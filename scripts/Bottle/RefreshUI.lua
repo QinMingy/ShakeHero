@@ -1,10 +1,12 @@
--- 共享刷新池的只读UI文案；不使用rerollUsed/refreshUsed决定可用性。
+-- 按当前阶段选择刷新池；遗物免费次数独立于准备/物品共享池。
 local RefreshUI = {}
 
 ---@param game BottleGame
 ---@return integer
 function RefreshUI.Count(game)
-    return math.max(0, math.floor(game.refreshes or 0))
+    local balance = game.refreshes
+    if game.phase == "draft" and game.relicDraft then balance = game.relicRefreshes end
+    return math.max(0, math.floor(balance or 0))
 end
 
 ---@param game BottleGame
@@ -17,7 +19,10 @@ end
 ---@param game BottleGame
 ---@return string
 function RefreshUI.Hint(game)
-    return "共享刷新剩余 " .. RefreshUI.Count(game) .. " 次 · 每完成2回合+1"
+    if game.phase == "draft" and game.relicDraft then
+        return "遗物独立刷新剩余 " .. RefreshUI.Count(game) .. " 次 · 本次免费1次，不累计"
+    end
+    return "准备/物品共享刷新剩余 " .. RefreshUI.Count(game) .. " 次 · 每完成2回合+1"
 end
 
 return RefreshUI

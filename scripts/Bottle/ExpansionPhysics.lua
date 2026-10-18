@@ -20,7 +20,14 @@
 ---@field targetUid number?
 ---@field endpointWait boolean
 
+---@class BottleForcedRotation
+---@field delta number 总强制角差，弧度；负数顺时针
+---@field duration number 真实秒数，不受加速器倍率影响
+---@field elapsed number
+---@field applied number 已施加角差；逐步只施加差量，末步补齐浮点尾差
+
 ---@class BottleExpansionMotion
+---@field rotations BottleForcedRotation[] 独立叠加的持续旋转任务
 ---@field anchored boolean
 ---@field flight BottleFlight?
 ---@field dashRemaining number
@@ -117,12 +124,52 @@ function Expansion:State(record)
     ---@type BottleExpansionMotion?
     local state = self.states[record.uid]
     if not state then
-        state = {anchored = false, dashRemaining = 0, dashX = 0, dashY = 0,
+        state = {anchored = false, rotations = {}, dashRemaining = 0, dashX = 0, dashY = 0,
             angle = record.node.rotation2D * RAD, angularTravel = 0, rotateOffset = 0, arrived = false,
             discVX = record.uid % 2 == 0 and -DISC_SPEED or DISC_SPEED, discVY = 0, idleHold = false}
         self.states[record.uid] = state
     end
     return state
+end
+
+---只累计两次真实姿态采样之间的自然角差；所有强制角/重建必须随后重设基线。
+---强制动作前也先采样，避免同一同步屏障吞掉尚未采样的自然首段。
+---@param record BottleBody
+---@return BottleExpansionMotion
+function Expansion:SampleAngle(record)
+    local state = self:State(record)
+    local angle = record.node.rotation2D * RAD
+    if not record.ghostLike then
+        local delta = (angle - state.angle + PI) % (2 * PI) - PI
+        state.angularTravel = state.angularTravel + math.abs(delta)
+    end
+    state.angle = angle
+    return state
+end
+
+---同uid重建只强制继承累计和剩余旋转；兼容旧行为由Physics明确判断。
+---新物体的实际角度是唯一采样基线，不能用旧节点角或rotateOffset反推。
+---@param record BottleBody
+---@param previous BottleExpansionMotion
+---@param keepBehavior boolean
+function Expansion:Restore(record, previous, keepBehavior)
+    local state = self:State(record)
+    state.angularTravel, state.rotateOffset = previous.angularTravel, previous.rotateOffset
+    state.rotations = record.ghostLike and {} or previous.rotations
+    if keepBehavior then
+        state.anchored, state.flight = previous.anchored, previous.flight
+        state.dashRemaining, state.dashX, state.dashY = previous.dashRemaining, previous.dashX, previous.dashY
+        state.arrived, state.hit, state.idleHold = previous.arrived, previous.hit, previous.idleHold
+        state.discVX, state.discVY = previous.discVX, previous.discVY
+        if state.anchored then
+            for _, part in ipairs(record.parts) do
+                part.body.bodyType = BT_KINEMATIC
+                part.body.linearVelocity = Vector2(0, 0)
+                part.body.angularVelocity = 0
+            end
+        end
+    end
+    state.angle = record.node.rotation2D * RAD
 end
 
 ---@param kind string
@@ -179,7 +226,7 @@ end
 ---@param record BottleBody
 ---@param delta number
 local function rotateWhole(record, delta)
-    local center = record.node.position2D
+    local center, centerVelocity = record.node.position2D, record.body.linearVelocity
     local cosine, sine = math.cos(delta), math.sin(delta)
     for _, part in ipairs(record.parts) do
         local position, velocity = part.node.position2D, part.body.linearVelocity
@@ -187,8 +234,11 @@ local function rotateWhole(record, delta)
         part.node:SetPosition2D(center.x + dx * cosine - dy * sine,
             center.y + dx * sine + dy * cosine)
         part.node.rotation2D = part.node.rotation2D + delta / RAD
-        part.body.linearVelocity = Vector2(velocity.x * cosine - velocity.y * sine,
-            velocity.x * sine + velocity.y * cosine)
+        -- 只旋转软体相对速度，保留整体平移与各段自然角速度；不锁动态体、
+        -- 不用目标角速度覆盖碰撞/关节解算，自然重力仍由下一步Box2D处理。
+        local vx, vy = velocity.x - centerVelocity.x, velocity.y - centerVelocity.y
+        part.body.linearVelocity = Vector2(centerVelocity.x + vx * cosine - vy * sine,
+            centerVelocity.y + vx * sine + vy * cosine)
         part.body.awake = true
     end
 end
@@ -225,15 +275,22 @@ function Expansion:Apply(sim, event)
         local record = sim.bodies[event.uid]
         if not record then return end
         local delta = finite(event.delta) and event.delta or -PI * .5
-        local state = self:State(record)
+        local state = self:SampleAngle(record)
         if record.ghostLike then
             record.node.rotation2D = 0
             record.body.angularVelocity = 0
+            state.rotations = {}
+        elseif finite(event.duration) and event.duration > 0 then
+            -- 每条命令独立计时；多齿轮同帧/错峰发令都叠加，不覆盖已有任务。
+            state.rotations[#state.rotations + 1] = {
+                delta = delta, duration = event.duration, elapsed = 0, applied = 0,
+            }
         else
+            -- 不带duration的指南针保持旧语义：在解锁屏障立刻完成。
             rotateWhole(record, delta)
             state.rotateOffset = state.rotateOffset + delta
         end
-        -- 强制姿态从采样基线排除，不计指南针的自然角路程。
+        -- 强制姿态从采样基线排除，不计指南针/转圈圈的自然角路程。
         state.angle = record.node.rotation2D * RAD
         return
     end
@@ -302,7 +359,29 @@ end
 ---@param multiplier number? 只加速空间进度，计时dt保持真实固定步长
 function Expansion:Before(record, dt, bodies, clampPoint, multiplier)
     local speed = multiplier or 1
-    local state = self:State(record)
+    local state = self:SampleAngle(record)
+    if record.ghostLike then
+        state.rotations = {} -- 直立豁免期间不积攒待补转任务。
+    else
+        local delta, remaining = 0, {}
+        for _, rotation in ipairs(state.rotations) do
+            local elapsed = math.min(rotation.duration, rotation.elapsed + dt)
+            if rotation.duration - elapsed <= 1e-9 * math.max(1, rotation.duration) then
+                elapsed = rotation.duration
+            end
+            -- 匀速平滑完成，不以当前姿态作目标插值，因而不会抹掉自然碰撞角差。
+            local applied = rotation.delta * (elapsed / rotation.duration)
+            delta = delta + applied - rotation.applied
+            rotation.elapsed, rotation.applied = elapsed, applied
+            if elapsed < rotation.duration then remaining[#remaining + 1] = rotation end
+        end
+        state.rotations = remaining
+        if delta ~= 0 then
+            rotateWhole(record, delta)
+            state.rotateOffset = state.rotateOffset + delta
+            state.angle = record.node.rotation2D * RAD
+        end
+    end
     if state.anchored then
         record.body.linearVelocity = Vector2(0, 0)
         record.body.angularVelocity = 0
@@ -349,7 +428,8 @@ end
 
 -- 高压生成时Box2D位置求解可能先把重叠物体挤到薄墙外，再发生CCD。
 -- 安全兜底只处理真实轮廓已经越界的情况，不用包络逐帧挤压瓶内堆叠。
--- 只整体平移同uid全部段，保持软体相对姿态/关节；绝不伪造wall或pairs。
+-- 优先整体平移同uid全部段，保持软体相对姿态/关节；绝不伪造wall或pairs。
+-- 软体被瞬态拉伸得比瓶宽还大时不存在整体平移解，最后才逐段保角度收回。
 local function boundaryPoint(x, y)
     local sx, sy = x, y
     if y < -.015 then sy = .006 elseif y > 6.415 then sy = 6.394 end
@@ -357,6 +437,72 @@ local function boundaryPoint(x, y)
     if x > width + .015 then sx = width - .006
     elseif x < -width - .015 then sx = -width + .006 end
     return sx-x, sy-y
+end
+
+---整体平移无解的软体，只收回仍越界的真实矩形段，不改变角度/尺寸/关节。
+---边界示意：左墙 | [1]--[2]--[3]--[4]--[5] | 右墙；链被拉伸过宽时
+---不能交替把整链左右推。逐段投影只是越界兜底，下一步仍由Box2D解关节。
+---@param record BottleBody
+local function containSoftSegments(record)
+    if not record.soft then return end
+    for _, segment in ipairs(record.soft.segments) do
+        local position = segment.node.position2D
+        local angle = segment.node.rotation2D * RAD
+        local cosine, sine = math.cos(angle), math.sin(angle)
+        local hx, hy = segment.halfLength, segment.halfWidth
+        local offsets = {}
+        local escaped = false
+        for _, corner in ipairs({{-hx,-hy},{hx,-hy},{hx,hy},{-hx,hy}}) do
+            local x, y = corner[1] * cosine - corner[2] * sine,
+                corner[1] * sine + corner[2] * cosine
+            offsets[#offsets + 1] = {x, y}
+            local dx, dy = boundaryPoint(position.x + x, position.y + y)
+            escaped = escaped or dx ~= 0 or dy ~= 0
+        end
+        if escaped then
+            local vertical = math.abs(hx * sine) + math.abs(hy * cosine)
+            local y = math.max(vertical + .006, math.min(6.394 - vertical, position.y))
+            local function horizontalRange(centerY)
+                local low, high = -math.huge, math.huge
+                local function include(xOffset, worldY)
+                    local width = worldY >= 6.05 and 1.15
+                        or math.min(2.4, 2.4 - (2.4-1.15)/.55*(worldY-5.5))
+                    low, high = math.max(low, -width + .006 - xOffset),
+                        math.min(high, width - .006 - xOffset)
+                end
+                for index, point in ipairs(offsets) do
+                    include(point[1], centerY + point[2])
+                    local following = offsets[index % #offsets + 1]
+                    -- 肩颈折点处也检查矩形边，避免仅四角在内、斜边却穿出。
+                    for _, level in ipairs({5.5, 6.05}) do
+                        local dy = following[2] - point[2]
+                        if math.abs(dy) > 1e-9 then
+                            local t = (level - centerY - point[2]) / dy
+                            if t > 0 and t < 1 then
+                                include(point[1] + (following[1] - point[1]) * t, level)
+                            end
+                        end
+                    end
+                end
+                return low, high
+            end
+            local low, high = horizontalRange(y)
+            if low > high then
+                -- 当前方向放不进瓶颈时，保角度退到瓶肩以下；不缩短段或拉直链。
+                y = math.min(y, 5.494 - vertical)
+                low, high = horizontalRange(y)
+            end
+            local x = math.max(low, math.min(high, position.x))
+            local dx, dy = x - position.x, y - position.y
+            if dx ~= 0 or dy ~= 0 then
+                local velocity = segment.body.linearVelocity
+                segment.node:SetPosition2D(x, y)
+                segment.body.linearVelocity = Vector2(dx * velocity.x < 0 and 0 or velocity.x,
+                    dy * velocity.y < 0 and 0 or velocity.y)
+                segment.body.awake = true
+            end
+        end
+    end
 end
 
 ---@param record BottleBody
@@ -417,14 +563,17 @@ local function containSolid(record)
         shiftX,shiftY=shiftX+correctionX,shiftY+correctionY
         if correctionX==0 and correctionY==0 then break end
     end
-    if shiftX==0 and shiftY==0 then return end
-    for _,part in ipairs(record.parts) do
-        local p,v=part.node.position2D,part.body.linearVelocity
-        part.node:SetPosition2D(p.x+shiftX,p.y+shiftY)
-        -- 只抵消继续指向瓶外的速度，不给额外反弹能量，保留切向运动。
-        part.body.linearVelocity=Vector2(shiftX*v.x<0 and 0 or v.x,shiftY*v.y<0 and 0 or v.y)
-        part.body.awake=true
+    if shiftX~=0 or shiftY~=0 then
+        for _,part in ipairs(record.parts) do
+            local p,v=part.node.position2D,part.body.linearVelocity
+            part.node:SetPosition2D(p.x+shiftX,p.y+shiftY)
+            -- 只抵消继续指向瓶外的速度，不给额外反弹能量，保留切向运动。
+            part.body.linearVelocity=Vector2(shiftX*v.x<0 and 0 or v.x,shiftY*v.y<0 and 0 or v.y)
+            part.body.awake=true
+        end
     end
+    -- 整链平移可能左右来回抵消为零，不能提前return漏掉仍越界的末段。
+    containSoftSegments(record)
 end
 
 ---@param sim BottlePhysics
@@ -432,11 +581,7 @@ end
 function Expansion:After(sim, dt)
     for uid, record in pairs(sim.bodies) do
         if not record.sensor then containSolid(record) end
-        local state = self:State(record)
-        local angle = record.node.rotation2D * RAD
-        local delta = (angle - state.angle + PI) % (2 * PI) - PI
-        state.angularTravel = state.angularTravel + math.abs(delta)
-        state.angle = angle
+        local state = self:SampleAngle(record)
         local flight = state.flight
         if flight then
             -- 遍历真实接触计数，绝不用到终点的几何距离冒充Box2D触碰。

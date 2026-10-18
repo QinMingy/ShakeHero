@@ -174,13 +174,13 @@ Case("重抽读档返还均不重复发添加金币或价值", function()
     Close(rolledBack.score, 1); Close(rolledBack.totalScore, 1)
 end)
 
-Case("真正冷却predicate逐项覆盖93件且不改定义时长", function()
+Case("真正冷却predicate逐项覆盖98件且不改定义时长", function()
     local active = {
         trash_can=2,glutton=1,fruit_ninja=5,thief=6,
         knife=5,fruit_farmer=8,monkey=5,ball=3,coffin=4,tombstone=4,coin_machine=5,
-        pig=2,hay=3,chicken_keeper=3,splitter=4,compass=3,jelly=2.5,
+        pig=2,hay=3,chicken_keeper=3,splitter=4,compass=3,jelly=2.5,gear=4,
     }
-    assert(#Items.list == 93)
+    assert(#Items.list == 98)
     for _, def in ipairs(Items.list) do
         assert(Items.HasCooldown(def.id) == (active[def.id] ~= nil), def.id .. "冷却predicate不符")
         if active[def.id] then Close(def.cooldown, active[def.id], def.id) end

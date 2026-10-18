@@ -75,8 +75,17 @@ end
 ---@param game BottleGame
 ---@param item ItemInstance
 ---@param events GameEvent[]
-function PhysicalState.Apply(game, item, events)
+---@param previousScale number? 本次修改前的可信尺寸，用于实际缩体积通知
+function PhysicalState.Apply(game, item, events, previousScale)
     PhysicalState.Normalize(item)
+    if previousScale and item.scale < previousScale - 1e-9 then
+        for _, coach in ipairs(game:BottleItems()) do
+            if coach.id == "fitness_coach" then
+                coach.permBonus = coach.permBonus + 1
+                events[#events + 1] = {kind = "buff", uid = coach.uid, id = coach.id, value = 1}
+            end
+        end
+    end
     events[#events + 1] = {kind = "resize", uid = item.uid, id = item.id,
         value = item.scale, weight = item.weight}
     game.revision = game.revision + 1

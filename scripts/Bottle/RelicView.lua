@@ -66,8 +66,9 @@ function RelicView.ConfirmJuicer(view)
     panel:AddChild(Icon("juicer", 72 * s))
     local prose = UI.ScrollView {width = "100%", flexGrow = 1, flexBasis = 0,
         minHeight = 0, children = {Label(view, "当前累计价值：" .. Number(value)
-        .. "\n\n确认后生成1份等值果汁，永久加入牌库，不直接进入瓶中。"
-        .. "\n果汁只有食物标签，没有特殊效果，也不进入三选一卡池。"
+        .. "\n\n确认后生成1份果汁，基础价值为累计值，永久加入牌库，不直接进入瓶中。"
+        .. "\n果汁被消耗时：消耗者价值永久增加，数值等于果汁当时的价值。"
+        .. "\n果汁为食物，不进入三选一卡池；食物+2等遗物仍可额外生效。"
         .. "\n\n生成成功后累计值清零；取消不会消耗累计值。")}}
     panel:AddChild(prose)
     local confirm = Audio.Button {id = "juicerConfirm", text = "确认生成 · " .. Number(value),

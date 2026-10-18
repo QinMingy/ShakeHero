@@ -4,6 +4,7 @@
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local RelicExpansion = require("Bottle.RelicExpansion")
+local Rotation = require("Bottle.RotationEffects")
 local Expansion = {}
 local EPSILON = 1e-9
 local TURN = math.pi * 2
@@ -17,7 +18,10 @@ local HANDLED = {
     splitter = true, juice = true, discus_athlete = true, discus = true, compass = true,
     jelly = true, wool = true, sweater = true,
 }
-local PIG_FOOD = { apple = true, orange = true, banana = true }
+local PIG_FOOD = {
+    apple = true, orange = true, enoki = true, tomato_egg = true,
+    banana = true, banana_peel = true,
+}
 
 ---@param item any
 function Expansion.ResetRound(item)
@@ -29,7 +33,8 @@ function Expansion.ResetRound(item)
     item.discusOwnerUid, item.discusTargetUid, item.discusState = nil, nil, nil
     item.discusHolderUid = nil
     item.compassAngle, item.compassTravel, item.compassForced = nil, nil, nil
-    item.cactusScale = nil
+    item.cactusScale, item.cactusBonus = nil, 0
+    Rotation.ResetRound(item)
     item.geckoContactTime = 0
     item.eventMult = 1
     RelicExpansion.ResetRound(item)
@@ -137,7 +142,7 @@ function Expansion.Touches(game, item, contacts)
     if id == "grass" or id == "hay" then
         return FirstAdjacent(game, item, contacts, Animal) ~= nil
     end
-    if id == "poop" or id == "golden_poop" then
+    if id == "poop" or id == "golden_poop" or id == "diamond_poop" or id == "rainbow_poop" then
         return FirstAdjacent(game, item, contacts, Plant) ~= nil
     end
     if id == "pig" then
@@ -183,7 +188,7 @@ function Expansion.BurstBalloon(game, balloon, events, consumer)
     return true
 end
 
---- 仙人掌所有实际正向尺寸增幅都换成永久倍率加数，不把+10%误写成×1.1。
+--- 仙人掌实际正向尺寸增幅换成本回合倍率加数，物理尺寸本身仍永久保留。
 ---@param game BottleGame
 ---@param item any
 ---@param events GameEvent[]
@@ -192,7 +197,7 @@ local function TrackCactus(game, item, events)
     local previous = item.cactusScale
     item.cactusScale = scale
     if previous and scale > previous + EPSILON then
-        item.permMult = (item.permMult or 1) + (scale - previous)
+        item.cactusBonus = (item.cactusBonus or 0) + (scale - previous)
         Buff(game, item, events, scale - previous)
     end
 end
@@ -267,6 +272,7 @@ end
 ---@param reason string?
 ---@param value number
 function Expansion.OnConsumed(game, target, consumer, events, reason, value)
+    RelicExpansion.OnConsumed(game, target, events)
     -- 彩虹返还概率属于被消耗物本身，即使无实体消耗者（例如公共消耗接口）也判定。
     if target.id == "rainbow_poop" and game:_RandomInt(5) == 1 then
         game:_SpawnTop("poop", events, false)
@@ -321,6 +327,7 @@ function Expansion.OnConsumed(game, target, consumer, events, reason, value)
         game:ApplyScale(consumer, events)
     elseif consumer.id == "calf" then
         consumer.calfDashRemaining, consumer.calfDashHits = DASH_DURATION, {}
+        RelicExpansion.OnDash(game, consumer, events)
         local from, to = Position(game, consumer.uid), origin
         events[#events + 1] = { kind = "dash", uid = consumer.uid, duration = DASH_DURATION,
             targetUid = target.uid, dx = from and to and to.x - from.x or nil,
@@ -346,6 +353,7 @@ local function Split(game, target, contacts, events)
     for _, item in ipairs({ target, copy }) do
         item.valueBase, item.bonus, item.permBonus = half, 0, 0
         item.permMult, item.eventMult, item.mult = 1, 1, 1
+        item.cactusBonus, item.jackpotBonus = 0, 0
         item.rollValue = nil
         Buff(game, item, events, half)
     end
@@ -376,7 +384,8 @@ function Expansion.Apply(game, item, contacts, events)
     local id = item.id
     if id == "chick" then
         return game:_Spawn("egg", events, false, Position(game, item.uid, contacts)) ~= nil
-    elseif id == "grass" or id == "poop" or id == "golden_poop" then
+    elseif id == "grass" or id == "poop" or id == "golden_poop"
+        or id == "diamond_poop" or id == "rainbow_poop" then
         local consumer = FirstAdjacent(game, item, contacts, id == "grass" and Animal or Plant)
         return consumer ~= nil and game:_Destroy(item.uid, false, events, consumer, "consume")
     elseif id == "hay" then
@@ -388,8 +397,8 @@ function Expansion.Apply(game, item, contacts, events)
                 if grass then
                     grass.pendingConsumerUid = animal.uid
                     Expansion.OnEnter(game, grass, events)
+                    count = count + 1
                 end
-                count = count + 1
             end
         end
         if count == 0 then return false end
@@ -414,7 +423,11 @@ function Expansion.Apply(game, item, contacts, events)
                 end
                 if consumed then
                     hit = true
-                    if id == "chicken_keeper" then
+                    if id == "pig" then
+                        -- _Destroy可能已把香蕉转皮、猪长成培根；必须用消费前保存值，
+                        -- 且按本次主动消费者身份给钱，不让转化吞掉最后一餐收益。
+                        game:_Score(events, item, value * 2, Position(game, item.uid, contacts))
+                    elseif id == "chicken_keeper" then
                         game:_Score(events, item, value, Position(game, item.uid, contacts))
                         if game:_RandomInt(2) == 1 then
                             game:_Spawn("chick", events, false, Position(game, item.uid, contacts))
@@ -590,6 +603,14 @@ end
 ---@param game BottleGame
 ---@param events GameEvent[]
 function Expansion.AfterSettle(game, events)
+    -- 先完成全体收益，移除币才普通自耗：成功才发次数，临时币也按同一口径。
+    for _, coin in ipairs(game:BottleItems()) do
+        if coin.id == "removal_coin" and game:_Destroy(coin.uid, false, events, nil, "self") then
+            game.removals = game.removals + 1
+            game.revision = game.revision + 1
+            print(string.format("[移除币] #%d结算后成功自耗，机会+1，剩余%d", coin.uid, game.removals))
+        end
+    end
     for _, egg in ipairs(game:BottleItems()) do
         if egg.id == "egg" and egg.bottleRounds >= 3 then
             if game:_Destroy(egg.uid, false, events, nil, "self") and game:_RandomInt(2) == 1 then
@@ -705,6 +726,7 @@ function Expansion.Step(game, dt, contacts, events)
             end
             item.compassAngle, item.compassForced = angle, forced
         elseif item.id == "discus" then
+            -- 按源表每真实飞行5米结算；闪回清采样基线，不计传送路程。
             while (item.distance or 0) >= 5 - EPSILON do
                 item.distance = math.max(0, item.distance - 5)
                 game:_Score(events, item, game:_Value(item), Position(game, item.uid, contacts))

@@ -1,4 +1,4 @@
--- 33件遗物像素原稿，拆分不改变原色/像素/接口。
+-- 遗物独立16×16像素原稿；新增图案不改变既有原色/像素/接口。
 ---@param Sprite fun(rows:string[], palette:table<string,number[]>, mirror?:boolean):BottlePixelSprite
 ---@param INK number[]
 ---@return table<string,BottlePixelSprite>
@@ -627,6 +627,38 @@ RELIC_SPRITES.wool_market = Sprite({
     "..ohhhhhhoymyo..", "..ohhhhho.yyo...", "..o.hhh...yy.o..", "..oooooooooooo..",
     "..obbbbbbbbbbo..", "..obbbbbbbbbbo..", "..oo........oo..", "................",
 }, {o=INK,r={181,90,96,255},y={235,193,84,255},h={229,224,202,255},m={133,97,44,255},b={131,101,76,255}})
+
+-- 羊毛回收：奶白纤维球置于青绿回转箭头内，区别于木摊羊毛集市。
+RELIC_SPRITES.wool_recycle = Sprite({
+    "................", "....oooooooo....", "...ohggggggdo...", "..ohggoooogddo..",
+    ".ohggo....ogddo.", ".ohgo.oooo.oooo.", ".ooo.ohhhho..o..", "....ohwwhhho....",
+    "..o.ohhllhdo.oo.", ".ooooohhlhdoogdo", ".ohgo.ohhdo.ogdo", ".ohggo.ooo.ogddo",
+    "..ohggooooggddo.", "...ohgggggdddo..", "....oooooooo....", "................",
+}, {o=INK,h={239,232,208,255},w={255,255,244,255},l={194,177,165,255},g={68,181,141,255},d={42,116,108,255}})
+
+-- 骰号大奖：三尖金冠下的五点白骰，底部红绶带，不复用作弊骰子。
+RELIC_SPRITES.dice_jackpot = Sprite({
+    "..oo...oo...oo..", "..oyo.ohyo.oyo..", "..oyyoyhyyoyyo..", "...oyyyyyyyyo...",
+    "...oddddddddo...", "..oooooooooooo..", ".ohhhhhhhhhhhdo.", ".ohwoowwwoowwdo.",
+    ".ohwoowwwoowwdo.", ".ohwwwwoowwwwdo.", ".ohwwwwoowwwwdo.", ".ohwoowwwoowwdo.",
+    ".ohwoowwwoowwdo.", "..oddddddddddo..", "...orrr..rrro...", "...orro..orro...",
+}, {o=INK,h={255,249,201,255},y={247,196,74,255},w={235,240,235,255},d={144,127,96,255},r={210,76,99,255}})
+
+-- 牛来！：向右冲刺的斑纹小牛、前伸黄角和左侧速度条，与正脸小牛区分。
+RELIC_SPRITES.calf_rush = Sprite({
+    "................", "...........oo...", "..........oyyo..", ".........oowwoo.",
+    "..ooo..oowwwwwdo", ".ohho.ohhwwowwdo", "..oo.ohwwddwwwdo", ".oooohwwwddwpppo",
+    "ohhwwwwwwwwwpmmo", ".oowwwddwwwwpppo", "..owwwddwwwddoo.", "..owwwwwwwddo...",
+    "...ooddoooodo...", "..ohdo.....oddo.", ".oooo.......ooo.", "................",
+}, {o=INK,h={255,255,241,255},w={226,233,216,255},d={68,75,96,255},p={235,157,166,255},m={177,97,126,255},y={251,205,100,255}})
+
+-- 幸运转盘：金紫小轮配右上四叶草与绿底座，轮廓不复用物品转盘。
+RELIC_SPRITES.lucky_roulette = Sprite({
+    "..........oo.oo.", ".........ohgoggo", "....ooooo.ogggo.", "..oohhhhoohgoggo",
+    ".ohyyyyyo.oo.oo.", "ohyyyoyypppdo...", "ohyyyooypppdo...", "ohyyohoopppdo...",
+    "ohppoooyyyydo...", "ohpppoyyyyydo...", ".odppyyyyddo....", "..odddddddo.....",
+    "....ooooo.......", "...ohgggdo......", "..ohgggggdo.....", "..ooooooooo.....",
+}, {o=INK,h={255,242,181,255},y={241,192,72,255},p={152,103,181,255},g={75,177,127,255},d={139,98,65,255}})
 
 return RELIC_SPRITES
 end

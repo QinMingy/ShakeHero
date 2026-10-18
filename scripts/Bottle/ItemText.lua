@@ -24,7 +24,7 @@ function Text.Effect(game, id, item)
             .. (washed and "" or "、[[thief]]") .. "转变为[[student]]，学生叠加其价值"
     end
     if Relics.Has(game, "lucky_charm") then
-        if id == "credit_card" or id == "hay" then
+        if id == "credit_card" or id == "hay" or id == "roulette" then
             text = text:gsub("价值永久%-1", "价值永久+1")
         elseif id == "thief" and not washed then
             text = "相邻人类、硬币、[[credit_card]]价值永久+1，自身价值永久+1（冷却：6秒）\n幸运符只改变价值减量，不改变负面职业身份"
@@ -81,7 +81,7 @@ function Text.Effect(game, id, item)
         text = text .. "\n羊毛集市：每份脱落库存改为从瓶顶生成1枚永久[[coin_1]]，不直接获得金币，也不兑换已有羊毛"
     end
     if id == "ghost" and Relics.Has(game, "ghost_sport") then
-        text = text .. "\n幽灵运动：每真实移动5m，+1金币；闪现不计路程"
+        text = text .. "\n幽灵运动：每真实移动30m，+1金币；闪现不计路程"
     end
     if id == "bacon" and Relics.Has(game, "bacon_network") then
         text = text .. "\n培根是对的：和同一块培根相邻的其他物品视为相邻，不改变物理碰撞轮廓"
@@ -92,11 +92,31 @@ function Text.Effect(game, id, item)
     if Items.HasTag(id, "食物") and Relics.Has(game, "food_comfort") then
         text = text .. "\n吃了不烧心：持有期间当前价值+2（基础项，之后计算倍率；非永久加值）"
     end
+    if id == "wool" and Relics.Has(game, "wool_recycle") then
+        text = text .. "\n羊毛回收：本件合成或成功被消耗时独立50%瓶顶生成1份临时[[wool]]，临时羊毛也可触发"
+    end
+    if id == "calf" and Relics.Has(game, "calf_rush") then
+        text = text .. "\n牛来！：每次冲刺价值+1（本回合）、体积+20%；达到200%价值永久+2并复原100%，仍保留原冲撞收益"
+            .. string.format("\n当前体积：%.0f%%", (item and item.scale or 1) * 100)
+    end
+    if id == "roulette" and Relics.Has(game, "lucky_roulette") then
+        text = text .. "\n幸运转盘：每圈5%概率价值+77（本回合），其余95%在原两种结果间各半；大奖不再另给基础奖励"
+    end
+    if Items.HasTag(id, "骰子") and Relics.Has(game, "dice_jackpot") then
+        text = text .. "\n骰号大奖：每次投6体积+50%（上限300%），为场内骰子、硬币、赌徒和赌神增加体积超出100%部分的临时倍率；非6仅将本骰体积复原100%"
+            .. string.format("\n当前体积：%.0f%%", (item and item.scale or 1) * 100)
+    end
+    if item and (item.jackpotBonus or 0) > 0 then
+        text = text .. string.format("\n本回合骰号大奖：+%.2fx（累计，与其他倍率乘算）", item.jackpotBonus)
+    end
+    if id == "cactus" and item then
+        text = text .. string.format("\n本回合体积成长倍率：+%.2fx", item.cactusBonus or 0)
+    end
     if Relics.Has(game, "accelerator") then
         text = text .. "\n加速器：瓶内移动速度+20%，不缩短冷却或回合时间"
     end
     if Relics.Has(game, "spin_reward") then
-        text = text .. "\n转圈圈：自然旋转每满一圈，+1金币"
+        text = text .. "\n转圈圈：自然旋转每满三圈独立30%概率+1金币；失败也消耗三圈进度"
     end
     local coin = tonumber(id:match("^coin_(%d+)$"))
     if coin and coin >= 64 and coin < 2048 and Relics.Has(game, "merge_2048") then

@@ -9,6 +9,7 @@ local DeckBoard = require("Bottle.DeckBoard")
 local ItemText = require("Bottle.ItemText")
 local ItemDetail = require("Bottle.ItemDetail")
 local RefreshUI = require("Bottle.RefreshUI")
+local Removal = require("Bottle.Removal")
 local MachineSkin = require("Machine.LayeredSkin")
 local Atmosphere=require("Machine.Atmosphere")
 local GameAudio = require("Bottle.Audio")
@@ -197,6 +198,7 @@ end
 ---@field deckSim any
 ---@field deckBackButton Button?
 ---@field deckDetailUid integer
+---@field removalConfirmUid integer
 ---@field deckDraftWasOpen boolean
 ---@field choiceHidden boolean
 ---@field lastRevision number
@@ -217,7 +219,7 @@ function View:Init(game, physics, actions)
     self.game, self.physics, self.actions = game, physics, actions
     self.currentPhase = ""
     self.inventoryOpen, self.choiceHidden = false, false
-    self.deckDetailUid, self.deckDraftWasOpen = 0, false
+    self.deckDetailUid, self.deckDraftWasOpen, self.removalConfirmUid = 0, false, 0
     self.lastRevision, self.lastDisplayedScore, self.lastRound = -1, -1, -1
     self.lastRerollUsed = false
     self.lastRefreshes = RefreshUI.Count(game)
@@ -482,7 +484,7 @@ function View:Rebind(game)
     self.lastRerollUsed = game.rerollUsed
     self.lastRefreshes = RefreshUI.Count(game)
     self.choiceHidden, self.inventoryOpen = false, false
-    self.deckDetailUid, self.deckDraftWasOpen = 0, false
+    self.deckDetailUid, self.deckDraftWasOpen, self.removalConfirmUid = 0, false, 0
     self:DisposeDeckSim()
     if self.physicsButton then self.physicsButton:Show() end
     self.modal:Hide()
@@ -520,6 +522,11 @@ function View:Update(force)
         self.timer:SetValue(math.max(0, 1 - game.settleElapsed / 2))
     else
         self.timer:SetValue(1)
+    end
+    -- 牌库详情与确认页共享当前实例，不以类型名删牌；次数在牌库标题中始终可见。
+    if self.inventoryOpen and self.inventoryTitle then
+        self.inventoryTitle:SetText("我的牌库 · " .. #game.deck .. " 件 · 移除 " .. Removal.Count(game) .. " 次")
+        if Busy(game) then self:CloseInventory() end
     end
     self.deckButton:SetText("牌库 " .. #game.deck)
     self.deckButton:SetDisabled(Busy(game))
@@ -696,7 +703,7 @@ function View:Modal(title, noClose)
     if self.inventoryOpen then
         -- 打开其它面板即离开牌库页：恢复机台输入与牌库页暂时接管的三选一页面。
         self.inventoryOpen=false
-        self.deckDetailUid=0
+        self.deckDetailUid,self.removalConfirmUid=0,0
         self:DisposeDeckSim()
         if self.game.phase=="draft" and self.deckDraftWasOpen then self.draft:Show() end
         self.deckDraftWasOpen=false
@@ -758,6 +765,90 @@ function View:BuildDeckDetail(body, item, s)
         onInspect = function(id) self:InspectDefinition(id) end}
     content:SetStyle({height = "auto", flexGrow = 1, flexBasis = 0})
     body:AddChild(content)
+    local uid = item.uid
+    local allowed = self.game:CanRemoveOwned(uid)
+    local remove = Button("永久移除 · 消耗1次（剩余" .. Removal.Count(self.game) .. "次）",
+        function() self:ConfirmRemoval(uid) end)
+    remove.id = "deckRemove"
+    remove:SetStyle({width = "100%", height = 42 * s, fontSize = 12 * s, flexShrink = 0})
+    remove:SetDisabled(not allowed)
+    body:AddChild(remove)
+end
+
+-- 仍留在牌库页的同一弹窗中二次确认；不重开牌库或重抽瓶内实例。
+---@param uid integer
+function View:ConfirmRemoval(uid)
+    if not self.inventoryOpen or self.deckDetailUid ~= uid then return false end
+    local game = self.game
+    local allowed, message = game:CanRemoveOwned(uid)
+    local item = game:Get(uid)
+    if not allowed or not item then
+        UI.Toast.Show(message, {variant = "info"})
+        return false
+    end
+    self.removalConfirmUid = uid
+    self:CloseDefinition()
+    self:BuildDeckPage(true)
+    print(string.format("[移除] 等待确认 %s #%d，剩余%d次", item.id, uid, Removal.Count(game)))
+    return true
+end
+
+function View:BuildRemovalConfirm(body, item, s)
+    local game, uid = self.game, item.uid
+    local round, phase = game.round, game.phase
+    local def = Items.byId[item.id]
+    body:AddChild(UI.Panel {width = "100%", flexGrow = 1, flexBasis = 0,
+        padding = 14 * s, gap = 12 * s, justifyContent = "center", children = {
+            Label("确认永久移除？", 18 * s, C.warning),
+            Icon {itemId = item.id, rollValue = item.rollValue, woolCount = item.woolCount,
+                width = 72 * s, height = 72 * s, alignSelf = "center", pointerEvents = "none"},
+            UI.Label {id = "removalTarget", text = def.name .. " · 持有编号 #" .. uid
+                .. "\n当前价值 " .. string.format("%g", game:_Value(item)),
+                fontSize = 13 * s, fontColor = C.text, whiteSpace = "normal", width = "100%"},
+            UI.Label {text = "仅移除这一件，永久离开牌库与瓶中。不会进入弃牌堆，"
+                .. "不会触发被消耗效果，也不能被死灵返还。\n成功后消耗1次，取消不扣次数。",
+                fontSize = 12 * s, fontColor = C.textSecondary, whiteSpace = "normal", width = "100%"},
+        }})
+    local used = false
+    local confirm = Button("确认永久移除 · 剩余" .. Removal.Count(game) .. "次", function()
+        if used or self.game ~= game or not self.inventoryOpen or self.removalConfirmUid ~= uid
+            or game.round ~= round or game.phase ~= phase or game:Get(uid) ~= item then return end
+        used = true
+        local ok, text = self.actions.remove(uid)
+        UI.Toast.Show(text or (ok and "已永久移除" or "无法移除"), {variant = ok and "success" or "info"})
+        if not ok then self.removalConfirmUid = 0; self:BuildDeckPage(true) end
+    end, true)
+    confirm.id = "removalConfirm"
+    confirm:SetStyle({width = "100%", height = 44 * s, fontSize = 12 * s, flexShrink = 0})
+    local cancel = Button("取消 · 保留物品", function()
+        if self.game ~= game or self.removalConfirmUid ~= uid then return end
+        self.removalConfirmUid = 0
+        self:BuildDeckPage(true)
+    end)
+    cancel.id = "removalCancel"
+    cancel:SetStyle({width = "100%", height = 40 * s, fontSize = 12 * s, flexShrink = 0})
+    body:AddChild(confirm)
+    body:AddChild(cancel)
+end
+
+---成功移除后只退休该UID沙盒实体；其他沙盒和瓶内物理姿态不重建。
+---@param uid integer
+function View:OwnedItemRemoved(uid)
+    local sim = self.deckSim
+    local record = sim and sim.records[uid]
+    if record then
+        if record.soft then record.soft:Dispose()
+        elseif record.node then record.node:Remove(); record.node:Dispose() end
+        sim.records[uid] = nil
+        for index = #sim.order, 1, -1 do
+            if sim.order[index].uid == uid then table.remove(sim.order, index) end
+        end
+    end
+    self.board:Effects({{kind = "remove", uid = uid}})
+    if self.selectedUid == uid then self:CloseItemDetail() end
+    self.deckDetailUid, self.removalConfirmUid = 0, 0
+    if self.inventoryOpen then self:BuildDeckPage(true) end
+    self:Update(true)
 end
 
 ---@param syncLayout boolean? 事件回调中立即排版；尺寸变化时由 UI 帧自行排版。
@@ -770,9 +861,12 @@ function View:BuildDeckPage(syncLayout)
     self.deckBoard = nil
     local s = self.machineSkin and self.machineSkin.scale or 1
     local item = self.deckDetailUid ~= 0 and self.game:Get(self.deckDetailUid) or nil
-    if item then
+    if item and self.removalConfirmUid == item.uid then
+        self:BuildRemovalConfirm(body, item, s)
+    elseif item then
         self:BuildDeckDetail(body, item, s)
     else
+        self.removalConfirmUid = 0
         self:BuildDeckSandbox(body, s)
     end
     if syncLayout then UI.Layout() end
@@ -787,6 +881,11 @@ end
 
 -- 返回按钮分层后退：详情 → 沙盒 → 离开牌库回到原页面。
 function View:DeckBack()
+    if self.removalConfirmUid ~= 0 then
+        self.removalConfirmUid = 0
+        self:BuildDeckPage(true)
+        return
+    end
     if self.deckDetailUid ~= 0 then
         self.deckDetailUid = 0
         self:BuildDeckPage(true)
@@ -807,7 +906,7 @@ end
 function View:CloseInventory()
     self.modal:Hide()
     self.inventoryOpen = false
-    self.deckDetailUid = 0
+    self.deckDetailUid, self.removalConfirmUid = 0, 0
     self:DisposeDeckSim()
     if self.physicsButton then self.physicsButton:Show() end
     if self.game.phase == "draft" and self.deckDraftWasOpen then self.draft:Show() end
@@ -830,11 +929,11 @@ function View:OpenInventory()
         panel:AddChild(self.deckBody)
     end
     self.inventoryOpen = true
-    self.deckDetailUid = 0
+    self.deckDetailUid, self.removalConfirmUid = 0, 0
     self:DisposeDeckSim()
     -- 每次打开牌库都让全部持有实例重新从顶部落下。
     self.deckSim = DeckBoard.Sim.New(self.game.deck)
-    self.inventoryTitle:SetText("我的牌库 · "..#self.game.deck.." 件")
+    self.inventoryTitle:SetText("我的牌库 · " .. #self.game.deck .. " 件 · 移除 " .. Removal.Count(self.game) .. " 次")
     if self.machineSkin then MachineSkin.Modal(self,panel,true) end
     self.modal:Show()
     -- 面板可见后再排版，隐藏节点的 Yoga display=none 会得到零尺寸。
@@ -855,17 +954,18 @@ function View:OpenHelp()
     panel:AddChild(mood)
     local scroll = UI.ScrollView {width = "100%", flexGrow = 1, flexBasis = 0, gap = 12, padding = 4}
     local rules = {
-        {"01  抽取与刷新", "回合开始从牌库随机抽取最多20件进入瓶中，不足时全部入瓶。准备重抽、物品三选一与遗物三选一共用刷新池：新局1次，每完成两回合+1；成功刷新消耗1次，有次数即可连续刷新，回合开始不重置。[[egg]]入瓶满3回合消耗自身，50%概率增加1次免费刷新。"},
+        {"01  抽取与刷新", "回合开始从牌库随机抽取最多20件进入瓶中，不足时全部入瓶。准备重抽与物品三选一共用刷新池：新局1次，每完成两回合+1；成功刷新消耗1次，有次数即可连续刷新，回合开始不重置。遗物三选一每次独立免费刷新1次，不消耗共享池，未用次数不累计。[[egg]]入瓶满3回合消耗自身，50%概率增加1次免费刷新。"},
         {"02  摇晃", "点击开始后运行10秒（遗物最后一秒可增加1秒），不操作照常计时。瓶中物品按说明实时反应。瓶子左上可切换物理；手机原生端可启用体感，网页预览可触摸拖动。"},
         {"03  结算", "摇晃结束后禁止摇晃，物品自然下落2秒；持续接触加成继续同步，不再执行离散触发。随后按当前有效价值产金币，逐件弹出收益，全部展示后再停留2秒。"},
-        {"04  价值与冷却", "价值增益默认临时，回合末清除；明确永久的加值与倍率跨回合保留。冷却下限1秒（特别说明除外），仅在瓶中推进，每回合重置且入场不进入冷却。描述未写冷却的内部防抖、周期计时不显示冷却环。"},
+        {"04  价值与冷却", "价值增益默认临时，回合末清除；明确永久的加值与倍率跨回合保留。冷却下限1秒（特别说明除外），仅在瓶中推进，每回合重置，开局触发冷却就绪；运行中新入场或重生等待完整冷却，周期效果等待完整周期。触发成功才进入冷却，概率失败、额度耗尽、护盾拦截不冷却；每X秒周期仍按原周期等待。描述未写冷却的内部防抖、周期计时不显示冷却环。"},
         {"05  消耗与生成", "消耗默认离开拥有牌库与瓶中，记入本回合弃牌堆，不在回合末自动恢复；临时消耗才会回牌库。生成默认永久，只有明确临时生成才在回合末移除。[[banana]]被消耗变为[[banana_peel]]等特例遵循各自说明。"},
         {"06  入瓶计时", "每x秒、过x回合只在瓶中计算，未入瓶牌库不计时。[[banana]]、[[egg]]读取各自的瓶中回合数；[[chicken_keeper]]的每5次刷新永久+1明确在牌库也生效。"},
-        {"07  构筑与遗物", "结算后进入物品三选一，可选一件永久加入牌库或跳过；考核达标后还可选择遗物。候选稀有度概率随考核阶段变化；每次考核回合的物品及遗物三选一都不会出现普通品质，刷新后同样如此。已拥有的唯一物品与遗物不再作为对应候选。刷新使用同一累计池。"},
-        {"08  考核", "每5回合考核并扣除目标分数，余额保留。目标40/80/140/220/320/450/600/780，之后每阶段×1.3并向上取整到10；不足则结束本局。"},
+        {"07  构筑与遗物", "结算后进入物品三选一，可选一件永久加入牌库或跳过；考核达标后还可选择遗物。候选稀有度概率随考核阶段变化；每次考核回合仅物品三选一不出现普通品质，刷新同样生效；遗物不排除普通品质。已拥有的唯一物品与遗物不再作为对应候选。准备重抽与物品刷新使用同一累计池；每次遗物三选一独立免费刷新1次，用完不能再刷，离开即清空。"},
+        {"08  考核", "每5回合考核并扣除目标分数，余额保留。目标40/80/140/220/320/450/600/780，之后每阶段×1.3并向上取整到10；不足则结束本局。每次达标另获得1次移除机会，新局0次、可跨回合累计。"},
         {"09  上限与物理", "瓶中上限100件，超出的新生成物按顺序等待入瓶；等待物品不算瓶中物品，回合末回牌库。时间上限99秒。体积、重量默认100%，常规范围50%至200%；物理修改默认永久，特殊物品按自身说明。"},
         {"10  存档", "非摇晃/结算阶段自动保存。运行中退出回退到本回合开始前，包括生成与永久变化。网页刷新可能丢失本地文件，请导出存档码。"},
-        {"11  物品目录", "当前93件物品均已实装；仅源表标记屏蔽的物品不进入普通卡池，GM可添加全部93件。分类严格按标签，不按名称或外观推测；士兵与医生保留人类标签。"},
+        {"11  物品目录", "当前98件物品均已实装；仅源表标记屏蔽的物品不进入普通卡池，GM可添加全部98件。分类严格按标签，不按名称或外观推测；士兵与医生保留人类标签。"},
+        {"12  主动移除", "新局移除0次，每次考核达标+1次，可累计；[[removal_coin]]结算后成功消耗自身也+1。准备或物品／遗物三选一阶段打开牌库，点选具体编号物品，再二次确认即可永久移除1件。成功才花1次，不进弃牌，不触发被消耗效果，不补抽替代物品，取消／失败不扣次数。"},
     }
     for _, rule in ipairs(rules) do
         scroll:AddChild(UI.Card {width = "100%", gap = 5, padding = 12, backgroundColor = C.background,
@@ -900,21 +1000,21 @@ function View:OpenAtmosphere()
     end
 end
 
---- GM 面板：接受数字编号 1–93 或字符串 id，由 Game:GmAddItem 统一匹配；未实装物品会被拒绝。
+--- GM 面板：接受数字编号 1–98 或字符串 id，由 Game:GmAddItem 统一匹配；未实装物品会被拒绝。
 function View:OpenGm()
     if Busy(self.game) then return end
     local panel = self:Modal("GM 面板")
     panel:SetStyle({textMotionDisabled = true})
-    panel:AddChild(UI.Label {text = "功能一 · 添加物品：输入数字编号 1–93 或字符串 id，全部93件可添加，加入牌库供后续抽取",
+    panel:AddChild(UI.Label {text = "功能一 · 添加物品：输入数字编号 1–98 或字符串 id，全部98件可添加，加入牌库供后续抽取",
         fontSize = 11.25, fontColor = C.textSecondary, whiteSpace = "normal", width = "100%"})
     local message = UI.Label {text = "输入数字或字符串 id；也可点击下方列表“添加”快捷加入",
         fontSize = 10.5, fontColor = C.primary, whiteSpace = "normal", width = "100%"}
-    local field = UI.TextField {id = "gmItemId", placeholder = "数字 1–93 或 id，如 1 / apple",
+    local field = UI.TextField {id = "gmItemId", placeholder = "数字 1–98 或 id，如 1 / apple",
         width = "100%", height = 48, fontSize = 12, fontFamily = "mono", flexGrow = 1, flexBasis = 0,
         onSubmit = function(self_, value)
             local id = value:match("^%s*(%S+)%s*$")
             if not id or id == "" then
-                message:SetText("请先输入数字编号 1–93 或字符串 id")
+                message:SetText("请先输入数字编号 1–98 或字符串 id")
                 return
             end
             local ok, text = self.actions.gmadd(id)
@@ -925,7 +1025,7 @@ function View:OpenGm()
         local value = field:GetValue()
         local id = value:match("^%s*(%S+)%s*$")
         if not id or id == "" then
-            message:SetText("请先输入数字编号 1–93 或字符串 id")
+            message:SetText("请先输入数字编号 1–98 或字符串 id")
             return
         end
         local ok, text = self.actions.gmadd(id)

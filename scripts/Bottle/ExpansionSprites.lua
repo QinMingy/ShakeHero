@@ -1,4 +1,4 @@
--- 扩展22件独立16×16像素图案；沿用INK硬描边、左上高光和右下阴影。
+-- 扩展物品独立16×16像素图案；沿用INK硬描边、左上高光和右下阴影。
 -- 只注册新ID，既有果汁和所有旧图案完全不覆盖；同类便便也有独立切面/彩虹纹。
 ---@param Sprite fun(rows:string[],palette:table<string,number[]>,mirror?:boolean):BottlePixelSprite
 ---@param INK number[]
@@ -6,7 +6,7 @@
 return function(Sprite, INK, sprites)
 local function add(id, rows, colors)
     assert(not sprites[id], "扩展图案不得覆盖已有图案: " .. id)
-    colors.o = INK
+    colors.o = colors.o or INK
     sprites[id] = Sprite(rows, colors)
 end
 
@@ -18,27 +18,31 @@ add("chick", {
     "....ooooooo.....", ".....oa.oa......", "....oaa.aaao....", "................",
 }, {h={255,244,160,255},y={255,217,61,255},d={214,143,40,255},a={244,139,53,255},r={255,71,87,255}})
 
--- 小羊：云团羊毛包围深色脸，四只短蹄。
-add("sheep", {
-    "................", "....ooo..ooo....", "..oohhhoohhhoo..", ".ohhhhhhhhhhhho.",
-    ".ohhwhhhhhwhhho.", "ohhwhhhhhhwwhhho", "ohhhhhddddhhhhho", "ohhhhddllddhhhdo",
-    ".ohhhdolldohhdo.", ".ohhhdllllldhdo.", "..ohhdlmmllddo..", "...ohdddddddo...",
-    "....oddoooddo...", "....oddo.oddo...", "....oooo.oooo...", "................",
-}, {h={245,242,224,255},w={255,255,248,255},d={97,101,124,255},l={160,155,157,255},m={242,157,172,255}})
-
--- 零羊毛露出窄身和长腿，五份以上为满幅胖羊；公开scale/weight不随库存改变。
+-- 奶白毛绵羊侧身：按用户选定参考图恢复深灰脸腿、粉耳鼻与近黑硬描边。
+-- 库存0仍保留贴身奶白短绒，1–4为蓬起的卷绒，5以上为圆鼓鼓的厚毛。
+local sheepColors = {
+    h={245,242,224,255}, w={255,255,248,255}, s={205,201,186,255},
+    d={69,73,87,255}, l={102,106,119,255}, e={213,151,157,255}, m={164,109,119,255},
+    o={10,10,26,255},
+}
 add("sheep_0", {
-    "................", "................", "...oo.....oo....", "...ohdooodho....",
-    "....ohhhhho.....", "....odolodo.....", "....odllldo.....", ".....ommmo......",
-    "....ohlllho.....", "...ohhlllddo....", "...ohllllldo....", "....ohllldo.....",
-    "....odddddd.....", "....oddo.ddo....", "....oddo.ddo....", "....oooo.ooo....",
-}, {h={218,213,197,255},d={97,101,124,255},l={160,155,157,255},m={242,157,172,255}})
+    "................", "................", "................", "................",
+    "..........oooo..", ".........odlldo.", "...ooooo.oddddoo", "..ohwhhhhodowdde",
+    ".ohhhshhhoddddo.", ".ohhhhhsssodddo.", "..ohhhssssoddmo.", "...ohsssssoooo..",
+    "....odooddo.....", "....od..odo.....", "....oo..ooo.....", "................",
+}, sheepColors)
+add("sheep", {
+    "................", "................", "................", "....ooo.ooo.....",
+    "..oohhhohhhoo...", ".ohwwhhhhhhhooo.", ".ohwhshhhodlldoo", "ohhhhhhhhodowdde",
+    "ohhshhhhsoddddo.", ".ohhhshhhsodddo.", ".ohhhhhsssoddmo.", "..ohhsssssoooo..",
+    "...oodooddoo....", "....od..odo.....", "....oo..ooo.....", "................",
+}, sheepColors)
 add("sheep_5", {
-    "...ooo....ooo...", ".oohhhoooohhhoo.", "ohhwwhhhhhhwwhho", "ohhwhhhhhhhhwhho",
-    "ohhhhhhhhhhhhhho", "ohhwhhhhhhwwhhho", "ohhhhddddddhhhho", "ohhhddllllddhhdo",
-    "ohhhdollllodhhdo", "ohhhdlllllldhhdo", "ohhhdllmmlldhhdo", "ohhhhddddddhhhdo",
-    "ohhhhhhhhhhhhddo", ".ohhhhhhhhddddo.", "..ooddooodddoo..", "...oooo..oooo...",
-}, {h={245,242,224,255},w={255,255,248,255},d={97,101,124,255},l={160,155,157,255},m={242,157,172,255}})
+    "................", "....ooo.ooo.....", "..oohhhohhhoo...", ".ohwwhhhhhhhhoo.",
+    ".ohwhhshhhhhhhho", "ohhhshhhhshhooo.", "ohhhhhhhhodlldoo", "ohhshhhshodowdde",
+    "ohhhhhhhhshodddo", "ohhshhshhhsodddo", ".ohhhhhshssoddmo", ".ohhshhhhsssoooo",
+    "..ohhhsssssso...", "...oodooddoo....", "....oo..ooo.....", "................",
+}, sheepColors)
 
 -- 小猪：分开的尖耳、粉红圆鼻与卷尾，不能复用人类圆头。
 add("pig", {
@@ -199,4 +203,44 @@ add("sweater", {
     "ohr.orrrrrro.bro", "ohr.orhhhhro.bro", "ooo.orrrrrro.ooo", "....orhhhhro....",
     "....orrrrrro....", "....oddddddo....", "....oooooooo....", "................",
 }, {h={255,151,151,255},r={207,77,102,255},d={144,54,86,255},w={255,231,206,255},b={175,61,88,255}})
+
+-- 陀螺：直立短轴、宽红金盘身与收尖锥底，区别于扁飞盘。
+add("spinning_top", {
+    ".......oo.......", "......ohyo......", "......ohyo......", ".....ooyyoo.....",
+    "...oohhhhhhoo...", "..ohhyyyyyyhho..", ".ohhrrrrrrrrhdo.", "ohhrryyyyyyrrddo",
+    ".oyyyrrrrrryydo.", "..orrrrrrrrrdo..", "...orrrrrrddo...", "....orrrrddo....",
+    ".....oyyddo.....", "......oydo......", ".......oo.......", "................",
+}, {h={255,243,177,255},y={245,191,71,255},r={223,85,98,255},d={153,57,83,255}})
+
+-- 风车：红黄蓝绿四折叶、金色轴心与细木柄，叶间保留透明凹口。
+add("windmill", {
+    "......oooo......", "......ohro......", "..ooo.ohrro.....", ".ohhyo.orrro....",
+    ".ohyyyoorrro....", "..oyyyyorrroooo.", "...oyyyooybbhho.", "....ooyhybbbhho.",
+    ".ooooggoybbbo...", ".ohggggoobbo....", ".ohggggoooo.....", "..oggggoho......",
+    "...ogg.oho......", "....oo.oho......", ".......odo......", ".......ooo......",
+}, {h={255,244,193,255},r={230,91,112,255},y={247,204,84,255},b={95,169,216,255},g={86,181,133,255},d={139,95,67,255}})
+
+-- 齿轮：八向凸齿、冷钢亮边与贯通方轴孔，空心不画成硬币。
+add("gear", {
+    "......oooo......", ".....ohhhdo.....", "..oooohbbdoooo..", ".ohhhbbbbbbdddo.",
+    ".ohbbbbbbbbbbdo.", "..ohbbboobbbdo..", "ooohbbo..obbdooo", "ohbbbbo..obbbbdo",
+    "ohbbbbo..obbbbdo", "ooodbbo..obbdooo", "..odbbboobbbdo..", ".ohbbbbbbbbbbdo.",
+    ".oddbbbbbbbdddo.", "..oooodbbdoooo..", ".....oddddo.....", "......oooo......",
+}, {h={226,240,246,255},b={134,170,192,255},d={65,91,121,255}})
+
+-- 转盘：独立红青扇区圆盘、金属亮边和上端红指针；不复用指南针。
+add("roulette", {
+    ".......oo.......", "......orro......", ".....oorroo.....", "...oohhrrhhoo...",
+    "..ohhrrryyhddo..", ".ohrrrroyyybbdo.", ".ohrrrroyybbbdo.", "ohrrrrroobbbbbdo",
+    "ohyyyyohoobbbbdo", "ohyyyyooogggggdo", ".ohyybbogggggdo.", ".ohbbbboggggddo.",
+    "..odbbbggggddo..", "...oddddddddo...", ".....oooooo.....", "................",
+}, {h={255,240,179,255},r={220,86,105,255},y={242,197,73,255},b={89,143,193,255},g={67,174,151,255},d={139,98,60,255}})
+
+-- 移除币：青绿硬币、浅金轮缘与中央减号，区别于面额合成币。
+add("removal_coin", {
+    "................", ".....oooooo.....", "...oohhhhhoo....", "..ohhyyyyyhho...",
+    ".ohyygggggyyho..", ".ohygggggggyho..", "ohygggggggggydo.", "ohygghhhhgggydo.",
+    "ohygghhhhgggydo.", "ohygggggggggydo.", ".oyggggggggyddo.", ".oyyggggggyydo..",
+    "..odyyyyyyddo...", "...odddddddo....", ".....oooooo.....", "................",
+}, {h={246,245,193,255},y={217,187,102,255},g={91,194,166,255},d={45,110,105,255}})
 end

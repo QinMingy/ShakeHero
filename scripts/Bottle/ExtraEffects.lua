@@ -1,7 +1,7 @@
 -- 剩余物品的独立规则模块。只依赖纯 Lua 数据表，不引用引擎、物理或全局随机数。
 -- 接线约定：
 --   Start           Game:Start 中，回合计数/冷却初始化后调用一次。
---   Touches/Apply   Game 的冷却调度调用；Apply 失败也由调度重置完整冷却。
+--   Touches/Apply   Apply返回实际生效；失败保持就绪，timer判定仍由Game续完整周期。
 --   Crop            主动执行一次农作物判定，不改变其周期 remaining。
 --   BeforeSettle    持续光环同步完毕、统一产金币前调用一次。
 --   AfterSettle     统一产金币后、回合清理前调用一次。
@@ -11,12 +11,13 @@
 --   [水珠]--pair--[农作物]    全部相邻农作物各判一次，之后才消耗水珠。
 --   [灵魂石]--pair--[幽灵]    逐件消耗，每件分别结算幽灵与灵魂石。
 --   ===== bottom =====       星星仅触底传送；灵魂罐可触任意内壁。
--- 空接触/错误目标不触发；合法目标但概率失败、额度用完、瓶满等仍进入冷却。
+-- 无目标/额度耗尽/已有同一祝福等不进触发冷却；成功生成排队也属于已生效。
 -- 位移（健身教练/兔子）、计数器持续加成、水果商人光环由 Game/Effects 维护。
 
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local RelicEffects = require("Bottle.RelicEffects")
+local RelicExpansion = require("Bottle.RelicExpansion")
 
 ---@class ExtraEffects
 local Extra = {}
@@ -65,7 +66,7 @@ local function Permanent(game, item, events, value)
     Buff(game, item, events, value)
 end
 
---- 合法目标判定与执行分开：额度用完的骰子仍是骰子，判定失败照样消耗触发冷却。
+--- 合法接触仅代表可尝试；是否仍有额度或确实改变状态由Apply的boolean返回。
 ---@param sourceId string
 ---@param other ItemInstance
 ---@return boolean
@@ -118,6 +119,7 @@ local function Roll(game, die, contacts, events)
     local minimum = Relics.Has(game, "cheat_dice") and 2 or 1
     local point = game:_RandomInt(maximum - minimum + 1) + minimum - 1
     die.rollValue = point
+    RelicExpansion.OnRoll(game, die, point, events)
     Buff(game, die, events, point)
     game:_Score(events, die, game:_Value(die), contacts and contacts.positions[die.uid] or nil)
     return point
@@ -183,41 +185,45 @@ local function PlantPool()
     return pool
 end
 
---- 执行一次农作物本身的效果；返回 true 表示已判定，概率失败不等于没有触发。
---- 水珠不重置果树周期 remaining；种子转成新类型则使用 _Transform 的完整冷却。
+--- 执行一次农作物判定；首返回值供水珠确认已判定，次返回值才表示实际生效。
+--- 水珠即使抽签失败仍按原约定自耗；果树周期由Game按timer独立续期。
 ---@param game BottleGame
 ---@param item ItemInstance
 ---@param contacts BottleStepContacts
 ---@param events GameEvent[]
 ---@return boolean attempted
+---@return boolean applied
 function Extra.Crop(game, item, contacts, events)
-    if item.location ~= "bottle" then return false end
+    if item.location ~= "bottle" then return false, false end
     if item.id == "seed" then
         if game:_RandomInt(2) == 1 then
             local pool = PlantPool()
             if #pool > 0 then
                 game:_Transform(item, assert(pool[game:_RandomInt(#pool)]), events)
+                return true, true
             end
         end
-        return true
+        return true, false
     end
-    if item.id ~= "fruit_tree" then return false end
+    if item.id ~= "fruit_tree" then return false, false end
     local blessed = item.treeBlessed == true
     item.treeBlessed = false -- 下一次判定即消费，不叠加，也不会因瓶满保留。
+    local applied = false
     if blessed then
         -- 先保证基础一件，再独立50%额外一件，每件独立抽完整水果种类。
-        game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
-            contacts.positions[item.uid])
+        applied = game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
+            contacts.positions[item.uid]) ~= nil
         if game:_RandomInt(2) == 1 then
-            game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
+            local extra = game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
                 contacts.positions[item.uid])
+            applied = extra ~= nil or applied
         end
     elseif game:_RandomInt(2) == 1 then
-        game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
-            contacts.positions[item.uid])
+        applied = game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
+            contacts.positions[item.uid]) ~= nil
     end
     game.revision = game.revision + 1
-    return true
+    return true, applied
 end
 
 ---@param game BottleGame
@@ -232,8 +238,8 @@ local function Farmer(game, item, contacts, events)
             if not other.treeBlessed then
                 other.treeBlessed = true
                 Buff(game, other, events, 1)
-            end
-            hit = true -- 已带祝福也算触碰，不叠层，农民仍进入1秒冷却。
+                hit = true
+            end -- 已带同一祝福没有实际效果，不重复冷却。
         end
     end
     return hit
@@ -245,15 +251,20 @@ end
 ---@param events GameEvent[]
 ---@return boolean
 local function Droplet(game, item, contacts, events)
-    local attempted = false
-    -- 快照只含触发前已有的相邻对象；生成的水果不追加进本次相邻集合。
+    local attempted, applied = false, false
+    -- Crop返回“已执行农作物判定”而非“概率成功”；水珠明确判定后自耗，
+    -- 因而概率失败但自耗成功仍是水珠本身的实际效果，不改果树周期。
     for _, crop in ipairs(game:_Adjacents(item.uid, contacts)) do
         if crop.location == "bottle" and Items.HasTag(crop.id, "农作物") then
-            if Extra.Crop(game, crop, contacts, events) then attempted = true end
+            local checked, changed = Extra.Crop(game, crop, contacts, events)
+            attempted, applied = checked or attempted, changed or applied
         end
     end
-    if attempted then game:_Destroy(item.uid, false, events) end
-    return attempted
+    if attempted then
+        local consumed = game:_Destroy(item.uid, false, events)
+        return consumed or applied -- 自耗被拦截但确实触发了农作物，也属于实际生效。
+    end
+    return false
 end
 
 ---@param game BottleGame
@@ -365,7 +376,8 @@ function Extra.Apply(game, item, contacts, events)
     if id == "gambler" or id == "gambling_god" then
         return Gambler(game, item, contacts, events)
     elseif id == "fruit_tree" then
-        return Extra.Crop(game, item, contacts, events)
+        local _, applied = Extra.Crop(game, item, contacts, events)
+        return applied
     elseif id == "farmer" then
         return Farmer(game, item, contacts, events)
     elseif id == "droplet" then
@@ -450,28 +462,31 @@ function Extra.AfterSettle(game, events)
     end
 end
 
---- 位移已经由 Game 按真实物理差分累积；这里只消费10米阈值，不再重复采样。
---- 健身教练各自使缩幅×2，气球没有缩小效果，不在这里新增气球规则。
+--- 位移已经由 Game 按真实物理米差分累积；按源表分别消费大胃王50米、兔子100米。
+--- 只调收益阈值，不缩放物理或硬限每回合次数。
 ---@param game BottleGame
 ---@param item ItemInstance
 ---@param events GameEvent[]
 function Extra.TrackDistance(game, item, events)
     if item.location ~= "bottle" then return end
     if item.id == "glutton" then
+        local threshold = 50
         local coaches = 0
         for _, other in ipairs(game:BottleItems()) do
             if other.id == "fitness_coach" then coaches = coaches + 1 end
         end
         local shrink = 0.1 * (2 ^ coaches)
-        while item.distance >= 10 and item.scale > 1 do
-            item.distance = item.distance - 10
-            item.scale = math.max(1, item.scale - shrink)
-            game:ApplyScale(item, events)
+        while item.distance >= threshold and item.scale > 1 do
+            item.distance = item.distance - threshold
+            local previous = item.scale
+            item.scale = math.max(1, previous - shrink)
+            game:ApplyScale(item, events, previous)
         end
-        if item.distance >= 10 and item.scale <= 1 then item.distance = 0 end
+        if item.distance >= threshold and item.scale <= 1 then item.distance = 0 end
     elseif item.id == "rabbit" then
-        while item.distance >= 10 do
-            item.distance = item.distance - 10
+        local threshold = 100
+        while item.distance >= threshold do
+            item.distance = item.distance - threshold
             if Relics.Has(game, "in_groups") then
                 for _, other in ipairs(game:BottleItems()) do
                     if other.id == "rabbit" then Permanent(game, other, events, 1) end

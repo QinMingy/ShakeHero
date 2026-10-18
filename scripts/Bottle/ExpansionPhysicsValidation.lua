@@ -8,7 +8,8 @@ local Art = require("Bottle.Art")
 local worlds = {}
 local IDS = {"chick","sheep","pig","calf","grass","hay","poop","golden_poop",
     "diamond_poop","rainbow_poop","gecko","cactus","abacus","bodyguard","chicken_keeper",
-    "splitter","discus_athlete","discus","compass","jelly","wool","sweater"}
+    "splitter","discus_athlete","discus","compass","jelly","wool","sweater",
+    "spinning_top","windmill","gear","roulette","removal_coin"}
 
 local function make(ids)
     local sim = Physics.New()
@@ -42,18 +43,20 @@ end
 local cases = {}
 local function case(name, run) cases[#cases+1]={name=name,run=run} end
 
--- 夹具示意：22种独立凸片在中央自由下落；凹口只由分片表示，不交给Box2D凹多边形。
-case("22新图案与全部凸片轮廓合法", function(check)
+-- 夹具示意：独立凸片/真圆在中央自由下落；凹口只由分片表示，不交给Box2D凹多边形。
+case("新增图案与全部凸片及真圆轮廓合法", function(check)
     local sim = make(IDS)
     local fingerprints = {}
     for uid,id in ipairs(IDS) do
         check(Art.HasSprite(id), id.."有专用图案")
         local rec=assert(sim.bodies[uid])
-        local shape=Shapes.Variant(id,id=="sheep" and 0 or nil)
-        local profile=assert(Shapes.profiles[shape])
-        local polygons=assert(profile.polygons)
-        check(rec.shape==shape and #rec.shapes==#polygons,id.."使用专用真实fixture")
-        check(rec.body.mass>0,id.."质量有限正数")
+        local shape=id=="sheep" and Shapes.Variant(id,0) or Items.byId[id].shape
+        -- 移除币使用内置完整圆；其余新增图案使用显式专用轮廓。
+        local profile=assert(Shapes.profiles[shape] or (shape=="circle" and {circles={{x=8,y=8,radius=8}}}))
+        local polygons, circles = profile.polygons or {}, profile.circles or {}
+        check(#polygons+#circles>0,id.."至少有一个凸片或真圆轮廓")
+        check(rec.shape==shape and #rec.shapes==#polygons+#circles,id.."使用专用真实fixture")
+        check(rec.body.mass>0 and rec.body.mass<math.huge,id.."质量有限正数")
         for index,polygon in ipairs(polygons) do
             local convex,area=true,0
             local n=#polygon//2
@@ -67,6 +70,23 @@ case("22新图案与全部凸片轮廓合法", function(check)
                 area=area+ax*by-ay*bx
             end
             check(n>=3 and n<=8 and area>0 and convex,id.."凸片"..index.."为正绕序凸片")
+        end
+        for index,circle in ipairs(circles) do
+            local finite=circle.x==circle.x and circle.y==circle.y and circle.radius==circle.radius
+                and math.abs(circle.x)<math.huge and math.abs(circle.y)<math.huge
+                and circle.radius>0 and circle.radius<math.huge
+            check(finite,id.."真圆"..index.."圆心及半径有限且半径为正")
+            check(finite and math.abs(circle.x-circle.radius)<math.huge
+                and math.abs(circle.x+circle.radius)<math.huge
+                and math.abs(circle.y-circle.radius)<math.huge
+                and math.abs(circle.y+circle.radius)<math.huge,id.."真圆"..index.."边界有限")
+            local fixture=assert(rec.shapes[#polygons+index]) --[[@as CollisionCircle2D]]
+            local radius=Items.byId[id].radius
+            check(fixture:GetTypeName()=="CollisionCircle2D",id.."真圆使用实际CollisionCircle2D")
+            check(math.abs(fixture.radius-circle.radius*radius/8)<1e-6
+                and math.abs(fixture.center.x-(circle.x-8)*radius/8)<1e-6
+                and math.abs(fixture.center.y-(8-circle.y)*radius/8)<1e-6,
+                id.."真圆"..index.."实际半径和圆心匹配像素转米轮廓")
         end
         local colors=Art.ItemColors(id)
         local chunks={}

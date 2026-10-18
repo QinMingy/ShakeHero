@@ -1,4 +1,4 @@
--- 五件新增遗物的规则钩子。纯 Lua，仅依赖 Bottle 数据模块与 Game 的公开/内部规则接口。
+-- 遗物规则与首次正常获取附赠。纯 Lua，仅依赖 Bottle 数据模块与 Game 的规则接口。
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 
@@ -9,6 +9,27 @@ local TOKEN_THRESHOLD = 50
 local HUNT_NONE = 0
 
 local HALF_FRUIT = { apple_half = true, banana_half = true, orange_half = true, cherry_half = true }
+
+-- 源表“立即获得”仅由正常遗物三选一成功获取路径调用，不在维护或读档时补发。
+---@type table<string, string[]>
+local ACQUISITION_GRANTS = {
+    coin_rain = { "cloud" },
+    in_groups = { "rabbit" },
+    cheat_dice = { "die_d6" },
+    upgrade_coin_machine = { "coin_machine" },
+    tomato_tycoon = { "tomato" },
+    scramble_recipe = { "egg", "tomato" },
+    see_you_tomorrow = { "enoki" },
+    teach_all = { "teacher" },
+    jungle_hunt = { "killer" },
+    cherry_plus = { "cherry" },
+    wash_hands = { "thief" },
+    chef_hat = { "chef" },
+    credit_line = { "credit_card" },
+    bacon_network = { "bacon" },
+    ghost_sport = { "ghost" },
+    lucky_roulette = { "roulette" },
+}
 
 ---@param item ItemInstance
 ---@return boolean
@@ -86,7 +107,7 @@ function RelicEffects.CheckGamblingToken(game, item, events)
     -- 先落尝试标记，再做概率判定，失败后直到严格归零都不重试。
     item.tokenAttempted = true
     game.revision = game.revision + 1
-    if game:_RandomInt(2) ~= 1 then return false end
+    if game:_RandomInt(4) ~= 1 then return false end
 
     -- _Transform 会清理遗物状态，但会为 gambler→gambling_god 保留 rerolled 配额。
     game:_Transform(item, "gambling_god", events)
@@ -124,6 +145,17 @@ end
 function RelicEffects.OnAcquire(game, id)
     if id == "jungle_hunt" or id == "teach_all" then RelicEffects.MaintainHuntTarget(game) end
     if id == "gambling_token" then RelicEffects.Maintain(game) end
+end
+
+--- 仅供Game:Choose成功获得新遗物时调用一次，调用方已先将relics[id]设为true。
+--- 新物品永久加入牌库，不直接入当前瓶、不走生成FIFO；随后才维护原有遗物状态。
+--- 一次性由Choose拒绝已拥有候选保证，不新增存档标记，Restore/GM/Maintain不调用。
+---@param game BottleGame
+---@param id string
+function RelicEffects.OnAcquired(game, id)
+    if not Relics.Has(game, id) then return end
+    for _, itemId in ipairs(ACQUISITION_GRANTS[id] or {}) do game:_Create(itemId) end
+    RelicEffects.OnAcquire(game, id)
 end
 
 --- 消灭完成后奖励：使用消灭前锁定的目标 UID，避免 _Destroy 刷新后误判。

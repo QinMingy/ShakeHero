@@ -82,7 +82,7 @@ Test("新局共享刷新1次、每完成2回合加1且跳过不再发", function
     assert(game.round == 5)
 end)
 
-Test("prepare重抽与物品遗物draft共用刷新且可连续扣除", function()
+Test("prepare与物品draft共享可连续扣除、遗物独立免费一次", function()
     local game = Fixture({"apple"})
     game.refreshes = 4
     assert(game:Reroll() and game:Reroll())
@@ -100,9 +100,11 @@ Test("prepare重抽与物品遗物draft共用刷新且可连续扣除", function
     snapshot.phase, snapshot.round, snapshot.stage = "draft", 5, 2
     snapshot.target, snapshot.relicDraft = Game.GetTarget(2), true
     snapshot.options, snapshot.refreshes = {"juicer"}, 2
+    snapshot.refreshUsed, snapshot.relicRefreshes = false, 1
     local relic = Game.Restore(snapshot)
-    assert(relic:DraftRefresh() and relic:DraftRefresh() and not relic:DraftRefresh())
-    Close(relic.refreshes, 0)
+    assert(relic:DraftRefresh() and not relic:DraftRefresh())
+    Close(relic.refreshes, 2)
+    Close(relic.relicRefreshes, 0)
 end)
 
 Test("所有成功刷新为已拥有养鸡人计数、失败不计且余数读档", function()
@@ -148,7 +150,7 @@ Test("刷新余额prepare与draft读档保留且运行中回滚", function()
     game.refreshes = 7
     assert(game:Reroll())
     local prepare = game:Snapshot()
-    assert(prepare.version == 2 and prepare.rulesVersion == 6 and prepare.refreshes == 6)
+    assert(prepare.version == 2 and prepare.rulesVersion == 8 and prepare.refreshes == 6)
     local restored = Game.Restore(prepare)
     Close(restored.refreshes, 6)
     assert(restored:Start())
@@ -171,7 +173,7 @@ Test("旧档缺刷新只继承当前一次、不追溯已完成回合", function
         draft.rulesVersion, draft.refreshes, draft.refreshUsed = nil, nil, used
         restored = Game.Restore(draft)
         Close(restored.refreshes, used and 0 or 1)
-        assert(restored:Snapshot().rulesVersion == 6 and restored:Snapshot().version == 2)
+        assert(restored:Snapshot().rulesVersion == 8 and restored:Snapshot().version == 2)
     end
 end)
 
@@ -399,7 +401,7 @@ end)
 Test("存档严格拒绝新永久字段非法值和所有运行态残留", function()
     local invalid = {
         refreshes={-1,.5,false,"1",0/0,math.huge},
-        rulesVersion={0,4,7,false,"6"},
+        rulesVersion={0,4,9,false,"8"},
         valueBase={false,"3",{},0/0,math.huge,-math.huge},
         refreshCount={-1,5,.5,false,"1",0/0,math.huge},
         woolCount={-1,2147483648,.5,false,"1",0/0,math.huge},
@@ -413,7 +415,7 @@ Test("存档严格拒绝新永久字段非法值和所有运行态残留", funct
         spinTravel={0}, spinAngle={0}, spinForced={0},
         pendingConsumerUid={1}, calfDashHits={{}}, discusOwnerUid={1}, discusTargetUid={1},
         discusState={"flying"}, discusHolderUid={1}, compassAngle={0}, compassTravel={0},
-        compassForced={0}, cactusScale={1},
+        compassForced={0}, cactusScale={1}, cactusBonus={.1,false,"0",{},0/0,math.huge},
     }
     for field, values in pairs(invalid) do
         for _, value in ipairs(values) do

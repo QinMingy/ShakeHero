@@ -92,7 +92,7 @@ Test("新增23类型、编号、tag与穿透属性", function()
     local ids = { "chick", "sheep", "pig", "calf", "grass", "hay", "poop", "golden_poop",
         "diamond_poop", "rainbow_poop", "gecko", "cactus", "abacus", "bodyguard", "chicken_keeper",
         "splitter", "juice", "discus_athlete", "discus", "compass", "jelly", "wool", "sweater" }
-    assert(#Items.list == 93)
+    assert(#Items.list == 98)
     for index, id in ipairs(ids) do
         assert(Items.byId[id].numberId == 70 + index and Items.byId[id].implemented, "编号/实装错：" .. id)
     end
@@ -113,11 +113,14 @@ Test("新建与回合清理只清临时状态", function()
     assert(item.shielded == false and item.calfDashHits == nil)
 end)
 
-Test("Touches不抢旧规则与纯被动类型", function()
-    local game = Fixture({ "apple", "diamond_poop", "calf", "wool" })
-    local contacts = Contacts({ { 1, 2 }, { 3, 4 } })
+Test("Touches不抢旧规则并区分便便合法touch与纯被动类型", function()
+    local game = Fixture({ "apple", "diamond_poop", "calf", "wool", "rainbow_poop" })
+    local contacts = Contacts({ { 1, 2 }, { 3, 4 }, { 1, 5 } })
     assert(Expansion.Touches(game, Item(game, 1), contacts) == nil)
-    for uid = 2, 4 do assert(Expansion.Touches(game, Item(game, uid), contacts) == false) end
+    for _, uid in ipairs({ 2, 5 }) do
+        assert(Expansion.Touches(game, Item(game, uid), contacts) == true)
+    end
+    for uid = 3, 4 do assert(Expansion.Touches(game, Item(game, uid), contacts) == false) end
 end)
 
 Test("小鸡每5秒生成永久鸡蛋、不在零时刻生成", function()
@@ -242,11 +245,15 @@ Test("便便20%失败只加基础、垃圾桶仍得消费钩子", function()
     Close(Item(game, 1).permBonus, 3)
 end)
 
-Test("钻石彩虹不擅自被植物自动吃", function()
-    local game = Fixture({ "apple", "diamond_poop", "rainbow_poop" })
-    local contacts = Contacts({ { 1, 2 }, { 1, 3 } })
-    assert(Expansion.Touches(game, Item(game, 2), contacts) == false)
-    assert(Expansion.Touches(game, Item(game, 3), contacts) == false)
+Test("钻石彩虹仅被相邻植物tag目标自动消费", function()
+    local game = Fixture({ "apple", "diamond_poop", "rainbow_poop", "egg" })
+    local plants = Contacts({ { 1, 2 }, { 1, 3 } })
+    local foodOnly = Contacts({ { 4, 2 }, { 4, 3 } })
+    for _, uid in ipairs({ 2, 3 }) do
+        assert(Expansion.Touches(game, Item(game, uid), plants) == true)
+        assert(Expansion.Touches(game, Item(game, uid), foodOnly) == false)
+        assert(Items.byId[Item(game, uid).id].effect:find("被相邻植物消耗", 1, true))
+    end
 end)
 
 Test("钻石永久倍率和彩虹临时倍率独立", function()
@@ -292,25 +299,58 @@ Test("壁虎侧壁连续延迟后只锚定一次，底顶不触发", function()
     assert(not Item(game, 1).anchored)
 end)
 
-Test("仙人掌吃水珠按实际尺寸增幅永久加倍率、上限不超收", function()
+Test("仙人掌吃水珠按实际尺寸临时加倍率、上限不超收且旧永久倍率保留", function()
     local game = Fixture({ "cactus", "droplet", "droplet" })
-    Item(game, 1).scale = 1.95
+    Item(game, 1).scale, Item(game, 1).permMult = 1.95, 1.5
     local events = {}
     Expansion.Apply(game, Item(game, 1), Contacts({ { 1, 2 }, { 1, 3 } }), events)
     Close(Item(game, 1).scale, 2)
-    Close(Item(game, 1).permMult, 1.05)
+    Close(Item(game, 1).cactusBonus, .05)
+    Close(Item(game, 1).permMult, 1.5)
+    Close(game:_Value(Item(game, 1)), 4 * 1.55, "旧永久倍率与本回合加数相加而非连乘")
     assert(Item(game, 2).location == "discard" and Item(game, 3).location == "discard")
+    local settled = game:Finish()
+    Close(Events(settled, "score")[1].value, 4 * 1.55)
+    Close(Item(game, 1).cactusBonus, 0)
+    Close(Item(game, 1).scale, 2)
+    Close(Item(game, 1).permMult, 1.5)
+    game:RevealStep(100)
+    local restored = Game.Restore(game:Snapshot())
+    Close(Item(restored, 1).scale, 2)
+    Close(Item(restored, 1).permMult, 1.5, "旧存量倍率不得因新规则剥离")
+    Close(restored:_Value(Item(restored, 1)), 6)
+    for _,rules in ipairs({"nil",5,6}) do
+        local legacy = game:Snapshot() --[[@as any]]
+        if rules == "nil" then legacy.rulesVersion = nil else legacy.rulesVersion = rules end
+        local migrated = Game.Restore(legacy)
+        Close(Item(migrated, 1).permMult, 1.5, "旧档已有仙人掌永久倍率不追溯剥离")
+        Close(Item(migrated, 1).scale, 2)
+        Close(Item(migrated, 1).cactusBonus, 0)
+        Close(migrated:_Value(Item(migrated, 1)), 6)
+        assert(migrated:Snapshot().rngState == legacy.rngState)
+    end
+    assert(restored:Skip() and restored:Start())
+    restored:Step(0, Contacts())
+    Close(Item(restored, 1).cactusBonus, 0, "新回合不把永久尺寸重新兑换临时倍率")
+    Close(restored:_Value(Item(restored, 1)), 6)
 end)
 
-Test("仙人掌追踪其他正向尺寸变化，不奖励缩小", function()
+Test("仙人掌追踪其他正向尺寸变化，不奖励缩小且清理只清临时倍率", function()
     local game = Fixture({ "cactus" })
     Expansion.Step(game, 0, Contacts(), {})
     Item(game, 1).scale = 1.3
     Expansion.Step(game, 0, Contacts(), {})
-    Close(Item(game, 1).permMult, 1.3)
+    Close(Item(game, 1).cactusBonus, .3)
+    Close(Item(game, 1).permMult, 1)
+    Close(game:_Value(Item(game, 1)), 5.2)
     Item(game, 1).scale = 1.1
     Expansion.Step(game, 0, Contacts(), {})
-    Close(Item(game, 1).permMult, 1.3)
+    Close(Item(game, 1).cactusBonus, .3)
+    Close(Item(game, 1).permMult, 1)
+    Expansion.ResetRound(Item(game, 1))
+    Close(Item(game, 1).cactusBonus, 0)
+    Close(Item(game, 1).scale, 1.1)
+    Close(game:_Value(Item(game, 1)), 4)
 end)
 
 Test("仙人掌气球公共爆炸只一次、事件倍率不被光环刷新抹去", function()
@@ -349,6 +389,11 @@ Test("保镖按uid最早选且不保护自身，护盾禁止整回合重复消�
     Close(game.roundScore, 5); Close(Item(game, 1).counter, 1)
     assert(not game:_Destroy(1, false, events, Item(game, 4), "consume"))
     Close(Item(game, 2).counter, 1)
+    local score = game.roundScore
+    game:Step(0, Contacts({ { 3, 4 } }))
+    Close(Item(game, 4).remaining, 0, "杀手消费被护盾拦截不进入冷却")
+    Close(game.roundScore, score, "同一护盾反复阻拦不重复收益")
+    assert(Item(game, 3).location == "bottle" and Item(game, 3).shielded)
 end)
 
 Test("保镖三盾直接离场，不被第二保镖套娃保护", function()
@@ -389,12 +434,19 @@ Test("养鸡人刷新跨回合累计且牌库生效、弃牌不计", function()
     Close(Item(game, 3).permBonus, 0); Close(Item(game, 1).refreshCount, 0)
 end)
 
-Test("小猪只主动吃完整苹果橘子香蕉，半份樱桃不匹配", function()
-    local game = Fixture({ "pig", "apple_half", "cherry", "apple", "banana", "orange" })
+Test("小猪主动吃完整苹果橘子香蕉及香蕉皮，半份樱桃不匹配", function()
+    local game = Fixture({ "pig", "apple_half", "cherry", "apple", "banana", "orange", "banana_peel" })
     assert(not Expansion.Touches(game, Item(game, 1), Contacts({ { 1, 2 }, { 1, 3 } })))
     Expansion.Apply(game, Item(game, 1), Contacts({ { 1, 4 }, { 1, 5 }, { 1, 6 } }), {})
     Close(Item(game, 1).scale, 1.3); Close(Item(game, 1).weight, 1.3)
+    Close(game.roundScore, 20, "三件按消费前价值2/6/2分别奖励两倍金币")
     assert(Item(game, 5).id == "banana_peel", "香蕉变皮仍给猪增长")
+    Expansion.Apply(game, Item(game, 1), Contacts({ { 1, 5 }, { 1, 7 } }), {})
+    assert(Item(game, 5).location == "discard" and Item(game, 7).location == "discard",
+        "新产生和既有香蕉皮都可被主动消费")
+    Close(Item(game, 1).scale, 1.5); Close(Item(game, 1).weight, 1.5)
+    Close(game.roundScore, 24, "两份基础1香蕉皮成功消费各奖励2金币")
+    assert(Item(game, 2).location == "bottle" and Item(game, 3).location == "bottle")
 end)
 
 Test("猪消费草照样增长，到体积上限转培根且保物理", function()
