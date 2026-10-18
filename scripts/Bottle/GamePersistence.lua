@@ -3,7 +3,6 @@ local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local RelicState = require("Bottle.RelicState")
 local PhysicalState = require("Bottle.PhysicalState")
-local Money = require("Bottle.Money")
 local GamePersistence = {}
 
 -- 与 Game 的规则常量保持一致；持久化校验不依赖可变运行状态。
@@ -12,7 +11,7 @@ local DRAW_LIMIT = 20
 local MAX_COUNTER = 2147483647
 local MAX_STAGE = 1000
 local RNG_MODULUS = 2147483647
-local RULES_VERSION = 6
+local RULES_VERSION = 8
 
 ---@class GamePersistenceHelpers
 ---@field Copy fun(value:any):any
@@ -31,17 +30,6 @@ function GamePersistence.Install(Game, helpers)
     local IsInteger = assert(helpers.IsInteger)
     local OwnedTypes = assert(helpers.OwnedTypes)
     local DraftEligible = assert(helpers.DraftEligible)
-
-    -- 旧结算摘要也可能包含小数金币，只迁移已知的金币金额短语。
-    ---@param prefix string
-    ---@param literal string
-    ---@param suffix string
-    ---@return string
-    local function RoundResultPhrase(prefix, literal, suffix)
-        local value = tonumber(literal)
-        if value and IsFinite(value) then return prefix .. Money.Format(value) .. suffix end
-        return prefix .. literal .. suffix
-    end
 
     -- 存档数组必须是无额外键的连续1-based数组；避免 ipairs 静默丢掉损坏数据。
     ---@param value any
@@ -81,13 +69,14 @@ function GamePersistence.Install(Game, helpers)
         end
         -- 扩展运行态只接受 ResetRound 清理后的缺省/零值，不把额外表导入实例。
         for _, key in ipairs({"abacusMerges", "calfDashRemaining", "discusWait", "compassProgress",
-            "ghostTravel", "spinProgress", "geckoContactTime"}) do
+            "ghostTravel", "spinProgress", "geckoContactTime", "cactusBonus", "jackpotBonus",
+            "rotationProgress", "gearPlayback"}) do
             assert(saved[key] == nil or saved[key] == 0, "可持久化阶段残留扩展状态: " .. key)
         end
         assert(saved.anchored == nil or saved.anchored == false, "可持久化阶段残留锚定状态")
         for _, key in ipairs({"pendingConsumerUid", "calfDashHits", "discusOwnerUid", "discusTargetUid",
             "discusHolderUid", "discusState", "compassAngle", "compassTravel", "compassForced", "cactusScale",
-            "spinTravel", "spinAngle", "spinForced"}) do
+            "spinTravel", "spinAngle", "spinForced", "rotationSamples", "gearBatch"}) do
             assert(saved[key] == nil, "可持久化阶段残留扩展状态: " .. key)
         end
         item.valueBase = saved.valueBase
@@ -97,6 +86,8 @@ function GamePersistence.Install(Game, helpers)
         item.abacusMerges, item.calfDashRemaining = 0, 0
         item.discusWait, item.compassProgress = 0, 0
         item.ghostTravel, item.spinProgress, item.geckoContactTime = 0, 0, 0
+        item.cactusBonus, item.jackpotBonus = 0, 0
+        item.rotationProgress, item.gearPlayback = 0, 0
         item.refreshCount = math.floor(refreshCount)
         item.woolCount, item.woolExtraEntry = math.floor(woolCount), saved.woolExtraEntry
         item.woolReadyRound = saved.woolReadyRound
@@ -122,7 +113,7 @@ function GamePersistence.Install(Game, helpers)
             lastRoundScore = self.lastRoundScore, lastResult = self.lastResult,
             drawn = Copy(self.drawn), options = Copy(self.options),
             rerollUsed = self.rerollUsed, refreshUsed = self.refreshUsed, refreshes = self.refreshes,
-            removals = self.removals,
+            relicRefreshes = self.relicRefreshes, removals = self.removals,
             revision = self.revision, rngState = self._rngState, nextUid = self._nextUid,
             instances = Copy(self:AllInstances()), deck = deck, discard = discard,
             relics = Copy(self.relics), relicDraft = self.relicDraft,
@@ -136,8 +127,9 @@ function GamePersistence.Install(Game, helpers)
     function Game.Restore(snapshot)
         assert(type(snapshot) == "table" and getmetatable(snapshot) == nil and snapshot.version == 2,
             "存档版本不兼容（V0.3 新表需要 version=2；旧档作废）")
-        assert(snapshot.rulesVersion == nil or snapshot.rulesVersion == 5
-            or snapshot.rulesVersion == RULES_VERSION, "存档规则版本不兼容")
+        local legacyPre7 = snapshot.rulesVersion == nil or snapshot.rulesVersion == 5 or snapshot.rulesVersion == 6
+        assert(legacyPre7 or snapshot.rulesVersion == 7 or snapshot.rulesVersion == RULES_VERSION,
+            "存档规则版本不兼容")
         assert(snapshot.phase == "prepare" or snapshot.phase == "draft" or snapshot.phase == "over",
             "存档必须是 prepare/draft/over；运行/结算中应保存回合前快照")
         assert(IsInteger(snapshot.round) and snapshot.round >= 1 and snapshot.round <= MAX_COUNTER, "无效回合")
@@ -161,8 +153,23 @@ function GamePersistence.Install(Game, helpers)
             refreshes = used and 0 or 1
         end
         assert(IsInteger(refreshes) and refreshes >= 0, "无效刷新次数")
+        local inRelicDraft = snapshot.phase == "draft" and snapshot.relicDraft == true
+        local relicRefreshes = snapshot.relicRefreshes
+        if relicRefreshes == nil then
+            assert(snapshot.rulesVersion ~= RULES_VERSION, "新规则存档缺少遗物刷新次数")
+            -- 旧档只迁移当前遗物环节尚未用过的一次，避免重读重复发放。
+            relicRefreshes = inRelicDraft and not snapshot.refreshUsed and 1 or 0
+        end
+        assert(IsInteger(relicRefreshes) and relicRefreshes >= 0 and relicRefreshes <= 1,
+            "无效遗物刷新次数")
+        assert(relicRefreshes == (inRelicDraft and not snapshot.refreshUsed and 1 or 0),
+            "遗物刷新次数与阶段或已用状态不一致")
         local removals = snapshot.removals
-        if removals == nil then removals = 0 end
+        if removals == nil then
+            assert(legacyPre7, "新规则存档缺少移除次数")
+            -- nil/5/6旧档仅补0，不按旧考核回合追溯补发。
+            removals = 0
+        end
         assert(IsInteger(removals) and removals >= 0, "无效移除次数")
         assert(type(snapshot.lastResult) == "string", "无效回合结果")
         local scalarNames = {
@@ -193,18 +200,14 @@ function GamePersistence.Install(Game, helpers)
         local self = setmetatable({}, Game)
         self:_Init(1) -- 只初始化字段，不抽取，不消耗随机状态。
         self.phase, self.round, self.stage = snapshot.phase, math.floor(snapshot.round), math.floor(snapshot.stage)
-        -- 兼容旧档中的小数金币；仅迁移账户字段，不提前取整物品价值或倍率。
-        self.score, self.totalScore, self.roundScore = Money.Round(snapshot.score),
-            Money.Round(snapshot.totalScore), Money.Round(snapshot.roundScore)
+        -- 账户保留远端实际结算精度；格式化展示不得反写或逐笔取整收益。
+        self.score, self.totalScore, self.roundScore = snapshot.score, snapshot.totalScore, snapshot.roundScore
         self.elapsed, self.target = snapshot.elapsed, snapshot.target
-        self.bestRound, self.bestRoundScore = snapshot.bestRound, Money.Round(snapshot.bestRoundScore)
-        self.lastRoundScore, self.lastResult = Money.Round(snapshot.lastRoundScore), snapshot.lastResult
-        for _, pattern in ipairs({"(获得)([%d%.eE%+%-]+)(金币)",
-            "(余额)([%d%.eE%+%-]+)(未达到)", "(扣除)([%d%.eE%+%-]+)(，)"}) do
-            self.lastResult = self.lastResult:gsub(pattern, RoundResultPhrase)
-        end
+        self.bestRound, self.bestRoundScore = snapshot.bestRound, snapshot.bestRoundScore
+        self.lastRoundScore, self.lastResult = snapshot.lastRoundScore, snapshot.lastResult
         self.rerollUsed, self.refreshUsed, self.revision = snapshot.rerollUsed, snapshot.refreshUsed, snapshot.revision
         self.refreshes = math.floor(refreshes)
+        self.relicRefreshes = math.floor(relicRefreshes)
         self.removals = math.floor(removals)
         self.spawnQueue = {} -- 队列属运行态；永远不从存档导入。
         self._rngState, self._nextUid = math.floor(snapshot.rngState), math.floor(snapshot.nextUid)
@@ -318,10 +321,10 @@ function GamePersistence.Install(Game, helpers)
             end
             optionSeen[id] = true
             local definition = self.relicDraft and Relics.byId[id] or Items.byId[id]
-            local excludedCommon = self.round % 5 == 0 and definition.rarity == 1
+            local excludedCommon = not self.relicDraft and self.round % 5 == 0 and definition.rarity == 1
             if excludedCommon then
-                -- 新基础行生效前的nil/5旧档先完整校验，再只过滤普通；不重抽不消耗随机/刷新。
-                assert(snapshot.rulesVersion ~= RULES_VERSION, "考核三选一不能包含普通品质")
+                -- nil/5/6旧档先完整校验，再只过滤考核普通物品；遗物原样保留，不重抽。
+                assert(legacyPre7, "考核三选一不能包含普通品质")
             else
                 self.options[#self.options + 1] = id
             end

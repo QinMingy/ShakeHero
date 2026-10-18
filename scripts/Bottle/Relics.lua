@@ -1,13 +1,13 @@
--- 遗物数据与机制（docs/relic.txt，33 件）。纯 Lua，不依赖引擎。
+-- 遗物数据与机制（docs/relic.txt，37 件）。纯 Lua，不依赖引擎。
 -- 遗物是永久被动加成，通过“考核后的遗物三选一”获得，不进瓶、不参与物理。
 -- 效果多为声明式标记：Game/Effects 在相应时机查询 Relics.Has(game, id)。
--- 全部33件已接线；复杂行为由 RelicEffects / RelicExpansion 与规则/物理查询协作。
+-- 全部37件已接线；复杂行为由 RelicEffects / RelicExpansion 与规则/物理查询协作。
 -- 骰子、赌徒、云朵、兔子、灵魂石和硬币机的关联钩子已随物品实装接通。
 -- 数据来源 relic.txt 的“备注”列保留语义；本轮明确细则在各 note 中注明。
 
 ---@class RelicDef
 ---@field id string
----@field numberId integer 1..33，与 relic.txt 序号一致
+---@field numberId integer 1..37，与 relic.txt 序号一致
 ---@field name string
 ---@field rarity integer 1..5（白/绿/蓝/紫/黄）
 ---@field effect string UI 说明；@ 为金币图标，[[id]] 为物品引用
@@ -32,7 +32,7 @@ end
 
 Add {
     numberId = 1, id = "gambling_token", name = "赌神令牌", rarity = 1, pool = true, implemented = true,
-    effect = "[[gambler]]完成本次投掷效果后，价值达到50时有50%概率变为[[gambling_god]]；每个赌徒失败后不再尝试，价值归0刷新。转化后永久叠加转化前价值",
+    effect = "[[gambler]]完成本次投掷效果后，价值达到50时有25%概率变为[[gambling_god]]；每个赌徒失败后不再尝试，价值归0刷新。转化后永久叠加转化前价值",
     note = "旧投掷的加值、特殊结算、投1归零先完成；成功保留UID和本回合骰子重投额度并结束原赌徒批次。尝试标记跨回合/存档；外部价值变化完成后也可触发；负值不刷新",
 }
 Add {
@@ -46,12 +46,12 @@ Add {
 }
 Add {
     numberId = 4, id = "coin_rain", name = "硬币雨", rarity = 2, pool = true, implemented = true,
-    effect = "之后的[[cloud]]产生[[coin_1]]而不是[[droplet]]",
+    effect = "之后的[[cloud]]产生[[coin_1]]而不是[[droplet]]；立即获得1个[[cloud]]",
     note = "已接线：ExtraEffects 云朵生成 coin_1 替换 droplet",
 }
 Add {
     numberId = 5, id = "in_groups", name = "成群结队", rarity = 2, pool = true, implemented = true,
-    effect = "[[rabbit]]现在会同时为场上其他兔子永久增加价值",
+    effect = "[[rabbit]]现在会同时为场上其他兔子永久增加价值；立即获得1个[[rabbit]]",
     note = "已接线：ExtraEffects 兔子位移为全部兔子加值",
 }
 Add {
@@ -71,12 +71,12 @@ Add {
 }
 Add {
     numberId = 9, id = "cheat_dice", name = "作弊骰子", rarity = 1, pool = true, implemented = true,
-    effect = "骰子不再会投到点数1",
+    effect = "骰子不再会投到点数1；立即获得1个[[die_d6]]",
     note = "已接线：ExtraEffects 骰子点数下限2",
 }
 Add {
     numberId = 10, id = "upgrade_coin_machine", name = "升级硬币机", rarity = 2, pool = true, implemented = true,
-    effect = "[[coin_machine]]现在有机会产生[[coin_4]]",
+    effect = "[[coin_machine]]现在有机会产生[[coin_4]]；立即获得1个[[coin_machine]]",
     note = "已接线：ExtraEffects 硬币机产出池加入 coin_4",
 }
 Add {
@@ -86,7 +86,7 @@ Add {
 }
 Add {
     numberId = 12, id = "tomato_tycoon", name = "西红柿首富", rarity = 2, pool = true, implemented = true,
-    effect = "[[tomato]]价值×2",
+    effect = "[[tomato]]价值×2；立即获得1个[[tomato]]",
 }
 Add {
     numberId = 13, id = "lucky_charm", name = "幸运符", rarity = 2, pool = true, implemented = true,
@@ -95,22 +95,22 @@ Add {
 }
 Add {
     numberId = 14, id = "scramble_recipe", name = "炒蛋秘籍", rarity = 2, pool = true, implemented = true,
-    effect = "[[tomato_egg]]可被消耗总次数从5次提升为10次",
+    effect = "[[tomato_egg]]可被消耗总次数从5次提升为10次；立即获得1个[[egg]]和1个[[tomato]]",
     note = "总计10次，不是额外10次；保留原有累计消耗次数，跨回合与存档",
 }
 Add {
     numberId = 15, id = "see_you_tomorrow", name = "seeYouTomorrow", rarity = 2, pool = true, implemented = true,
-    effect = "[[enoki]]每次被消耗，自身价值永久+1",
+    effect = "[[enoki]]每次被消耗，自身价值永久+1；立即获得1个[[enoki]]",
 }
 Add {
     numberId = 16, id = "teach_all", name = "有教无类", rarity = 2, pool = true, implemented = true,
-    effect = "[[teacher]]不会被杀手杀害，将相邻的杀手、赌徒、小偷转变为[[student]]，学生叠加其价值",
+    effect = "[[teacher]]不会被杀手杀害，将相邻的杀手、赌徒、小偷转变为[[student]]，学生叠加其价值；立即获得1个[[teacher]]",
     note = "V0.4 已接线：Effects.Teacher 转化 + Killer 豁免老师",
 }
 Add {
     numberId = 17, id = "jungle_hunt", name = "江湖追杀", rarity = 3, pool = true, implemented = true,
-    effect = "标记拥有牌库中一个可被[[killer]]击杀的人类。杀手击杀当前目标后，自身永久倍率×1.5，并刷新目标",
-    note = "只从deck/bottle标记既有人类UID，不生成新人；排除警察/杀手，有教无类时排除老师；目标跨回合/存档稳定，失效才按UID排序随机补选，无候选为0。警察或其他消耗不奖励",
+    effect = "标记拥有牌库中一个可被[[killer]]击杀的人类。杀手击杀当前目标后，自身永久倍率×1.5，并刷新目标；立即获得1个[[killer]]",
+    note = "只从deck/bottle标记既有人类UID，刷新目标不生成新人；首次获得另赠杀手入牌库；排除警察/杀手，有教无类时排除老师；目标跨回合/存档稳定，失效才按UID排序随机补选，无候选为0。警察或其他消耗不奖励",
 }
 Add {
     numberId = 18, id = "juicer", name = "榨汁机", rarity = 2, pool = true, implemented = true,
@@ -123,7 +123,7 @@ Add {
 }
 Add {
     numberId = 20, id = "cherry_plus", name = "车厘子", rarity = 1, pool = true, implemented = true,
-    effect = "[[cherry]]现在改为结算多2次",
+    effect = "[[cherry]]现在改为结算多2次；立即获得1个[[cherry]]",
 }
 Add {
     numberId = 21, id = "knife_skill", name = "精进刀法", rarity = 2, pool = true, implemented = true,
@@ -132,17 +132,17 @@ Add {
 }
 Add {
     numberId = 22, id = "wash_hands", name = "金盘洗手", rarity = 2, pool = true, implemented = true,
-    effect = "[[thief]]不再偷取价值，而是和对方共同永久+1价值，且不再是负面职业（不会被[[police]]、[[teacher]]影响）",
+    effect = "[[thief]]不再偷取价值，而是和对方共同永久+1价值，且不再是负面职业（不会被[[police]]、[[teacher]]影响）；立即获得1个[[thief]]",
     note = "共同加值保留原合法目标分类；警察不消灭该小偷，有教无类老师不将其转为学生；不改变杀手的一般人类目标规则",
 }
 Add {
     numberId = 23, id = "chef_hat", name = "厨师帽", rarity = 2, pool = true, implemented = true,
-    effect = "[[chef]]现在可以消耗相邻的[[knife]]，每消耗一把小刀，为本次切割产物额外增加1点永久价值（冷却：1秒）",
+    effect = "[[chef]]现在可以消耗相邻的[[knife]]，每消耗一把小刀，为本次切割产物额外增加1点永久价值（冷却：1秒）；立即获得1个[[chef]]",
     note = "持帽厨师1秒调度，无帽5秒；本次先消耗相邻小刀，再令本次全部切割产物永久+1/把；无切割不累计给下次，不永久累计到厨师自身",
 }
 Add {
     numberId = 24, id = "credit_line", name = "贷款额度", rarity = 2, pool = true, implemented = true,
-    effect = "后续获取的[[credit_card]]，初始价值为25",
+    effect = "后续获取的[[credit_card]]，初始价值为25；立即获得1张[[credit_card]]",
 }
 
 Add {
@@ -172,23 +172,44 @@ Add {
 }
 Add {
     numberId = 30, id = "bacon_network", name = "培根是对的", rarity = 2, pool = true, implemented = true,
-    effect = "所有和[[bacon]]相邻的物品视为相邻",
+    effect = "所有和[[bacon]]相邻的物品视为相邻；立即获得1个[[bacon]]",
     note = "共享同一块培根的邻居建立效果邻接关系，不扩大物理碰撞或拾取轮廓",
 }
 Add {
     numberId = 31, id = "ghost_sport", name = "幽灵运动", rarity = 1, pool = true, implemented = true,
-    effect = "[[ghost]]每移动5m，+1金币",
+    effect = "[[ghost]]每移动30m，+1金币；立即获得1个[[ghost]]",
     note = "只记真实位移，不把闪现算路程；不直接增加幽灵价值",
 }
 Add {
     numberId = 32, id = "spin_reward", name = "转圈圈", rarity = 2, pool = true, implemented = true,
-    effect = "物品每次旋转一圈，+1金币",
-    note = "记录真实自然旋转，不把指南针强制转向重复算为自然角路程",
+    effect = "物品每累计自然旋转三圈，独立30%概率+1金币",
+    note = "真实自然绝对角路程含反转，指南针和齿轮强制转角不计；每次判定无论成败都消耗三圈并保留余角，进度回合末清零",
 }
 Add {
     numberId = 33, id = "wool_market", name = "羊毛集市", rarity = 1, pool = true, implemented = true,
     effect = "[[sheep]]现在产出的[[wool]]会自动兑换成[[coin_1]]",
     note = "只替换小羊脱毛的新产出，不兑换已有羊毛；每份产出对应一枚1元硬币",
+}
+
+Add {
+    numberId = 34, id = "wool_recycle", name = "羊毛回收", rarity = 1, pool = true, implemented = true,
+    effect = "[[wool]]合成或被消耗时，每份材料独立有50%概率在瓶顶生成1份临时羊毛",
+    note = "成功消费才判定；合成双方各判一次，临时羊毛再次合成或被耗同样可触发；临时产物满瓶FIFO，回合末删除，不受羊毛集市替换",
+}
+Add {
+    numberId = 35, id = "dice_jackpot", name = "骰号大奖", rarity = 2, pool = true, implemented = true,
+    effect = "骰子每投出6点，体积+50%（最高300%）；场上所有骰子、硬币、[[gambler]]、[[gambling_god]]立刻获得等于该骰子体积增量的本回合倍率加数，重复可叠加。非6点时该骰子体积恢复100%",
+    note = "按增长后scale-1累加jackpotBonus，最终独立倍率为1+累计加数，再乘其他来源；封顶再6仍奖励，非6不撤旧奖励。尺寸默认永久、倍率回合末清；硬币只指coin_N，不含幸运硬币",
+}
+Add {
+    numberId = 36, id = "calf_rush", name = "牛来！", rarity = 2, pool = true, implemented = true,
+    effect = "[[calf]]每次成功消耗启动冲刺时，价值临时+1、体积+20%；体积达到200%时价值永久+2，体积恢复100%",
+    note = "每次移动明确为每次冲刺启动，不按帧/米/碰撞次数；叠加原有每目标每冲刺临时+1，尺寸默认永久，新增+1回合末清",
+}
+Add {
+    numberId = 37, id = "lucky_roulette", name = "幸运转盘", rarity = 2, pool = true, implemented = true,
+    effect = "[[roulette]]每累计旋转360°时，5%概率价值临时+77；其余95%按原比例永久+3或永久-1（各47.5%）；立即获得1个[[roulette]]",
+    note = "大奖与基础正负互斥；基础原50%/50%，先判1/20大奖，未中再等概率基础正负；幸运符只将基础永久-1改永久+1，不改变概率或临时大奖",
 }
 
 --- 查询对局是否持有某遗物。

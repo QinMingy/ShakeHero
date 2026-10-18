@@ -1,7 +1,7 @@
 -- Bottle 规则回归测试（V0.4 新结算模型）：纯 Lua assert，不启动引擎，不写文件，不输出日志。
 -- 在资源根 scripts 的环境中：require("Bottle.Tests").Run()
 -- 标准 Lua：package.path = "/workspace/scripts/?.lua;" .. package.path
--- 覆盖：93件数据表完整性、新主流程（抽20/摇10/结算2秒/考核/三选一概率表）、
+-- 覆盖：98件数据表完整性、新主流程（抽20/摇10/结算2秒/考核/三选一概率表）、
 -- 初始4物品、价值临时性、冷却回合重置、香蕉生命周期、橘子贴底、小球碰壁、
 -- V0.4 效果（合成/切割/消灭/偷取/催熟/消耗/结算/重生）、遗物三选一与遗物效果、
 -- 快照回滚与存档校验、ShakeMotion 物理二、Physics 接触计数（无引擎 mock）。
@@ -139,8 +139,8 @@ local function Test(name, run)
     cases[#cases + 1] = { name = name, run = run }
 end
 
-Test("93件物品表与数据一致性", function()
-    assert(#Items.list == 93 and #Items.rarityNames == 5 and #Items.rarityColors == 5)
+Test("98件物品表与数据一致性", function()
+    assert(#Items.list == 98 and #Items.rarityNames == 5 and #Items.rarityColors == 5)
     ---@type table<string, boolean>
     local seen = {}
     for index, def in ipairs(Items.list) do
@@ -158,7 +158,7 @@ Test("93件物品表与数据一致性", function()
             assert(Items.byId[ref], "描述引用未知物品：" .. ref .. " ← " .. def.id)
         end
     end
-    -- 最新源表93件全部实装，原1..70编号保留；juice移至87，71为chick。
+    -- 最新源表98件全部实装，原1..70编号保留；juice移至87，71为chick。
     for _, def in ipairs(Items.list) do
         assert(def.implemented, "物品未实装：" .. def.id)
         assert(not def.pool or def.implemented, "未实装物品不能进卡池：" .. def.id)
@@ -170,24 +170,30 @@ Test("93件物品表与数据一致性", function()
         and Items.byNumber[70].id == "egg", "原末尾三件编号不变")
     assert(Items.byNumber[71].id == "chick", "小鸡位于源表 #71")
     assert(Items.byNumber[87].id == "juice", "果汁保持字符串ID并位于 #87")
+    assert(Items.byNumber[98].id == "removal_coin" and Items.byId.removal_coin.pool
+        and Items.byId.removal_coin.base == 4 and Items.byId.removal_coin.rarity == 2
+        and #(Items.byId.removal_coin.tags or {}) == 0, "移除币固定#98、优秀品质基础4无tag并开放")
     -- 卡池屏蔽（源表第8列=1及追加生成物juice）不进三选一。
     for _, id in ipairs({
         "apple_half", "banana_half", "orange_half", "fruit_ninja", "cherry_half",
         "tomato_egg", "coin_4", "coin_8", "coin_16", "coin_32", "coin_64", "coin_128",
-        "coin_256", "coin_512", "coin_1024", "coin_2048", "rotten_banana",
-        "banana_peel", "juice", "poop", "golden_poop", "diamond_poop", "rainbow_poop",
-        "discus", "wool", "sweater",
+        "coin_256", "coin_512", "coin_1024", "coin_2048",
+        "rotten_banana", "banana_peel", "juice", "poop", "golden_poop", "diamond_poop", "rainbow_poop",
+        "discus_athlete", "discus", "wool", "sweater",
     }) do
         assert(Items.byId[id].pool == false, "屏蔽物品不应进卡池：" .. id)
     end
-    assert(Items.byId.laurel.pool, "最新源表桂冠应进入卡池")
-    assert(Items.byId.apple.base == 2 and Items.byId.banana.base == 2
+    assert(Items.byId.laurel.pool, "桂冠仍进入卡池")
+    assert(Items.byId.apple.base == 2 and Items.byId.banana.base == 6
         and Items.byId.orange.base == 2 and Items.byId.ball.base == 1)
+    assert(Items.byId.glutton.rarity == 2 and Items.byId.diner.rarity == 1, "大胃王优秀、食客普通")
     assert(Items.byId.ball.cooldown == 3 and Items.byId.ball.trigger == "wall")
     assert(Items.HasTag("apple", "水果") and Items.HasTag("apple", "食物")
         and Items.HasTag("rotten_banana", "垃圾") and not Items.HasTag("ball", "水果"))
     assert(Items.HasTag("seed", "农作物"), "种子农作物tag")
-    assert(Items.HasTag("tomato", "食物") and Items.HasTag("egg", "食物"), "炒蛋材料tag")
+    assert(Items.HasTag("tomato", "食物") and Items.HasTag("egg", "食物")
+        and Items.HasTag("tomato", "植物") and Items.byId.tomato.rarity == 1
+        and Items.byId.tomato_egg.rarity == 3 and Items.HasTag("fruit_tree", "植物"), "炒蛋材料品质及植物tag")
     assert(Items.Recipe("slipper_left", "slipper_right") == "fruit_ninja", "拖鞋合成")
     assert(Items.Recipe("egg", "tomato") == "tomato_egg", "炒蛋合成")
     assert(Items.byId.die_d4.tags and Items.byId.die_d4.tags[1] == "骰子", "骰子tag归位")
@@ -209,12 +215,12 @@ Test("三选一概率表匹配docs/概率.txt", function()
     end
 end)
 
-Test("初始牌库为小羊小草苹果小球各1件", function()
+Test("初始牌库为苹果香蕉小球橘子各1件", function()
     local game = Game.New(123)
     assert(game.phase == "prepare" and #game.deck == 4 and #game.drawn == 4)
-    local starterIds = { "sheep", "grass", "apple", "ball" }
+    local starterIds = { "apple", "banana", "ball", "orange" }
     for i, item in ipairs(game.deck) do
-        assert(item.id == starterIds[i], "初始物品按小羊、小草、苹果、小球创建")
+        assert(item.id == starterIds[i], "初始物品按苹果、香蕉、小球、橘子创建")
     end
     for _, item in ipairs(game:BottleItems()) do
         assert(item.location == "bottle" and item.bonus == 0 and item.permBonus == 0)
@@ -234,7 +240,7 @@ Test("抽取上限20件与不放回重抽", function()
     ---@type table<number, boolean>
     local drawn = {}
     for _, uid in ipairs(game.drawn) do assert(not drawn[uid], "重复抽取"); drawn[uid] = true end
-    assert(game:Reroll() and not game:Reroll(), "重抽限一次")
+    assert(game:Reroll() and not game:Reroll(), "初始共享次数只有一次，耗尽后拒绝")
     assert(#game.drawn == 20, "重抽后仍抽20件")
     IdentityInvariant(game)
     -- 牌库不足20件时全部入瓶。
@@ -450,6 +456,25 @@ Test("三选一按考核阶段概率且候选不重复", function()
                     "普通概率及考核排除规则：" .. id)
             end
             if not g:Skip() then break end
+        end
+    end
+end)
+
+Test("腐烂香蕉屏蔽新候选但保留GM与已有实例", function()
+    for seed = 1, 100 do
+        local game = Game.New(seed)
+        assert(game:GmAddItem(4) and game:GmAddItem("rotten_banana"), "屏蔽不限制GM添加")
+        local restored = Game.Restore(game:Snapshot())
+        assert(Item(restored, 5).id == "rotten_banana" and Item(restored, 6).id == "rotten_banana",
+            "屏蔽不删除已有实例或阻止其读档")
+        for _, id in ipairs(game:_DraftOptions()) do
+            assert(id ~= "rotten_banana", "新候选不出腐烂香蕉")
+        end
+        game.phase = "draft"
+        game.refreshes = 1
+        assert(game:DraftRefresh())
+        for _, id in ipairs(game.options) do
+            assert(id ~= "rotten_banana", "刷新候选不出腐烂香蕉")
         end
     end
 end)
@@ -976,7 +1001,7 @@ Test("结算效果：种子变植物、气球爆炸、学生成长、桂冠、�
     assert(laurel:Start())
     laurel:Step(10)
     SettleAndReveal(laurel)
-    Close(laurel.lastRoundScore, 50 + 8, "苹果22×2.25向上取整为50 + 桂冠8")
+    Close(laurel.lastRoundScore, 22 * 1.5 * 1.5 + 8, "苹果22×2.25 + 桂冠8，保留小数金币")
     -- 樱桃：结算再结算一次（共2次）。
     local cherry = Fixture({ "cherry" })
     assert(cherry:Start())
@@ -1060,11 +1085,11 @@ Test("遗物三选一：考核达标后追加、刷新、跳过、选择", funct
     assert(game.phase == "draft" and game.relicDraft, "追加遗物三选一")
     assert(#game.options >= 1, "遗物候选非空")
     for _, id in ipairs(game.options) do assert(Relics.byId[id], "候选是遗物 id") end
-    -- 五回合累计的3次物品刷新保留；遗物每组独立免费刷新一次。
+    -- 五回合普通池仍保留3次；本次遗物另有独立免费1次。
     Close(game.refreshes, 3)
-    assert(game:DraftRefresh() and game.relicDraft)
+    assert(game.relicRefreshes == 1 and game:DraftRefresh() and game.relicDraft)
     Close(game.refreshes, 3)
-    assert(not game:DraftRefresh(), "遗物免费刷新用完后拒绝，不借用物品余额")
+    assert(game.relicRefreshes == 0 and not game:DraftRefresh(), "遗物免费次数耗尽后拒绝，不能改扣普通池")
     -- 选择遗物后加入 relics 并推进回合。
     local chosen = game.options[1]
     assert(game:Choose(1))
@@ -1193,7 +1218,7 @@ Test("存档往返保留遗物与跨回合实例状态", function()
     assert(next(old.relics) == nil and not old.relicDraft, "旧档缺省无遗物")
 end)
 
-Test("金币逐笔向上取整且事件余额累计回合一致", function()
+Test("金币逐笔保留精度且事件余额累计回合一致", function()
     local cherry = Fixture({ "cherry" })
     Item(cherry, 1).permBonus = -1.8
     Close(cherry:_Value(Item(cherry, 1)), 1.2, "物品价值保留计算精度")
@@ -1202,22 +1227,22 @@ Test("金币逐笔向上取整且事件余额累计回合一致", function()
     local events = SettleAndReveal(cherry)
     local scores = Events(events, "score", 1)
     assert(#scores == 2, "樱桃仍然逐笔结算两次")
-    Close(scores[1].value, 2); Close(scores[2].value, 2)
-    Close(cherry.score, 4, "两笔1.2各取整为2，共4金币")
-    Close(cherry.totalScore, 4); Close(cherry.roundScore, 4)
-    Close(cherry.lastRoundScore, 4); Close(cherry.bestRoundScore, 4)
+    Close(scores[1].value, 1.2); Close(scores[2].value, 1.2)
+    Close(cherry.score, 2.4, "两笔1.2不取整，共2.4金币")
+    Close(cherry.totalScore, 2.4); Close(cherry.roundScore, 2.4)
+    Close(cherry.lastRoundScore, 2.4); Close(cherry.bestRoundScore, 2.4)
 
     local card = Fixture({ "credit_card" })
     Item(card, 1).permBonus = -11.2
     assert(card:Start())
     card:Step(10)
     events = SettleAndReveal(card)
-    Close(Events(events, "score", 1)[1].value, -1, "-1.2向上取整为-1")
-    Close(card.score, -1); Close(card.totalScore, -1)
-    Close(card.roundScore, -1); Close(card.lastRoundScore, -1)
+    Close(Events(events, "score", 1)[1].value, -1.2, "负收益也保留小数")
+    Close(card.score, -1.2); Close(card.totalScore, -1.2)
+    Close(card.roundScore, -1.2); Close(card.lastRoundScore, -1.2)
 end)
 
-Test("金币在最终奖励取整且不提前截断物品价值和倍率", function()
+Test("金币奖励不截断物品价值和倍率", function()
     local game = Fixture({ "police", "thief" })
     Item(game, 2).permBonus, Item(game, 2).permMult = 4, 1.5
     Close(game:_Value(Item(game, 2)), 7.5, "消灭前目标有效价值仍为7.5")
@@ -1225,11 +1250,11 @@ Test("金币在最终奖励取整且不提前截断物品价值和倍率", funct
     local events = game:Step(0, { pairs = { { 1, 2 } } })
     local scores = Events(events, "score", 1)
     assert(#scores == 1 and Item(game, 2).location == "discard")
-    Close(scores[1].value, 30, "7.5×4最终为30，不能提前取整成8×4")
+    Close(scores[1].value, 30, "7.5×4为30，不能提前取整成8×4")
     Close(game.score, 30); Close(game.totalScore, 30); Close(game.roundScore, 30)
 end)
 
-Test("旧存档小数金币迁移为整数但物品与榨汁保留精度", function()
+Test("存档金币物品与榨汁往返保留小数精度", function()
     local game = Fixture({ "apple" })
     assert(game:Start())
     game:Step(10)
@@ -1241,18 +1266,18 @@ Test("旧存档小数金币迁移为整数但物品与榨汁保留精度", funct
     snapshot.juicerValue = 7.5
     snapshot.lastResult = "第1回合获得3.2金币"
     local restored = Game.Restore(snapshot)
-    Close(restored.score, 13); Close(restored.totalScore, 25); Close(restored.roundScore, 4)
-    Close(restored.lastRoundScore, 4); Close(restored.bestRoundScore, 7)
+    Close(restored.score, 12.2); Close(restored.totalScore, 24.2); Close(restored.roundScore, 3.2)
+    Close(restored.lastRoundScore, 3.2); Close(restored.bestRoundScore, 6.2)
     Close(Item(restored, 1).permBonus, .25); Close(Item(restored, 1).permMult, 1.5)
     Close(restored:_Value(Item(restored, 1)), 3.375)
     Close(restored.juicerValue, 7.5)
-    assert(restored.lastResult == "第1回合获得4金币", "旧结果文案同步整数金额")
-    local migrated = restored:Snapshot()
+    assert(restored.lastResult == snapshot.lastResult, "读档不改写结果文案中的小数金额")
+    local saved = restored:Snapshot()
     for _, field in ipairs({"score", "totalScore", "roundScore", "lastRoundScore", "bestRoundScore"}) do
-        assert(migrated[field] == math.ceil(migrated[field]), "迁移后金币字段必须为整数：" .. field)
+        Close(saved[field], snapshot[field], "金币字段保留精度：" .. field)
     end
     Close(snapshot.score, 12.2, "恢复不改写源快照")
-    assert(Equal(migrated, Game.Restore(migrated):Snapshot()), "整数迁移幂等")
+    assert(Equal(saved, Game.Restore(saved):Snapshot()), "小数金币往返幂等")
 end)
 
 Test("可选cjson往返保持prepare/rollback/draft和RNG", function()
@@ -1261,11 +1286,11 @@ Test("可选cjson往返保持prepare/rollback/draft和RNG", function()
     if not json then return end -- 标准Lua无cjson也可跑其余全部纯规则测试。
     Tests.jsonRoundtripRan = true
     local game = Fixture({ "apple", "banana", "ball", "orange" }, nil, 9876)
-    game.refreshes = 3 -- 物品候选刷新池；准备重抽不消耗此余额。
+    game.refreshes = 3 -- 为prepare重抽、draft刷新、下回合重抽各准备一次共享余额。
     assert(game:Reroll())
     local prepare = game:Snapshot()
     local restored = Game.Restore(json.decode(json.encode(prepare)) --[[@as BottleSnapshot]])
-    assert(Equal(prepare, restored:Snapshot()) and restored.refreshes == 3)
+    assert(Equal(prepare, restored:Snapshot()) and restored.refreshes == 2)
     assert(game:Start() and restored:Start())
     game:Step(5, { wall = { [3] = true } })
     assert(Equal(prepare, Game.Restore(json.decode(json.encode(game:Snapshot())) --[[@as BottleSnapshot]]):Snapshot()))
@@ -1278,12 +1303,12 @@ Test("可选cjson往返保持prepare/rollback/draft和RNG", function()
     assert(Equal(draft, copy:Snapshot()))
     assert(game:DraftRefresh() and copy:DraftRefresh() and Equal(game.options, copy.options))
     local refreshed = Game.Restore(json.decode(json.encode(game:Snapshot())) --[[@as BottleSnapshot]])
-    assert(refreshed.refreshUsed and refreshed.refreshes == 2, "draft已用标记不重置物品余额")
+    assert(refreshed.refreshUsed and refreshed.refreshes == 1, "draft已用标记不重置共享余额")
     assert(game:Choose(1) and refreshed:Choose(1))
     assert(Equal(game:Snapshot(), refreshed:Snapshot()))
     assert(game:Reroll() and refreshed:Reroll() and Equal(game:Snapshot(), refreshed:Snapshot()))
-    assert(game.refreshes == 2 and refreshed.refreshes == 2)
-    assert(not game:Reroll() and not refreshed:Reroll(), "独立重抽每回合限一次")
+    assert(game.refreshes == 0 and refreshed.refreshes == 0)
+    assert(not game:Reroll() and not refreshed:Reroll(), "共享余额耗尽后均拒绝")
     IdentityInvariant(refreshed)
 end)
 
@@ -1301,6 +1326,12 @@ function Tests.Run()
         + require("Bottle.ExpansionTests").Run() + require("Bottle.NewRelicTests").Run()
         + require("Bottle.TriggerFeedbackTests").Run()
         + require("Bottle.ConsumeFlashTests").Run()
+        + require("Bottle.RotationTests").Run() + require("Bottle.RotationRelicTests").Run()
+        + require("Bottle.CooldownTests").Run()
+        + require("Bottle.DistanceTests").Run()
+        + require("Bottle.RemovalTests").Run()
+        + require("Bottle.RelicGrantTests").Run()
+        + require("Bottle.RelicRefreshTests").Run()
 end
 
 return Tests

@@ -103,6 +103,24 @@ local ExpansionPhysics = require "Bottle.ExpansionPhysics"
 ---@field seed number?
 ---@field options BottlePhysicsOptions?
 
+---@class BottleRebuiltPart
+---@field x number 相对于旧中心的偏移（米）
+---@field y number
+---@field angle number 度
+---@field vx number
+---@field vy number
+---@field angularVelocity number
+
+---@class BottleRebuiltBody
+---@field x number
+---@field y number
+---@field radius number
+---@field newbornRemaining number
+---@field parts BottleRebuiltPart[]
+---@field motion BottleExpansionMotion 仅累计必继承，行为由兼容性单独决定
+---@field keepPose boolean 尺寸/同类型形态重建保持姿态速度；明确重生除外
+---@field keepBehavior boolean
+
 ---@class BottlePhysics
 ---@field speedMultiplier number 线移动速度倍率；不改变固定dt或规则计时
 ---@field ghostPoop boolean 四类便便是否使用幽灵sensor物理
@@ -123,6 +141,7 @@ local ExpansionPhysics = require "Bottle.ExpansionPhysics"
 ---@field _mergeSpawns table<number, BottlePhysicsSpawn>
 ---@field _nearSpawns table<number, BottlePhysicsSpawn>
 ---@field _eventRemoved table<number, boolean>
+---@field _respawned table<number, boolean> 明确重生的位置/行为语义，不能与resize重建混淆
 ---@field _updating boolean
 ---@field _flushing boolean
 ---@field _disposed boolean
@@ -389,6 +408,7 @@ function Physics:_Init()
     self._mergeSpawns = {}
     self._nearSpawns = {}
     self._eventRemoved = {}
+    self._respawned = {}
     self._updating = false
     self._flushing = false
     self._disposed = false
@@ -710,6 +730,7 @@ function Physics:RememberEvents(events)
             end
         elseif event.kind == "respawn" then
             -- 瓶顶重生（西红柿炒蛋/金针菇）：uid 保留但 body 需回到事件坐标。
+            self._respawned[event.uid] = true
             local record = self.bodies[event.uid]
             if record then
                 local position = record.node.position2D
@@ -775,6 +796,7 @@ function Physics:Sync(items, reset, seed, options)
         self._mergeSpawns = {}
         self._nearSpawns = {}
         self._eventRemoved = {}
+        self._respawned = {}
     end
     ---@type ItemInstance[]
     local ordered = {}
@@ -800,22 +822,37 @@ function Physics:Sync(items, reset, seed, options)
         scales[item.uid] = PhysicalState.Clamp(item.id, "scale", item.scale)
         weights[item.uid] = PhysicalState.Clamp(item.id, "weight", item.weight)
     end
-    ---@type table<number, {x:number,y:number,angle:number,vx:number,vy:number,motion:BottleExpansionMotion}>
+    ---@type table<number, BottleRebuiltBody>
     local rebuilt = {}
     for uid, record in pairs(self.bodies) do
-        -- 香蕉→香蕉皮等原地转化通过 kind 变化触发 body 重建，保留 uid；
-        -- 遗物改变便便穿透态时安全重建，保持中心、速度及角路程基线。
+        -- 生命周期按uid判断，不按旧kind/sensor判断：尺寸、羊形态、转化、
+        -- remove后同uid仍在场都保留自然累计和已施加强制角，但不盲继承行为。
         local sensorChanged = wanted[uid] and record.sensor ~= ExpansionPhysics.IsSensor(definitions[uid], self.ghostPoop)
         if not wanted[uid] or record.kind ~= definitions[uid] or record.shape ~= variants[uid]
             or record.scale ~= scales[uid] or sensorChanged or self._eventRemoved[uid] then
-            if sensorChanged and record.kind == definitions[uid] and not self._eventRemoved[uid] then
-                local p, v = record.node.position2D, record.body.linearVelocity
-                rebuilt[uid] = {x=p.x,y=p.y,angle=record.node.rotation2D,vx=v.x,vy=v.y,
-                    motion=self.expansion:State(record)}
+            if wanted[uid] then
+                local position = record.node.position2D
+                local sameKind = record.kind == definitions[uid]
+                local respawned = self._respawned[uid] == true
+                ---@type BottleRebuiltPart[]
+                local parts = {}
+                for _, part in ipairs(record.parts) do
+                    local p, v = part.node.position2D, part.body.linearVelocity
+                    parts[#parts + 1] = {x = p.x - position.x, y = p.y - position.y,
+                        angle = part.node.rotation2D, vx = v.x, vy = v.y,
+                        angularVelocity = part.body.angularVelocity}
+                end
+                rebuilt[uid] = {x = position.x, y = position.y, radius = record.radius, parts = parts,
+                    newbornRemaining = record.newbornRemaining,
+                    motion = self.expansion:SampleAngle(record),
+                    keepPose = sameKind and not respawned,
+                    keepBehavior = sameKind and not respawned
+                        and (not self._eventRemoved[uid] or record.scale ~= scales[uid]
+                            or record.shape ~= variants[uid] or sensorChanged)}
             end
             if wanted[uid] and (record.scale ~= scales[uid] or record.shape ~= variants[uid] or sensorChanged)
                 and not self._mergeSpawns[uid] then
-                -- 兜底：scale 变化未经 resize 事件（不应发生），保持当前位置重建。
+                -- 兜底：scale 变化未经 resize 事件，保持当前位置重建。
                 local position = record.node.position2D
                 self._mergeSpawns[uid] = { x = position.x, y = position.y }
             end
@@ -848,12 +885,13 @@ function Physics:Sync(items, reset, seed, options)
             local exact = self._exactSpawns[item.uid]
             local previous = rebuilt[item.uid]
             local x, y = 0, HEIGHT * 0.5
-            if previous then
-                x, y = previous.x, previous.y
-            elseif exact then
+            if exact then
                 x, y = exact.x, exact.y
             elseif near then
                 x, y = self:_NearPosition(item.uid, extent, near)
+            elseif previous and previous.keepPose then
+                -- 纯尺寸/同类型形态重建不重新搜索位置；明确respawn坐标优先。
+                x, y = previous.x, previous.y
             elseif remembered then
                 -- 瓶内安全时保持精确材料中点；近墙只修正新产物生成点，
                 -- 不修改任何存活动态物体的位置。
@@ -871,18 +909,33 @@ function Physics:Sync(items, reset, seed, options)
             self:_CreateItem(item, x, y)
             local record = assert(self.bodies[item.uid])
             if previous then
-                record.node.rotation2D = record.ghostLike and 0 or previous.angle
-                record.body.linearVelocity = Vector2(previous.vx, previous.vy)
-                previous.motion.angle = record.node.rotation2D * math.pi / 180
-                self.expansion.states[item.uid] = previous.motion
+                if previous.keepPose then
+                    local ratio = record.radius / previous.radius
+                    for index, part in ipairs(record.parts) do
+                        local pose = previous.parts[index]
+                        if pose then
+                            -- 五段分别还原旧弯曲姿态，偏移按新尺寸缩放；不把
+                            -- 软体压回直条，不因resize丢线速度/自然角速度。
+                            part.node:SetPosition2D(x + pose.x * ratio, y + pose.y * ratio)
+                            part.node.rotation2D = record.ghostLike and 0 or pose.angle
+                            part.body.linearVelocity = Vector2(pose.vx, pose.vy)
+                            part.body.angularVelocity = record.ghostLike and 0 or pose.angularVelocity
+                            part.body.awake = true
+                        end
+                    end
+                    record.newbornRemaining = previous.newbornRemaining
+                end
+                self.expansion:Restore(record, previous.motion, previous.keepBehavior)
+            else
+                self.expansion:State(record)
             end
-            self.expansion:State(record)
             created = created + 1
         end
     end
     self._mergeSpawns = {}
     self._nearSpawns = {}
     self._eventRemoved = {}
+    self._respawned = {}
     self._exactSpawns = {}
     self.expansion:Flush(self)
     if reset then
@@ -1286,6 +1339,7 @@ function Physics:_ClearBodies()
     self._mergeSpawns = {}
     self._nearSpawns = {}
     self._eventRemoved = {}
+    self._respawned = {}
 end
 
 ---清除动态物品与接触状态，保留瓶子静态墙体以便下回合复用。

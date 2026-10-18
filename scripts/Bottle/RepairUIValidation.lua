@@ -61,10 +61,11 @@ _G["nvgRGBA"]=function(r,g,b,a)
     end
     return rgba(r,g,b,a)
 end
-Art.Item=function(vg,id,x,y,r,angle,cooling,rollValue)
-    local draw={id=id,radius=r,x=x,y=y,angle=angle or 0,cooling=cooling==true,gray=0,color=0,rollValue=rollValue}
+Art.Item=function(vg,id,x,y,r,angle,cooling,rollValue,woolCount)
+    local draw={id=id,radius=r,x=x,y=y,angle=angle or 0,cooling=cooling==true,gray=0,color=0,
+        rollValue=rollValue,woolCount=woolCount}
     currentDraw=draw
-    oldItem(vg,id,x,y,r,angle,cooling,rollValue)
+    oldItem(vg,id,x,y,r,angle,cooling,rollValue,woolCount)
     currentDraw=nil
     records[#records+1]=draw
 end
@@ -160,6 +161,10 @@ Guard(3,function()
         Check(not Last(id).cooling,id.."准备阶段实际绘制保持原色")
     end
     Check(game:Start(),"开始真实规则运行")
+    local events=game:Step(0,{wall={[1]=true}})
+    local ball=assert(game:Get(1))
+    Check(ball.bonus==1 and ball.remaining==3,"小球成功碰瓶增值后才进入完整3秒冷却")
+    physics:RememberEvents(events);view.board:Effects(events)
     view:Update(true)
     view.board.pops,view.board.popByUid={},{}
     records={}

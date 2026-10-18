@@ -78,13 +78,11 @@ local cases = {}
 ---@param run fun()
 local function Test(name, run) cases[#cases + 1] = {name=name, run=run} end
 
-Test("新局物品刷新1次、每完成2回合加1且每回合独立重抽", function()
+Test("新局共享刷新1次、每完成2回合加1且跳过不再发", function()
     local game = Fixture({"apple"})
     assert(Game.New(1).refreshes == 1 and game.refreshes == 1)
     Item(game, 1).permBonus = 100
     for round = 1, 4 do
-        assert(not game.rerollUsed and game:Reroll() and not game:Reroll(), "每回合重抽一次并重置")
-        Close(game.refreshes, 1 + math.floor((round - 1) / 2), "准备重抽不扣物品刷新池")
         assert(game:Start())
         Finish(game)
         Close(game.refreshes, 1 + math.floor(round / 2), "完成回合后累计")
@@ -95,45 +93,46 @@ Test("新局物品刷新1次、每完成2回合加1且每回合独立重抽", fu
     assert(game.round == 5)
 end)
 
-Test("准备重抽、物品刷新池、遗物免费刷新相互独立", function()
+Test("prepare与物品draft共享可连续扣除、遗物独立免费一次", function()
     local game = Fixture({"apple"})
     game.refreshes = 4
-    assert(game:Reroll())
-    local once = game:Snapshot()
-    assert(not game:Reroll() and Equal(once, game:Snapshot()), "重抽用尽后原子拒绝，不改RNG")
-    Close(game.refreshes, 4)
+    assert(game:Reroll() and game:Reroll())
+    Close(game.refreshes, 2)
     assert(game:Start())
     local before = game.refreshes
     assert(not game:Reroll())
     Close(game.refreshes, before, "无效阶段不扣次数")
     Finish(game)
-    for _ = 1, 4 do assert(game:DraftRefresh()) end
+    for _ = 1, 2 do assert(game:DraftRefresh()) end
     Close(game.refreshes, 0)
-    local revision = game.revision
-    assert(not game:DraftRefresh() and game.revision == revision, "耗尽刷新原子拒绝")
+    local exhausted = game:Snapshot()
+    assert(not game:DraftRefresh() and Equal(exhausted, game:Snapshot()), "耗尽刷新原子拒绝")
     local snapshot = game:Snapshot()
     snapshot.phase, snapshot.round, snapshot.stage = "draft", 5, 2
     snapshot.target, snapshot.relicDraft = Game.GetTarget(2), true
-    snapshot.options, snapshot.refreshes, snapshot.refreshUsed = {"juicer"}, 2, false
+    snapshot.options, snapshot.refreshes = {"juicer"}, 2
+    snapshot.refreshUsed, snapshot.relicRefreshes = false, 1
     local relic = Game.Restore(snapshot)
     assert(relic:DraftRefresh() and not relic:DraftRefresh())
     Close(relic.refreshes, 2)
+    Close(relic.relicRefreshes, 0)
 end)
 
-Test("物品刷新池为零仍可重抽且用过的重抽读档不补发", function()
+Test("共享刷新池为零重抽原子拒绝且读档不补发", function()
     local game = Fixture({"apple", "ball", "orange"})
-    game.refreshes = 0
+    game.refreshes = 1
     assert(game:Reroll() and game.rerollUsed)
     local saved = game:Snapshot()
     local restored = Game.Restore(saved)
-    assert(not restored:Reroll() and Equal(saved, restored:Snapshot()), "读档保留本回合已用状态")
+    assert(not restored:Reroll() and Equal(saved, restored:Snapshot()), "耗尽读档不改状态或RNG")
     Close(restored.refreshes, 0)
     assert(restored:Start())
     assert(not restored:Reroll())
     Finish(restored)
-    assert(not restored:DraftRefresh(), "免费重抽未增加物品刷新余额")
+    assert(not restored:DraftRefresh(), "准备重抽已用尽同一物品余额")
     assert(restored:Skip() and not restored.rerollUsed)
-    assert(restored:Reroll(), "下一回合即使池为空也获得一次重抽")
+    local nextRound = restored:Snapshot()
+    assert(not restored:Reroll() and Equal(nextRound, restored:Snapshot()), "下回合不凭空补重抽")
     Close(restored.refreshes, 0)
 end)
 
@@ -145,9 +144,11 @@ Test("遗物免费刷新不依赖物品余额且读档不能重复领取", funct
         snapshot.phase, snapshot.round, snapshot.stage = "draft", 5, 2
         snapshot.target, snapshot.relicDraft = Game.GetTarget(2), true
         snapshot.options, snapshot.refreshes, snapshot.refreshUsed = {"juicer"}, balance, false
+        snapshot.relicRefreshes = 1
         local game = Game.Restore(snapshot)
         local unspent = game:Snapshot()
         assert(game:DraftRefresh() and game.refreshUsed)
+        Close(game.relicRefreshes, 0)
         Close(game.refreshes, balance)
         Close(Item(game, 1).refreshCount, 1, "成功遗物刷新仍通知养鸡人")
         local spent = game:Snapshot()
@@ -157,6 +158,7 @@ Test("遗物免费刷新不依赖物品余额且读档不能重复领取", funct
         restored = Game.Restore(unspent)
         assert(restored:DraftRefresh() and not restored:DraftRefresh(), "未使用的免费次数随存档保留")
         Close(restored.refreshes, balance)
+        Close(restored.relicRefreshes, 0)
     end
 end)
 
@@ -166,13 +168,15 @@ Test("每次遗物三选一重置一次免费刷新，已用或未用均不累�
     for round = 1, 15 do
         assert(game:Start()); Finish(game)
         if round % 5 == 0 then
-            assert(game:Skip() and game.relicDraft and not game.refreshUsed)
+            assert(game:Skip() and game.relicDraft and not game.refreshUsed and game.relicRefreshes == 1)
             local balance = game.refreshes
             if round ~= 10 then
                 assert(game:DraftRefresh() and not game:DraftRefresh())
                 Close(game.refreshes, balance)
+                Close(game.relicRefreshes, 0)
             end
             assert(game:Skip() and game.phase == "prepare" and not game.relicDraft)
+            Close(game.relicRefreshes, 0, "已用或未用的免费次数离开均清零")
         else
             assert(game:Skip())
         end
@@ -183,22 +187,27 @@ end)
 Test("所有成功刷新为已拥有养鸡人计数、失败不计且余数读档", function()
     local game = Fixture({"chicken_keeper", "chicken_keeper", "apple"}, 1)
     game.refreshes = 4
-    assert(game:Reroll() and not game:Reroll())
+    assert(game:Reroll())
+    Close(game.refreshes, 3)
     assert(game:Start())
     Finish(game)
     for _ = 1, 3 do assert(game:DraftRefresh()) end
     for uid = 1, 2 do Close(Item(game, uid).refreshCount, 4); Close(Item(game, uid).permBonus, 0) end
     local restored = Game.Restore(game:Snapshot())
-    Close(restored.refreshes, 1)
-    assert(restored:DraftRefresh())
-    for uid = 1, 2 do Close(Item(restored, uid).refreshCount, 0); Close(Item(restored, uid).permBonus, 1) end
-    assert(not restored:DraftRefresh())
+    Close(restored.refreshes, 0)
+    local spent = restored:Snapshot()
+    assert(not restored:DraftRefresh() and Equal(spent, restored:Snapshot()), "失败刷新不通知养鸡人")
     assert(restored:Skip())
-    assert(restored:Reroll())
+    spent = restored:Snapshot()
+    assert(not restored:Reroll() and Equal(spent, restored:Snapshot()), "余额耗尽不因下一回合而补重抽")
     assert(restored:Start())
     assert(not restored:Reroll())
     Finish(restored)
-    for uid = 1, 2 do Close(Item(restored, uid).refreshCount, 1); Close(Item(restored, uid).permBonus, 1) end
+    Close(restored.refreshes, 1, "完成第二回合才补共享次数")
+    for uid = 1, 2 do Close(Item(restored, uid).refreshCount, 4); Close(Item(restored, uid).permBonus, 0) end
+    assert(restored:DraftRefresh())
+    for uid = 1, 2 do Close(Item(restored, uid).refreshCount, 0); Close(Item(restored, uid).permBonus, 1) end
+    assert(not restored:DraftRefresh())
 end)
 
 Test("鸡蛋3次入瓶成功加1刷新、失败不加且不重复领取", function()
@@ -228,16 +237,17 @@ Test("刷新余额prepare与draft读档保留且运行中回滚", function()
     game.refreshes = 7
     assert(game:Reroll())
     local prepare = game:Snapshot()
-    assert(prepare.version == 2 and prepare.rulesVersion == 6 and prepare.refreshes == 7 and prepare.rerollUsed)
+    assert(prepare.version == 2 and prepare.rulesVersion == 8 and prepare.refreshes == 6 and prepare.rerollUsed)
     local restored = Game.Restore(prepare)
-    Close(restored.refreshes, 7)
-    assert(not restored:Reroll(), "读档不补发本回合已用重抽")
+    Close(restored.refreshes, 6)
+    assert(restored:Reroll(), "共享余额仍有剩余，读档后允许再次重抽")
+    Close(restored.refreshes, 5)
     assert(restored:Start())
     restored.refreshes = 100
-    Close(Game.Restore(restored:Snapshot()).refreshes, 7, "半回合刷新收益不存档")
+    Close(Game.Restore(restored:Snapshot()).refreshes, 5, "半回合刷新收益不存档")
     assert(game:Start())
     Finish(game)
-    Close(Game.Restore(game:Snapshot()).refreshes, 7)
+    Close(Game.Restore(game:Snapshot()).refreshes, 6)
 end)
 
 Test("旧档缺刷新只继承当前一次、不追溯已完成回合", function()
@@ -252,7 +262,7 @@ Test("旧档缺刷新只继承当前一次、不追溯已完成回合", function
         draft.rulesVersion, draft.refreshes, draft.refreshUsed = nil, nil, used
         restored = Game.Restore(draft)
         Close(restored.refreshes, used and 0 or 1)
-        assert(restored:Snapshot().rulesVersion == 6 and restored:Snapshot().version == 2)
+        assert(restored:Snapshot().rulesVersion == 8 and restored:Snapshot().version == 2)
     end
 end)
 
@@ -480,7 +490,7 @@ end)
 Test("存档严格拒绝新永久字段非法值和所有运行态残留", function()
     local invalid = {
         refreshes={-1,.5,false,"1",0/0,math.huge},
-        rulesVersion={0,4,7,false,"6"},
+        rulesVersion={0,4,9,false,"8"},
         valueBase={false,"3",{},0/0,math.huge,-math.huge},
         refreshCount={-1,5,.5,false,"1",0/0,math.huge},
         woolCount={-1,2147483648,.5,false,"1",0/0,math.huge},
@@ -494,7 +504,7 @@ Test("存档严格拒绝新永久字段非法值和所有运行态残留", funct
         spinTravel={0}, spinAngle={0}, spinForced={0},
         pendingConsumerUid={1}, calfDashHits={{}}, discusOwnerUid={1}, discusTargetUid={1},
         discusState={"flying"}, discusHolderUid={1}, compassAngle={0}, compassTravel={0},
-        compassForced={0}, cactusScale={1},
+        compassForced={0}, cactusScale={1}, cactusBonus={.1,false,"0",{},0/0,math.huge},
     }
     for field, values in pairs(invalid) do
         for _, value in ipairs(values) do
@@ -563,7 +573,7 @@ Test("移除余额新档往返保留、不升级版本且旧档缺省0不追溯"
     local game = Fixture({"apple"})
     game.removals = 7
     local snapshot = game:Snapshot()
-    assert(snapshot.version == 2 and snapshot.rulesVersion == 6 and snapshot.removals == 7)
+    assert(snapshot.version == 2 and snapshot.rulesVersion == 8 and snapshot.removals == 7)
     assert(Equal(snapshot, Game.Restore(snapshot):Snapshot()))
     local json = rawget(_G, "cjson") --[[@as BottleTestJsonCodec?]]
     if json then
@@ -577,7 +587,7 @@ Test("移除余额新档往返保留、不升级版本且旧档缺省0不追溯"
         legacy.removals = nil
         local restored = Game.Restore(legacy)
         Close(restored.removals, 0, "旧局只迁移为0，不按4次历史考核补发")
-        assert(restored:Snapshot().version == 2 and restored:Snapshot().rulesVersion == 6)
+        assert(restored:Snapshot().version == 2 and restored:Snapshot().rulesVersion == 8)
         assert(legacy.removals == nil, "恢复不能改写源快照")
     end
 end)
@@ -635,7 +645,7 @@ Test("主动移除只删选中同名实例、清理抽取位置且永久不返�
     assert(restored:Skip() and restored:Get(1) == nil, "推进回合不能令移除实例返回")
 end)
 
-Test("主动移除支持牌库备用物品、物品draft及终局详情", function()
+Test("主动移除支持牌库备用物品及物品draft、终局拒绝", function()
     local deck = Fixture({"apple", "apple"}, 0)
     deck.removals = 1
     assert(deck:RemoveItem(1) and #deck.drawn == 0 and deck:Get(2) ~= nil)
@@ -653,8 +663,10 @@ Test("主动移除支持牌库备用物品、物品draft及终局详情", functi
     local over = Game.Restore(failed)
     assert(over:Start())
     over:Finish(); over:RevealStep(100)
-    assert(over.phase == "over" and over:RemoveItem(1))
-    assert(#over.deck == 0 and over.removals == 0)
+    assert(over.phase == "over")
+    local ended = over:Snapshot()
+    assert(not over:RemoveItem(1) and Equal(ended, over:Snapshot()), "终局不得主动移除或扣次数")
+    assert(#over.deck == 1 and over.removals == 1)
     Game.Restore(over:Snapshot())
 end)
 

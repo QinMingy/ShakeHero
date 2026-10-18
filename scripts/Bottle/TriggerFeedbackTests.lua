@@ -67,10 +67,10 @@ Test("小球碰墙显示碰撞价值且不入金币、冷却内不重复", funct
     Close(Item(game,1).bonus, 1)
 end)
 
-Test("兔子真实移动满10米显示移动永久且不入金币", function()
+Test("兔子真实移动满100米显示移动永久且不入金币", function()
     local game = Fixture({"rabbit"})
     local all = {}
-    for step = 0, 20 do
+    for step = 0, 200 do
         for _, event in ipairs(game:Step(0,{positions={[1]={x=step*.5,y=1}}})) do
             all[#all+1] = event
         end
@@ -79,12 +79,12 @@ Test("兔子真实移动满10米显示移动永久且不入金币", function()
     Close(Item(game,1).permBonus, 1)
     Close(Item(game,1).distance, 0)
     Close(game.roundScore, 0)
-    assert(#Events(game:Step(0,{positions={[1]={x=10,y=1}}}),"triggerReward") == 0)
+    assert(#Events(game:Step(0,{positions={[1]={x=100,y=1}}}),"triggerReward") == 0)
 end)
 
 Test("成群结队兔子收益标在每个实际受益者", function()
     local game = Fixture({"rabbit","rabbit"},{in_groups=true})
-    Item(game,1).distance = 9.5
+    Item(game,1).distance = 99.5
     game:Step(0,{positions={[1]={x=0,y=1},[2]={x=1,y=2}}})
     local events = game:Step(0,{positions={[1]={x=.5,y=1},[2]={x=1,y=2}}})
     for uid=1,2 do
@@ -98,7 +98,7 @@ Test("幽灵和飞盘移动金币沿用score单次入账且带移动标签", fun
     local game = Fixture({"ghost","discus"},{ghost_sport=true})
     local total = 0
     local seen = {[1]=0,[2]=0}
-    for step=0,10 do
+    for step=0,60 do
         local events = game:Step(0,{positions={
             [1]={x=step*.5,y=1},[2]={x=step*.5,y=2}}})
         assert(#Events(events,"triggerReward") == 0, "金币不追加第二条收益事件")
@@ -108,8 +108,8 @@ Test("幽灵和飞盘移动金币沿用score单次入账且带移动标签", fun
             total = total + (event.value or 0)
         end
     end
-    assert(seen[1] == 1 and seen[2] == 1)
-    Close(total, 1+game:_Value(Item(game,2)))
+    assert(seen[1] == 1 and seen[2] == 6)
+    Close(total, 1+6*game:_Value(Item(game,2)))
     Close(game.roundScore,total)
     Close(game.score,total)
     Close(game.totalScore,total)
@@ -117,7 +117,8 @@ end)
 
 Test("转圈圈金币显示旋转、不重复角度领奖或计强制旋转", function()
     local game = Fixture({"apple"},{spin_reward=true})
-    local contacts = {angularTravel={[1]=TURN*2+.4},positions={[1]={x=.3,y=2}}}
+    rawset(game, "_RandomInt", function(_, maximum) assert(maximum == 100); return 1 end)
+    local contacts = {angularTravel={[1]=TURN*6+.4},positions={[1]={x=.3,y=2}}}
     local events = game:Step(0,contacts)
     local scores = Events(events,"score")
     assert(#scores == 2 and #Events(events,"triggerReward") == 0)
@@ -177,7 +178,7 @@ end)
 Test("大胃王位移缩体积使用位移标签且不改变价值", function()
     local game = Fixture({"glutton"})
     local item = Item(game,1)
-    item.scale,item.distance = 1.5,9.5
+    item.scale,item.distance = 1.5,49.5
     game:Step(0,{positions={[1]={x=0,y=1}}})
     local events = game:Step(0,{positions={[1]={x=.5,y=1}}})
     Reward(events,1,-10,"size","distance")
@@ -252,9 +253,9 @@ Test("金币价值永久与位移文案保持真实数字和图标标记", funct
     local prefix,amount,icon = Feedback.Content(5,"move")
     assert(prefix == "移动：" and amount == "+5" and not icon)
     prefix,amount,icon = Feedback.Content(1.2,"move")
-    assert(prefix == "移动：" and amount == "+2" and not icon)
+    assert(prefix == "移动：" and amount == "+1.2" and not icon)
     prefix,amount,icon = Feedback.Content(-1.2,"move")
-    assert(prefix == "移动：" and amount == "-1" and not icon)
+    assert(prefix == "移动：" and amount == "-1.2" and not icon)
     prefix,amount,icon = Feedback.Content(1.5,"collision","value")
     assert(prefix == "碰撞" and amount == "+1.5" and icon)
     prefix,amount,icon = Feedback.Content(3,"rotate","permanent")

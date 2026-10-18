@@ -39,6 +39,9 @@ local SCORE_OUTLINE = {
 
 -- 收益浮字存活时长（秒），与结算展示阶段 reveal 的停顿一致，保证玩家看清分数。
 local PARTICLE_LIFETIME = 2.0
+local DASH_TRAIL_LIFETIME = .20
+local DASH_TRAIL_INTERVAL = .04
+local DASH_TRAIL_DISTANCE = .10 -- 真实移动不足0.1米不叠残影，避免顶墙时原地变亮。
 
 -- 结算浮字逐个弹出（用户要求：结算页面逐个结算，看得更清楚）：
 -- 分数事件先入队，reveal 阶段按间隔逐一释放。节拍常量放在 Game 中，
@@ -174,6 +177,8 @@ end
 ---@field inflations table<number,BottleInflation> 气球平滑膨胀，终点保持实例永久尺寸
 ---@field presentUids table<number,boolean> 上一帧瓶内成员，用于差量触发出现动效
 ---@field consumeFlash BottleConsumeFlash
+---@field dashTrails {uid:number,x:number,y:number,angle:number,radius:number,age:number}[] 真实姿态短残影，独立于物理与拾取
+---@field dashEmitters table<number,{remaining:number,sampleAge:number,lastX:number,lastY:number}> 冲刺事件驱动的表现计时，不延续普通惯性
 ---@overload fun(props:WidgetProps): BottleBoard
 local Board = UI.Widget:Extend("BottleBoard") --[[@as BottleBoard]]
 
@@ -213,6 +218,42 @@ function Board:ResetEffects()
     self.shakeCoinsInFlight = 0
     self.roundScore:Reset()
     self.bursts, self.burstRings, self.explodedUids, self.inflations = {}, {}, {}, {}
+    self.dashTrails, self.dashEmitters = {}, {}
+end
+
+-- 只保留小牛真实走过的位置，不插值伪造轨迹；低帧率最多补一张，不突发堆积。
+-- 所有残影在实体后方绘制，不进物品集合、不参与碰撞/拾取/收益或存档。
+function Board:UpdateDashTrails(dt)
+    local elapsed = math.max(0, dt)
+    for index = #self.dashTrails, 1, -1 do
+        local trail = self.dashTrails[index]
+        trail.age = trail.age + elapsed
+        local item = self.game:Get(trail.uid)
+        if trail.age >= DASH_TRAIL_LIFETIME or not item or item.location ~= "bottle"
+            or item.id ~= "calf" then table.remove(self.dashTrails, index) end
+    end
+    for uid, emitter in pairs(self.dashEmitters) do
+        local item = self.game:Get(uid)
+        if self.game.phase ~= "running" or not item or item.id ~= "calf"
+            or item.location ~= "bottle" or not self.physics.bodies[uid] or emitter.remaining <= 0 then
+            self.dashEmitters[uid] = nil
+        else
+            emitter.sampleAge = emitter.sampleAge + math.min(elapsed, emitter.remaining)
+            if emitter.sampleAge >= DASH_TRAIL_INTERVAL then
+                emitter.sampleAge = emitter.sampleAge % DASH_TRAIL_INTERVAL
+                local px, py, angle, radius = self.physics:GetPose(uid)
+                local dx, dy = px - emitter.lastX, py - emitter.lastY
+                if dx * dx + dy * dy >= DASH_TRAIL_DISTANCE * DASH_TRAIL_DISTANCE then
+                    self.dashTrails[#self.dashTrails + 1] = {
+                        uid = uid, x = px, y = py, angle = angle, radius = radius, age = 0,
+                    }
+                    emitter.lastX, emitter.lastY = px, py
+                end
+            end
+            emitter.remaining = math.max(0, emitter.remaining - elapsed)
+            if emitter.remaining <= 0 then self.dashEmitters[uid] = nil end
+        end
+    end
 end
 
 -- 物理刚体在 Sync 后已是新尺寸，残留也只保存最终尺寸；动画仅覆盖绘制半径。
@@ -338,6 +379,7 @@ end
 
 function Board:Update(dt)
     if self.isPaused and self.isPaused() then return end
+    self:UpdateDashTrails(dt)
     if self.consumeFlash then self.consumeFlash:Update(dt) end
     local l = self:GetAbsoluteLayout()
     local phase = self.game.phase
@@ -609,9 +651,23 @@ function Board:Effects(events)
                     self.bursts[#self.bursts + 1] = particle
                 end
             end
+        elseif event.kind == "dash" and event.uid and self.game.phase == "running" then
+            local item = self.game:Get(event.uid)
+            if item and item.id == "calf" and item.location == "bottle"
+                and self.physics.bodies[event.uid] then
+                local px, py = self.physics:GetPose(event.uid)
+                -- 用物理真实中心起步；事件x/y若存在也不当作未来位置或残影。
+                self.dashEmitters[event.uid] = {
+                    remaining = event.duration or .35, sampleAge = 0, lastX = px, lastY = py,
+                }
+            end
         elseif event.kind == "remove" and event.uid then
             -- 即时score可能先于remove；弃牌与被消耗实体不得被残留绘制“复活”。
             self.residue[event.uid], self.inflations[event.uid] = nil, nil
+            self.dashEmitters[event.uid] = nil
+            for index = #self.dashTrails, 1, -1 do
+                if self.dashTrails[index].uid == event.uid then table.remove(self.dashTrails, index) end
+            end
         elseif event.kind == "spawn" and event.uid then
             -- 生成/入瓶事件：立即触发出现动效（不参与准备期错峰排队）。
             -- 同一步新实体在 Sync 后才建立刚体，位置沿用事件的 x/y（与 score 同一约定）。
@@ -773,6 +829,15 @@ function Board:Render(vg)
         PixelFrame(vg, l.x + l.w / 2, l.y + l.h / 2, math.min(l.w, l.h) * .43, C.border, 90)
     end
     Art.Bottle(vg, x, y, self.ppu, self.game.phase == "running")
+    -- 残影先于全部实体提交：保留原像素轮廓、真实角度/尺寸，仅以透明度淡出。
+    for _, trail in ipairs(self.dashTrails) do
+        local fade = math.max(0, 1 - trail.age / DASH_TRAIL_LIFETIME)
+        nvgSave(vg)
+        nvgGlobalAlpha(vg, .32 * fade * fade)
+        Art.Item(vg, "calf", x + trail.x * self.ppu, y - trail.y * self.ppu,
+            trail.radius * self.ppu, -trail.angle, false)
+        nvgRestore(vg)
+    end
     for _, item in ipairs(self.game:BottleItems()) do
         local px, py, angle, radius = self.physics:GetPose(item.uid)
         local sx, sy, sr = x + px * self.ppu, y - py * self.ppu, radius * self.ppu
@@ -785,8 +850,7 @@ function Board:Render(vg)
         -- 厨师本体源表未写冷却，只有持帽时显示遗物明确声明的1秒。
         local hasCooldown = Items.HasCooldown(item.id)
             or (item.id == "chef" and Relics.Has(self.game, "chef_hat"))
-        local coolingPhase = self.game.phase == "running" or self.game.phase == "settle"
-        local cooling = coolingPhase and hasCooldown and item.remaining > 0
+        local cooling = self.game.phase == "running" and hasCooldown and item.remaining > 0
         local pop = self.popByUid and self.popByUid[item.uid] or nil
         -- 错峰等待中的物品保持不可见（含选中框与冷却环），轮到它时才弹跳出现。
         local visible = not pop or pop.delay <= 0

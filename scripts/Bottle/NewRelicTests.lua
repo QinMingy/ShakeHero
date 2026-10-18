@@ -77,7 +77,7 @@ local function Test(name, run) cases[#cases+1] = {name=name,run=run} end
 Test("新增9遗物逐ID编号品质已接线且候选去重", function()
     local rarities = {2,2,2,1,2,2,1,2,1}
     local game = Fixture({})
-    assert(#Relics.list == 33 and #Relics.Available(game) == 33)
+    assert(#Relics.list == 37 and #Relics.Available(game) == 37)
     for index, id in ipairs(IDS) do
         local def = assert(Relics.byId[id])
         assert(def.numberId == 24+index and def.rarity == rarities[index])
@@ -88,7 +88,7 @@ Test("新增9遗物逐ID编号品质已接线且候选去重", function()
     for _, def in ipairs(Relics.Available(game)) do
         assert(not game.relics[def.id] and not seen[def.id]); seen[def.id] = true
     end
-    assert(#Relics.Available(game) == 24)
+    assert(#Relics.Available(game) == 28)
     local restored = Game.Restore(game:Snapshot())
     for _, id in ipairs(IDS) do assert(restored.relics[id]) end
 end)
@@ -192,43 +192,95 @@ Test("羊毛集市刀脱库存兑换永久硬币、不直接发钱且只奖创�
     Game.Restore(game:Snapshot()); Close(game.score,score)
 end)
 
-Test("幽灵运动逐5米固定金币、非幽灵/重采样/传送不领奖", function()
+Test("幽灵运动逐30米固定金币、非幽灵/重采样/传送不领奖", function()
     local game = Fixture({"ghost","apple"},{ghost_sport=true})
     assert(game:Start())
     Item(game,1).permBonus,Item(game,1).permMult = 50,3
     game:Step(0,{positions={[1]={x=0,y=0},[2]={x=0,y=0}}})
-    for index=1,12 do
+    for index=1,60 do
         local position = {x=index*.5,y=0}
         game:Step(0,{positions={[1]=position,[2]=position}})
-        if index == 6 then Close(game.roundScore,0) end
+        if index == 10 or index == 59 then Close(game.roundScore,0) end
+    end
+    Close(game.roundScore,1); Close(Item(game,1).ghostTravel,0)
+    for index=61,62 do
+        game:Step(0,{positions={[1]={x=index*.5,y=0}}})
     end
     Close(game.roundScore,1); Close(Item(game,1).ghostTravel,1)
     game:_TeleportTop(Item(game,1),{})
     game:Step(0,{positions={[1]={x=0,y=6}}})
     Close(game.roundScore,1); Close(Item(game,1).ghostTravel,1)
     local events = {}
-    RelicExpansion.TrackDistance(game,Item(game,1),14,events)
-    Close(game.roundScore,4); Close(Item(game,1).ghostTravel,0)
+    RelicExpansion.TrackDistance(game,Item(game,1),94,events)
+    Close(game.roundScore,4); Close(Item(game,1).ghostTravel,5)
     assert(#Repair.Events(events,"score",1) == 3)
+    local nextEvents = {}
+    RelicExpansion.TrackDistance(game,Item(game,1),25,nextEvents)
+    Close(game.roundScore,5); Close(Item(game,1).ghostTravel,0)
+    assert(#Repair.Events(nextEvents,"score",1) == 1)
 end)
 
-Test("转圈圈自然累计圈数、重复/重建不多奖、强制转动不计", function()
+Test("转圈圈每三圈30/31边界、失败耗进度、多批保余角与重建不重领", function()
     local game = Fixture({"apple"},{spin_reward=true})
     assert(game:Start()); Item(game,1).permBonus = 100
+    local done = Sequence(game,{{maximum=100,value=30},{maximum=100,value=31},
+        {maximum=100,value=100},{maximum=100,value=1}})
     game:Step(0,{angularTravel={[1]=TURN*2+.4}})
-    Close(game.roundScore,2); Close(Item(game,1).spinProgress,.4)
-    game:Step(0,{angularTravel={[1]=TURN*2+.4}}); Close(game.roundScore,2)
-    game:Step(0,{angularTravel={[1]=0}}); Close(game.roundScore,2)
-    game:Step(0,{angularTravel={[1]=TURN-.4}}); Close(game.roundScore,3)
+    Close(game.roundScore,0); Close(Item(game,1).spinProgress,TURN*2+.4)
+    game:Step(0,{angularTravel={[1]=TURN*2+.4}})
+    game:Step(0,{angularTravel={[1]=0}})
+    Close(game.roundScore,0); Close(Item(game,1).spinProgress,TURN*2+.4)
+    game:Step(0,{angularTravel={[1]=TURN-.4}})
+    Close(game.roundScore,1); Close(Item(game,1).spinProgress,0)
+    game:Step(0,{angularTravel={[1]=TURN*4-.4}})
+    Close(game.roundScore,1); Close(Item(game,1).spinProgress,0)
+    local events = game:Step(0,{angularTravel={[1]=TURN*10-.15}})
+    Close(game.roundScore,2); Close(Item(game,1).spinProgress,.25)
+    assert(#Repair.Events(events,"score",1) == 1)
+    done()
+end)
+
+Test("转圈圈反向绝对角路程仍计、强制转向不计且回合进度清理", function()
     local reverse = Fixture({"apple"},{spin_reward=true})
-    assert(reverse:Start()); reverse:Step(0,{angles={[1]=0}})
+    assert(reverse:Start())
+    local done = Sequence(reverse,{{maximum=100,value=30}})
+    reverse:Step(0,{angles={[1]=0}})
     reverse:Step(0,{angles={[1]=math.pi/2},rotateOffsets={[1]=math.pi/2}})
     Close(Item(reverse,1).spinProgress,0)
-    for _=1,4 do
+    for _=1,6 do
         reverse:Step(0,{angles={[1]=0},rotateOffsets={[1]=math.pi/2}})
         reverse:Step(0,{angles={[1]=math.pi/2},rotateOffsets={[1]=math.pi/2}})
     end
-    Close(reverse.roundScore,2)
+    Close(reverse.roundScore,1); Close(Item(reverse,1).spinProgress,0)
+    done()
+    Item(reverse,1).spinProgress = TURN*2+.1
+    Finish(reverse)
+    Close(Item(reverse,1).spinProgress,0)
+    assert(Item(reverse,1).spinTravel == nil and Item(reverse,1).spinAngle == nil)
+end)
+
+Test("转圈圈百分签精确30中70空、无遗物与不足三圈均不抽签", function()
+    ---@type number
+    local wins = 0
+    for ticket=1,100 do
+        local game = Fixture({"apple"},{spin_reward=true})
+        assert(game:Start())
+        local done = Sequence(game,{{maximum=100,value=ticket}})
+        game:Step(0,{angularTravel={[1]=TURN*3}}); done()
+        Close(game.roundScore,ticket<=30 and 1 or 0)
+        Close(Item(game,1).spinProgress,0)
+        wins = wins + game.roundScore
+    end
+    Close(wins,30)
+    local ordinary = Fixture({"apple"})
+    assert(ordinary:Start())
+    local done = Sequence(ordinary,{})
+    ordinary:Step(0,{angularTravel={[1]=TURN*30}}); done()
+    Close(ordinary.roundScore,0)
+    local partial = Fixture({"apple"},{spin_reward=true})
+    assert(partial:Start()); done = Sequence(partial,{})
+    partial:Step(0,{angularTravel={[1]=TURN*3-.01}}); done()
+    Close(partial.roundScore,0); Close(Item(partial,1).spinProgress,TURN*3-.01)
 end)
 
 Test("培根仅真实直接邻居成团、不递归传播两根培根链", function()
@@ -376,7 +428,7 @@ Test("金盘洗手只免警察老师、不免杀手追杀也不改学生成长�
     assert(Item(student,1).id == "thief", "洗手不能擅自删除负面成长池中的小偷")
 end)
 
-Test("第5与10回合物品和追加遗物三选一及刷新全部排普通", function()
+Test("第5与10回合仅物品及刷新排普通、追加普通遗物可获取刷新存档", function()
     for _, round in ipairs({5,10}) do
         local snapshot = Fixture({"apple"}):Snapshot()
         snapshot.round, snapshot.stage = round, math.floor((round-1)/5)+1
@@ -393,48 +445,126 @@ Test("第5与10回合物品和追加遗物三选一及刷新全部排普通", fu
             for _,id in ipairs(game.options) do assert(Items.byId[id].rarity > 1) end
             assert(game:DraftRefresh())
         end
+        for _,id in ipairs(game.options) do assert(Items.byId[id].rarity > 1) end
+        -- ticket=1命中原普通档；正常进入遗物流程和刷新都不能套用物品禁普通。
+        rawset(game,"_RandomInt",function(_,maximum) assert(maximum>=1); return 1 end)
         assert(game:Skip() and game.relicDraft and #game.options == 3)
+        -- 普通遗物是合法候选，但伪造未知遗物或已拥有项仍须原子拒绝。
         validOptions, revision = game.options, game.revision
-        game.options = {"gambling_token"}
-        assert(not game:Choose(1) and not game.relics.gambling_token and game.revision == revision,
-            "考核Choose也须拒绝伪造普通遗物")
-        game.options = validOptions
-        local balance = game.refreshes
-        for _,id in ipairs(game.options) do assert(Relics.byId[id].rarity > 1) end
-        assert(game:DraftRefresh() and not game:DraftRefresh())
-        Close(game.refreshes,balance,"遗物免费刷新不消耗物品余额")
-        for _,id in ipairs(game.options) do assert(Relics.byId[id].rarity > 1) end
-        Game.Restore(game:Snapshot())
+        local rng, balance = game._rngState, game.refreshes
+        game.options = {"unknown_relic"}
+        assert(not game:Choose(1) and game.revision == revision and game._rngState == rng
+            and game.refreshes == balance and #game.deck == count, "伪造未知遗物不得获得或推进")
+        local owned = validOptions[1]
+        game.relics[owned], game.options = true, {owned}
+        local alreadyOwned = game:Snapshot()
+        assert(not game:Choose(1) and Equal(alreadyOwned, game:Snapshot()), "已拥有遗物候选原子拒绝")
+        game.relics[owned], game.options = nil, validOptions
+        for _=1,2 do
+            local seen = {}
+            for _,id in ipairs(game.options) do
+                assert(Relics.byId[id].rarity == 1 and not game.relics[id] and not seen[id])
+                seen[id] = true
+            end
+            if not game.refreshUsed then assert(game:DraftRefresh())
+            else assert(not game:DraftRefresh()) end
+        end
+        for _,id in ipairs(game.options) do assert(Relics.byId[id].rarity == 1) end
+        Close(game.refreshes,balance)
+        Close(game.refreshes,round % 2 == 0 and 4 or 3) -- 遗物免费刷新不扣物品池，第10回合仍额外+1。
+        Close(game.relicRefreshes,0)
+        local state = game:Snapshot()
+        local restored = Game.Restore(state)
+        assert(Equal(state,restored:Snapshot()) and Equal(restored.options,game.options),
+            "普通遗物候选存档保序、RNG和刷新余额完全不变")
+        rawset(game,"_RandomInt",nil)
+        local chosen = game.options[1]
+        assert(game:Choose(1) and restored:Choose(1))
+        assert(game.relics[chosen] and restored.relics[chosen] and game.round == round+1)
+        assert(game.phase == "prepare" and #game.deck == count and Equal(game:Snapshot(),restored:Snapshot()))
+        local acquired = Game.Restore(game:Snapshot())
+        assert(acquired.relics[chosen], "普通遗物正常获取后永久读档")
+        for _,def in ipairs(Relics.Available(acquired)) do assert(def.id ~= chosen) end
     end
 end)
 
-Test("非考核回合仍按原白卡概率、考核候选不足不补普通", function()
+Test("非考核物品原白卡概率、遗物考核原权重及不足回退不受物品过滤影响", function()
     local ordinary = Fixture({"apple"})
     assert(ordinary:Start()); Finish(ordinary)
     assert(#ordinary.options == 3)
     for _,id in ipairs(ordinary.options) do assert(Items.byId[id].rarity == 1) end
+    for _,round in ipairs({5,10}) do
+        local probe = Fixture({})
+        probe.round,probe.stage = round,math.floor(round/5)+1
+        local weights = Items.DraftWeights(probe.stage)
+        -- 第一普通档的最后一签仍普通，下一签恰为优秀；每次请求原权重10000。
+        for _,ticket in ipairs({weights[1],weights[1]+1}) do
+            local calls = 0
+            rawset(probe,"_RandomInt",function(_,maximum)
+                calls = calls+1
+                if calls%2 == 1 then assert(maximum == 10000); return ticket end
+                assert(maximum>=1); return 1
+            end)
+            local options = probe:_RelicDraftOptions()
+            assert(#options == 3 and calls == 6)
+            for _,id in ipairs(options) do
+                assert(Relics.byId[id].rarity == (ticket == weights[1] and 1 or 2),
+                    "遗物普通/优秀分界保持原概率表")
+            end
+        end
+        assert(Equal(weights,Items.DraftWeights(probe.stage)), "抽签不污染共享概率表")
+    end
+    -- 候选不足与零权重回退仍覆盖物品禁普通，不能随遗物规则修正丢掉这组边界。
+    local itemLimited = Fixture({})
+    itemLimited.round,itemLimited.stage = 5,2
+    local originalPool = {}
+    for _,def in ipairs(Items.list) do originalPool[def.id] = def.pool end
+    local ok,message = pcall(function()
+        for _,def in ipairs(Items.list) do
+            if def.rarity > 1 then def.pool = def.id == "knife" or def.id == "teacher" end
+        end
+        local options = itemLimited:_DraftOptions()
+        assert(#options == 2)
+        local seen = {}
+        for _,id in ipairs(options) do
+            assert((id == "knife" or id == "teacher") and not seen[id]); seen[id]=true
+        end
+        assert(seen.knife and seen.teacher, "考核物品不足三件不拿普通补齐")
+        Items.byId.knife.pool = false
+        options = itemLimited:_DraftOptions()
+        assert(#options == 1 and options[1] == "teacher", "仅剩零权重稀有物品仍按最高非普通档回退")
+        Items.byId.teacher.pool = false
+        assert(#itemLimited:_DraftOptions() == 0, "无非普通物品时空候选而非普通补位")
+    end)
+    for _,def in ipairs(Items.list) do def.pool = originalPool[def.id] end
+    assert(ok,message)
     local limited = Fixture({})
     limited.round,limited.stage = 5,2
     for _,def in ipairs(Relics.list) do
-        if def.rarity > 1 and def.id ~= "teacher_team" and def.id ~= "accelerator" then
-            limited.relics[def.id]=true
-        end
+        if def.id ~= "gambling_token" and def.id ~= "teacher_team" then limited.relics[def.id]=true end
     end
     local options = limited:_RelicDraftOptions()
     assert(#options == 2)
-    for _,id in ipairs(options) do assert(id == "teacher_team" or id == "accelerator") end
-    limited.relics.teacher_team,limited.relics.accelerator = true,true
-    assert(#limited:_RelicDraftOptions() == 0, "仍未拥有普通遗物也不得补入考核候选")
-    -- 第5回合stage2对品质3权重为0，但只剩品质3时须回退到最高非普通档。
-    limited.relics.jungle_hunt, limited.relics.soul_resonance = nil,nil
+    local seen = {}
+    for _,id in ipairs(options) do
+        assert((id == "gambling_token" or id == "teacher_team") and not seen[id]); seen[id]=true
+    end
+    assert(seen.gambling_token and seen.teacher_team, "候选不足时普通遗物仍是合法候选")
+    limited.relics.teacher_team = true
+    options = limited:_RelicDraftOptions()
+    assert(#options == 1 and options[1] == "gambling_token", "只剩普通遗物仍正常抽出")
+    limited.relics.gambling_token = true
+    assert(#limited:_RelicDraftOptions() == 0, "真正全部拥有才无候选")
+    -- 只剩零权重品质3时沿用原最高可用档回退，不因考核新增限制。
+    limited.relics.jungle_hunt,limited.relics.soul_resonance = nil,nil
     local fallback = limited:_RelicDraftOptions()
     assert(#fallback == 2)
     for _,id in ipairs(fallback) do
-        assert(id == "jungle_hunt" or id == "soul_resonance", "零权重回退不可拿普通补位")
+        assert(id == "jungle_hunt" or id == "soul_resonance", "零权重回退至最高可用稀有度")
     end
 end)
 
-Test("rules6考核坏候选严格拒绝、nil和5旧档只过滤普通保PRNG与次数", function()
+Test("rules7/8仅拒绝考核普通物品、nil和5和6旧档只过滤物品保PRNG与次数", function()
     for _,relicDraft in ipairs({false,true}) do
         local snapshot = Fixture({"juice"}):Snapshot() --[[@as any]]
         snapshot.phase,snapshot.round,snapshot.stage = "draft",5,2
@@ -443,26 +573,40 @@ Test("rules6考核坏候选严格拒绝、nil和5旧档只过滤普通保PRNG与
         snapshot.options = relicDraft and {"gambling_token","juicer","teacher_team"}
             or {"apple","teacher","knife"}
         snapshot.refreshes = 7
-        assert(snapshot.rulesVersion == 6 and not pcall(Game.Restore,snapshot))
-        local expected = relicDraft and {"juicer","teacher_team"} or {"teacher","knife"}
-        for _,old in ipairs({"nil",5}) do
+        snapshot.relicRefreshes = relicDraft and 1 or 0
+        assert(snapshot.rulesVersion == 8)
+        for _, currentRules in ipairs({7,8}) do
+            snapshot.rulesVersion = currentRules
+            if relicDraft then
+                local current = Game.Restore(snapshot)
+                assert(Equal(current.options,snapshot.options) and current._rngState == snapshot.rngState)
+            else
+                assert(not pcall(Game.Restore,snapshot), "rules7/8考核普通物品必须严格拒绝")
+            end
+        end
+        local expected = relicDraft and {"gambling_token","juicer","teacher_team"} or {"teacher","knife"}
+        for _,old in ipairs({"nil",5,6}) do
             if old == "nil" then snapshot.rulesVersion = nil else snapshot.rulesVersion = old end
             local restored = Game.Restore(snapshot)
             assert(Equal(restored.options,expected) and restored._rngState == snapshot.rngState)
             Close(restored.refreshes,7); Close(Item(restored,1).refreshCount,0)
             Close(restored:_Value(Item(restored,1)),old == "nil" and 0 or 3)
             local stable = restored:Snapshot()
-            assert(stable.rulesVersion == 6 and Equal(stable,Game.Restore(stable):Snapshot()))
+            assert(stable.rulesVersion == 8 and Equal(stable,Game.Restore(stable):Snapshot()))
+            snapshot.options = relicDraft and {"gambling_token","gambling_token"} or {"apple","apple"}
+            assert(not pcall(Game.Restore,snapshot), "先严格拒绝旧重复普通，不能过滤后掩盖损坏")
+            snapshot.options = relicDraft and {"gambling_token"} or {"apple"}
+            local oneCommon = Game.Restore(snapshot)
+            assert(#oneCommon.options == (relicDraft and 1 or 0)
+                and oneCommon._rngState == snapshot.rngState and oneCommon.refreshes == 7)
+            if relicDraft then assert(oneCommon.options[1] == "gambling_token") end
+            snapshot.round = 6
+            local ordinaryCopy = Game.Restore(snapshot)
+            assert(#ordinaryCopy.options == 1, "非考核旧候选不擅过滤")
+            snapshot.round = 5
+            snapshot.options = relicDraft and {"gambling_token","juicer","teacher_team"}
+                or {"apple","teacher","knife"}
         end
-        snapshot.rulesVersion,snapshot.options = 5,relicDraft and {"gambling_token","gambling_token"}
-            or {"apple","apple"}
-        assert(not pcall(Game.Restore,snapshot), "先严格拒绝旧重复普通，不能过滤后掩盖损坏")
-        snapshot.options = relicDraft and {"gambling_token"} or {"apple"}
-        local empty = Game.Restore(snapshot)
-        assert(#empty.options == 0 and empty._rngState == snapshot.rngState and empty.refreshes == 7)
-        snapshot.round = 6
-        local ordinary = Game.Restore(snapshot)
-        assert(#ordinary.options == 1, "非考核旧候选不擅过滤")
     end
 end)
 

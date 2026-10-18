@@ -74,8 +74,8 @@ function Confirm:Valid(session)
     return session.active and self.session == session and view.game == game
         and view.deckSim == session.sim and session.sim ~= nil
         and view.inventoryOpen and view.inventoryTab == "items" and view.modal:IsVisible()
-        and (game.phase == "prepare" or game.phase == "draft" or game.phase == "over")
-        and game.revision == session.revision and (game.removals or 0) > 0
+        and game:CanRemoveOwned(session.uid)
+        and game.revision == session.revision
         and Owned(game, session.uid) == session.item
 end
 

@@ -140,6 +140,8 @@ local function StartRound()
         ResetSensor()
         -- 自动启用失败或设备断开后，开始按钮再试一次；仍保留触摸操作。
         if lastSensorNotice ~= "available" then Sensor(false) end
+        SyncPhysics(false)
+        physics:RememberEvents(game.startEvents)
         view:Update(true)
         view.board:Effects(game.startEvents)
         game.startEvents = {}
@@ -253,13 +255,13 @@ function Start()
             if view.tutorial and not view.tutorial:Allows("skip") then return end
             if game and game:Skip() then Refresh(true); print("[三选一] 跳过完成，当前状态：" .. game.phase .. (game.relicDraft and "（遗物）" or "")) end
         end,
-        newrun = NewRun, import = Import,
         remove = function(uid)
             if not game then return false, "游戏尚未就绪" end
-            local ok, message = game:RemoveItem(uid)
+            local ok, message = game:RemoveOwned(uid)
             if ok then SyncPhysics(false); Save() end
             return ok, message
         end,
+        newrun = NewRun, import = Import,
         juicer = function()
             if not game then return false, "游戏尚未就绪" end
             local ok, message = RelicEffects.UseJuicer(game)
@@ -314,7 +316,7 @@ function Start()
     SubscribeToEvent("PhysicsEndContact2D", "HandleContactEnd")
     SubscribeToEvent("KeyDown", "HandleKeyDown")
     Save()
-    print("[启动] 摇摇牌库 V0.5，单机竖屏2D，93件物品与33件遗物已实装")
+    print("[启动] 摇摇牌库 V0.6，单机竖屏2D，98件物品与37件遗物已实装")
 end
 
 ---@param eventType string

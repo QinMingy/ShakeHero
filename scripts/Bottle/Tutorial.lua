@@ -28,7 +28,7 @@ local specs={
         button="下一步",holes={L.screen,L.draftSlots[1],L.draftSlots[2],L.draftSlots[3]},
         windows={L.board,L.draftSlots[1],L.draftSlots[2],L.draftSlots[3]},
         point=L.draftSlots[2],y=24,compact=true},
-    refresh={text="再教你一招：重抽和刷新分开计算！\n准备阶段每回合可重抽1次，下回合重置。\n物品刷新开局有1次，每完成2回合增加1次，没用完会保留；遗物每组三选一独立刷新1次，每次重置。",
+    refresh={text="再教你一招：准备重抽和物品刷新共用次数！\n新局有1次，每完成2回合增加1次，没用完会保留；有次数就能继续重抽或刷新。\n遗物每组三选一另有1次独立免费刷新，每次重置。",
         button="试试刷新",holes={L.draftRefresh},point=L.draftRefresh,y=250},
     reroll={text="不满意这三个候选？点击「刷新」，花1次刷新机会，重抽一组！",
         button=false,holes={L.draftRefresh},windows={L.draftRefresh},point=L.draftRefresh,y=350,compact=true},
@@ -64,6 +64,8 @@ function Tutorial:IsPaused()
     return self:Active() and (self.milestone~="" or Storage.tutorial.step~="running")
 end
 function Tutorial:Allows(action)
+    -- 首次教学要实际刷新候选，尚未开始教学时也不能先花掉共享池的唯一一次。
+    if Storage.tutorial.status == "new" and action == "reroll" then return false end
     if not self:Active() then return true end
     local step=Storage.tutorial.step
     return self.milestone=="" and ((action=="switch" and (step=="choose" or step=="review" or step=="confirm"))

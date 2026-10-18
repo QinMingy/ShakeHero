@@ -20,6 +20,7 @@ local Relics = require("Bottle.Relics")
 local Extra = require("Bottle.ExtraEffects")
 local Expansion = require("Bottle.ExpansionEffects")
 local TriggerFeedback = require("Bottle.TriggerFeedback")
+local Rotation = require("Bottle.RotationEffects")
 
 ---@class Effects
 local Effects = {}
@@ -54,13 +55,15 @@ local STUDENT_BAD = { "thief", "killer", "gambler" }
 -- 警察消灭目标（#15：赌徒、小偷、杀手）。
 local POLICE_TARGETS = { gambler = true, thief = true, killer = true }
 
--- 接触条件：trigger=touch 的物品需与至少一个其他物品接触才进入调度；
--- 效果内部再过滤合法目标（无合法目标也算触发失败，按基础设定进入冷却）。
+-- 接触只决定是否尝试；Apply返回true必须代表本物品实际生效，失败保持就绪。
+-- 护盾/遗物产生的旁支事件不代表主动效果成功，不能用事件数量代替返回契约。
 ---@param game BottleGame
 ---@param item ItemInstance
 ---@param contacts BottleStepContacts
 ---@return boolean
 function Effects.Touches(game, item, contacts)
+    local rotation = Rotation.Touches(game, item, contacts)
+    if rotation ~= nil then return rotation end
     local expansion = Expansion.Touches(game, item, contacts)
     if expansion ~= nil then return expansion end
     local extra = Extra.Touches(game, item, contacts)
@@ -409,7 +412,8 @@ local function Chef(game, item, contacts, events)
             end
         end
     end
-    local hit = false
+    -- 成功吃刀本身也是效果，即使本次没有可切的水果也应进入冷却。
+    local hit = extra > 0
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
         if other.uid ~= item.uid and FULL_FRUIT[other.id] then
             if CutFruit(game, other, contacts, events, true, extra) then hit = true end
@@ -439,7 +443,7 @@ local TOUCH = {
 ---@param item ItemInstance
 ---@param contacts BottleStepContacts
 ---@param events GameEvent[]
----@return boolean handled
+---@return boolean applied 是否实际生效；无目标、额度耗尽、消费拦截等为false
 function Effects.Apply(game, item, contacts, events)
     if item.id == "ball" then
         -- 每次碰撞瓶子：价值+1（临时），进入冷却。

@@ -135,15 +135,15 @@ local function Test(name, run)
     cases[#cases + 1] = { name = name, run = run }
 end
 
-Test("93件全实装、26件屏蔽与硬币配方", function()
-    assert(#Items.list == 93)
+Test("98件全实装、27件屏蔽与硬币配方", function()
+    assert(#Items.list == 98)
     local blocked = {
         rotten_banana = true, banana_peel = true, apple_half = true, banana_half = true,
         orange_half = true, cherry_half = true, fruit_ninja = true, tomato_egg = true,
         coin_4 = true, coin_8 = true, coin_16 = true, coin_32 = true, coin_64 = true,
         coin_128 = true, coin_256 = true, coin_512 = true, coin_1024 = true, coin_2048 = true,
         juice = true, poop = true, golden_poop = true, diamond_poop = true, rainbow_poop = true,
-        discus = true, wool = true, sweater = true,
+        discus_athlete = true, discus = true, wool = true, sweater = true,
     }
     local blockedCount, normalCount = 0, 0
     for index, def in ipairs(Items.list) do
@@ -151,7 +151,7 @@ Test("93件全实装、26件屏蔽与硬币配方", function()
         assert(def.pool == (not blocked[def.id]), "卡池与源表及追加果汁约定不一致：" .. def.id)
         if def.pool then normalCount = normalCount + 1 else blockedCount = blockedCount + 1 end
     end
-    assert(blockedCount == 26 and normalCount == 67, "源表93件中26件屏蔽、67件入池")
+    assert(blockedCount == 27 and normalCount == 71, "源表98件中27件屏蔽、71件入池")
     for _, value in ipairs({ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 }) do
         local id = "coin_" .. value
         assert(Items.Recipe(id, id) == "coin_" .. (value * 2), "硬币配方缺失：" .. id)
@@ -199,6 +199,8 @@ Test("赌徒每位每骰每回合一次、不同赌徒额度独立", function()
     game:Step(3, contacts)
     Close(game.roundScore, score, "同回合不能重复投")
     Close(Item(game, 1).permBonus, 2)
+    Close(Item(game, 1).remaining, 0, "骰子额度用尽不重新进入冷却")
+    Close(Item(game, 2).remaining, 0, "另一赌徒额度独立耗尽后也保持就绪")
 end)
 
 Test("赌徒投1先加1结算自身再归零", function()
@@ -244,7 +246,7 @@ Test("再来一把只扩展赌徒为连续两投", function()
     Close(game.roundScore - before, 6)
 end)
 
-Test("果树10秒周期、概率失败也重置冷却", function()
+Test("果树10秒周期、概率失败也保持下一次周期调度", function()
     local game = Fixture({ "fruit_tree" })
     RandomConstant(game, 2)
     assert(game:Start())
@@ -349,12 +351,12 @@ Test("幸运硬币5秒投掷成功结算、失败不结算", function()
     end
 end)
 
-Test("兔子每移动10米永久加1、成群结队为其他兔子加值", function()
+Test("兔子每移动100米永久加1、成群结队为其他兔子加值", function()
     for _, grouped in ipairs({ false, true }) do
         local game = Fixture({ "rabbit", "rabbit" })
         game.relics.in_groups = grouped or nil
         assert(game:Start())
-        for sample = 0, 20 do
+        for sample = 0, 200 do
             game:Step(0, { positions = {
                 [1] = { x = sample * .5, y = 2 }, [2] = { x = 0, y = 4 },
             } })
@@ -366,19 +368,26 @@ Test("兔子每移动10米永久加1、成群结队为其他兔子加值", funct
     end
 end)
 
-Test("大胃王移动10米缩小、教练使缩幅翻倍且不低于1", function()
+Test("大胃王移动50米缩小、教练使缩幅翻倍且不低于1", function()
     for _, coached in ipairs({ false, true }) do
         local game = Fixture(coached and { "glutton", "fitness_coach" } or { "glutton" })
         Item(game, 1).scale = 1.5
         assert(game:Start())
-        for sample = 0, 20 do
+        for sample = 0, 100 do
             game:Step(0, { positions = { [1] = { x = sample * .5, y = 2 } } })
         end
         Close(Item(game, 1).scale, coached and 1.3 or 1.4)
-        for sample = 21, 120 do
+        if coached then Close(Item(game, 2).permBonus, 1, "每次真实缩小教练永久+1") end
+        for sample = 101, 600 do
             game:Step(0, { positions = { [1] = { x = sample * .5, y = 2 } } })
         end
         Close(Item(game, 1).scale, 1, "缩小有100%下限")
+        if coached then
+            Close(Item(game, 2).permBonus, 3, "1.5到1需三次真实缩小，到下限后不奖励")
+            Finish(game)
+            local restored = Game.Restore(game:Snapshot())
+            Close(Item(restored, 2).permBonus, 3, "教练收益跨回合存档永久保留")
+        end
     end
 end)
 
@@ -430,7 +439,7 @@ Test("培根相邻食物1.5连乘、无接触不生效", function()
     local events = Finish(game, { pairs = { { 1, 2 }, { 1, 3 }, { 1, 4 } } })
     local scores = Events(events, "score", 1)
     assert(#scores == 1)
-    Close(scores[1].value, 7, "培根3×1.5×1.5最终收益向上取整")
+    Close(scores[1].value, 6.75, "培根3×1.5×1.5保留小数收益")
     Close(Item(game, 1).mult, 1, "结算倍率回合末复位")
     local solo = Fixture({ "bacon", "apple" })
     assert(solo:Start())

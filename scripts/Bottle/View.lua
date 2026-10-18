@@ -573,10 +573,11 @@ function View:Update(force)
     else
         self.timer:SetValue(1)
     end
+    if self.inventoryOpen and Busy(game) then self:CloseInventory() end
     self.deckButton:SetText("牌库 " .. #game.deck)
     self.deckButton:SetDisabled(Busy(game))
     self:UpdateRemovalCount()
-    -- 独立重抽机会用尽时，即使抽回同批 uid，也重新错峰弹跳。
+    -- 成功重抽会扣共享刷新池，即使抽回同批 uid，也重新错峰弹跳。
     local refreshes = RefreshUI.Count(game)
     local refreshChanged = refreshes ~= self.lastRefreshes
     if game.phase == "prepare" and (refreshes < self.lastRefreshes
@@ -871,8 +872,10 @@ end
 function View:ConfirmRemoveDeckItem(uid)
     if Busy(self.game) or not self.inventoryOpen or self.inventoryTab ~= "items"
         or self.detailSource ~= "deck" or self.deckDetailUid ~= uid then return end
-    if (self.game.removals or 0) <= 0 then
-        UI.Toast.Show(NO_REMOVALS_MESSAGE, {duration = 2, variant = "info"})
+    local allowed, message = self.game:CanRemoveOwned(uid)
+    if not allowed then
+        UI.Toast.Show((self.game.removals or 0) <= 0 and NO_REMOVALS_MESSAGE or message,
+            {duration = 2, variant = "info"})
         return
     end
     self.removalConfirm:Open(uid, function(confirmedUid) self:RemoveDeckItem(confirmedUid) end)
@@ -1012,20 +1015,20 @@ function View:OpenAtmosphere()
     end
 end
 
---- GM 面板：接受数字编号 1–93 或字符串 id，由 Game:GmAddItem 统一匹配；未实装物品会被拒绝。
+--- GM 面板：接受数字编号 1–98 或字符串 id，由 Game:GmAddItem 统一匹配；未实装物品会被拒绝。
 function View:OpenGm()
     local panel = self:Modal("GM 面板")
     panel:SetStyle({textMotionDisabled = true})
-    panel:AddChild(UI.Label {text = "功能一 · 添加物品：输入数字编号 1–93 或字符串 id，全部93件可添加，加入牌库供后续抽取",
+    panel:AddChild(UI.Label {text = "功能一 · 添加物品：输入数字编号 1–98 或字符串 id，全部98件可添加，加入牌库供后续抽取",
         fontSize = 11.25, fontColor = C.textSecondary, whiteSpace = "normal", width = "100%"})
     local message = UI.Label {text = "输入数字或字符串 id；也可点击下方列表“添加”快捷加入",
         fontSize = 10.5, fontColor = C.primary, whiteSpace = "normal", width = "100%"}
-    local field = UI.TextField {id = "gmItemId", placeholder = "数字 1–93 或 id，如 1 / apple",
+    local field = UI.TextField {id = "gmItemId", placeholder = "数字 1–98 或 id，如 1 / apple",
         width = "100%", height = 48, fontSize = 12, fontFamily = "mono", flexGrow = 1, flexBasis = 0,
         onSubmit = function(self_, value)
             local id = value:match("^%s*(%S+)%s*$")
             if not id or id == "" then
-                message:SetText("请先输入数字编号 1–93 或字符串 id")
+                message:SetText("请先输入数字编号 1–98 或字符串 id")
                 return
             end
             local ok, text = self.actions.gmadd(id)
@@ -1036,7 +1039,7 @@ function View:OpenGm()
         local value = field:GetValue()
         local id = value:match("^%s*(%S+)%s*$")
         if not id or id == "" then
-            message:SetText("请先输入数字编号 1–93 或字符串 id")
+            message:SetText("请先输入数字编号 1–98 或字符串 id")
             return
         end
         local ok, text = self.actions.gmadd(id)
