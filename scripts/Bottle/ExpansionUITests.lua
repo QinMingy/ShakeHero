@@ -86,18 +86,36 @@ function Tests.Run(report)
     Check(Items.byId.wool.base==1 and not Contains(Items.byId.wool.effect,"被消耗时"), "最新羊毛基础1且不再被耗结算")
     Check(Contains(Items.byId.wool.effect,"不占用抽取数量") and Contains(Items.byId.wool.effect,"临时属性"), "价值1羊毛下回合额外入场说明")
     game.relics.lucky_charm = true
-    Check(Contains(ItemText.Effect(game,"hay"),"价值永久+1"), "幸运符草堆减量改增量")
+    Check(ItemText.Effect(game,"hay")==Items.byId.hay.effect, "幸运符不改写草堆正文")
     game.relics.wash_hands,game.relics.teach_all,game.relics.thief_handbook = true,true,true
     local thief = ItemText.Effect(game,"thief")
-    Check(Contains(thief,"共同增加价值") and Contains(thief,"各永久+1") and Contains(thief,"冷却：5秒"), "洗手与手册动态说明")
-    Check(Contains(thief,"不会被[[police]]消灭") and Contains(thief,"[[teacher]]转变"), "洗手职业豁免说明")
-    Check(not Contains(ItemText.Effect(game,"teacher"),"、[[thief]]"), "老师转换名单排除洗手小偷")
-    Check(Contains(ItemText.Effect(game,"police"),"不再消灭[[thief]]"), "警察说明排除洗手小偷")
+    Check(thief==Items.byId.thief.effect, "洗手与手册不改写小偷正文")
+    Check(ItemText.Effect(game,"teacher")==Items.byId.teacher.effect, "有教无类不追加老师正文")
+    Check(ItemText.Effect(game,"police")==Items.byId.police.effect, "金盘洗手不改写警察正文")
     game.relics.chef_hat = true
-    Check(Contains(ItemText.Effect(game,"chef"),"本次") and Contains(Relics.byId.chef_hat.note or "","不永久累计"), "厨师帽本次产物限制")
-    Check(RefreshUI.Count(game)==3 and RefreshUI.ButtonText(game)=="刷新 · 3 次", "历史布尔不影响共享次数")
+    Check(ItemText.Effect(game,"chef")==Items.byId.chef.effect and Contains(Relics.byId.chef_hat.note or "","不永久累计"), "厨师帽限制保留在遗物说明而非厨师正文")
+    Check(RefreshUI.Count(game)==3 and RefreshUI.ButtonText(game)=="刷新 · 3 次", "物品刷新池不受准备重抽标记影响")
     game.refreshes=0
     Check(RefreshUI.Count(game)==0 and Contains(RefreshUI.Hint(game),"剩余 0 次"), "耗尽刷新次数及底部提示")
+    game.relicDraft,game.refreshUsed=true,false
+    Check(RefreshUI.Count(game)==1 and RefreshUI.ButtonText(game)=="免费刷新 · 1 次",
+        "物品余额为零仍显示独立遗物免费刷新")
+    Check(Contains(RefreshUI.Hint(game),"每次遗物三选一重置"), "遗物提示每组重置")
+    game.refreshes,game.refreshUsed=9,true
+    Check(RefreshUI.Count(game)==0 and RefreshUI.ButtonText(game)=="免费刷新 · 0 次",
+        "遗物用尽后不显示物品池的9次")
+    game.relicDraft=false
+    Check(RefreshUI.Count(game)==9 and RefreshUI.ButtonText(game)=="刷新 · 9 次",
+        "返回物品页面显示独立物品余额")
+    game.phase,game.rerollUsed="prepare",false
+    Check(RefreshUI.Count(game)==1 and RefreshUI.ButtonText(game)=="重新抽取 · 1 次",
+        "准备显示独立一次重抽，不显示物品池9次")
+    Check(Contains(RefreshUI.Hint(game),"每回合重置"), "准备提示每回合重置")
+    game.rerollUsed=true
+    Check(RefreshUI.Count(game)==0 and RefreshUI.ButtonText(game,"重抽")=="重抽 · 0 次",
+        "准备已用重抽显示零且保留传入文案")
+    game.phase,game.refreshes,game.rerollUsed="prepare",0,false
+    Check(RefreshUI.Count(game)==1, "物品池为空仍显示一次准备重抽")
     Check(#Relics.list==33, "遗物完整33项")
     local relicIds={"teacher_team","accelerator","ghost_poop","premium_grass","food_comfort",
         "bacon_network","ghost_sport","spin_reward","wool_market"}
@@ -130,27 +148,38 @@ function Tests.Run(report)
     game.relics.ghost_poop=true
     for _,id in ipairs({"poop","golden_poop","diamond_poop","rainbow_poop"}) do
         Check(Items.IsPiercing(id,game) and not Items.IsPiercing(id),id.."穿透按对局而非全局定义")
-        Check(Contains(ItemText.Effect(game,id),"在瓶内自由飘动，可穿透物品"),id.."动态穿透说明")
+        Check(ItemText.Effect(game,id)==Items.byId[id].effect,id.."实际穿透但不追加遗物说明")
     end
     Check(Items.IsPiercing("ghost") and Items.IsPiercing("discus") and not Items.IsPiercing("apple",game),"默认穿透类型不扩大")
     game.relics.premium_grass,game.relics.wool_market=true,true
-    Check(Contains(ItemText.Effect(game,"grass"),"40:15:4:1") and Contains(ItemText.Effect(game,"grass"),"人类消费概率不变"),"优质草动物保底动态说明")
-    Check(Contains(ItemText.Effect(game,"sheep",first),"从瓶顶生成1枚永久[[coin_1]]") and Contains(ItemText.Effect(game,"sheep",first),"当前：7"),"羊集市替换脱毛产出但保库存显示")
+    Check(ItemText.Effect(game,"grass")==Items.byId.grass.effect,"优质草不追加物品正文")
+    Check(Contains(ItemText.Effect(game,"sheep",first),"当前：7") and not Contains(ItemText.Effect(game,"sheep",first),"羊毛集市"),"小羊保留实例库存且不追加遗物说明")
     game.relics.teacher_team,game.relics.food_comfort,game.relics.bacon_network=true,true,true
     game.relics.ghost_sport,game.relics.spin_reward,game.relics.accelerator=true,true,true
-    Check(Contains(ItemText.Effect(game,"teacher"),"名师团队"),"老师团队动态说明")
-    Check(Contains(ItemText.Effect(game,"apple"),"持有期间当前价值+2") and Contains(ItemText.Effect(game,"apple"),"非永久加值"),"食物+2非永久且倍率前")
+    Check(ItemText.Effect(game,"teacher")==Items.byId.teacher.effect,"名师团队不追加老师正文")
+    Check(ItemText.Effect(game,"apple")==Items.byId.apple.effect,"食物加值不追加物品正文")
     Check(ItemText.InitialValue(game,"apple")==4,"食物候选基础包含+2")
     game.relics.tomato_tycoon=true
     Check(ItemText.InitialValue(game,"tomato")==10,"西红柿候选先基础3+2再翻倍")
     Check(ItemText.InitialValue(game,"soldier")==5,"非食物候选不加2")
     Check(not Contains(ItemText.Effect(game,"soldier"),"吃了不烧心"),"食物遗物严格tag")
-    Check(Contains(ItemText.Effect(game,"bacon"),"不改变物理碰撞轮廓"),"培根邻接仅规则语义")
-    Check(Contains(ItemText.Effect(game,"ghost"),"每真实移动5m，+1金币"),"幽灵运动金币而非价值")
-    Check(Contains(ItemText.Effect(game,"compass"),"自然旋转每满一圈") and Contains(ItemText.Effect(game,"apple"),"瓶内移动速度+20%"),"旋转及加速动态说明")
+    Check(ItemText.Effect(game,"bacon")==Items.byId.bacon.effect,"培根邻接遗物不追加物品正文")
+    Check(ItemText.Effect(game,"ghost")==Items.byId.ghost.effect,"幽灵运动不追加物品正文")
+    Check(ItemText.Effect(game,"compass")==Items.byId.compass.effect and ItemText.Effect(game,"apple")==Items.byId.apple.effect,"旋转及加速遗物不追加物品正文")
     game.relics.coin_rain=true
     local cloud=ItemText.Effect(game,"cloud")
-    Check(Contains(cloud,"20%") and Contains(cloud,"6个临时[[coin_1]]") and not Contains(cloud,"[[droplet]]"),"云额外临时批与硬币雨一并替换")
+    Check(cloud==Items.byId.cloud.effect and Contains(cloud,"6个临时[[droplet]]"),"硬币雨不替换云朵原本生成物说明")
+    ---@type any
+    local noRelics={relics={}}
+    ---@type any
+    local allRelics={relics={}}
+    for _,relic in ipairs(Relics.list) do allRelics.relics[relic.id]=true end
+    for _,def in ipairs(Items.list) do
+        Check(ItemText.Effect(allRelics,def.id)==ItemText.Effect(noRelics,def.id)
+            and ItemText.Effect(allRelics,def.id,first)==ItemText.Effect(noRelics,def.id,first)
+            and ItemText.Effect(allRelics,def.id,second)==ItemText.Effect(noRelics,def.id,second),
+            def.id.."全部遗物不影响候选或两个独立实例的正文")
+    end
     Check(Contains(Items.byId.gecko.effect,"其他壁虎") and Contains(Items.byId.gecko.effect,"0.25秒") and Contains(Items.byId.gecko.effect,"每直接连接"),"壁虎延迟和直接邻接结算说明")
     print("[ExpansionUITests] " .. count .. " checks")
     return count

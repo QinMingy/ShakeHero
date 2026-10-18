@@ -1,11 +1,53 @@
 -- 原生平台使用项目隔离文件；网页预览可用存档码手动跨刷新恢复。
 local Game = require("Bottle.Game")
 local Atmosphere=require("Machine.Atmosphere")
-local Storage = { status = "未保存", sequence = 0, physicsMode = 2, atmosphereMode = "auto" }
+local TutorialState = require("Bottle.TutorialState")
+---@class BottleStorage
+---@field status string
+---@field sequence number
+---@field physicsMode number
+---@field atmosphereMode string
+---@field tutorial BottleTutorialState
+---@field runStarted boolean 玩家已经进入本局；启动页预先保存不算开始
+local Storage = { status = "未保存", sequence = 0, physicsMode = 2, atmosphereMode = "auto",
+    tutorial = TutorialState.New(false), runStarted = false }
+
+---@return BottleTutorialState
+function Storage.GetTutorial()
+    return TutorialState.FromSaved(Storage.tutorial, false)
+end
+
+--- 普通同步保留完成/旧玩家标记；显式新游戏通过 RestartTutorial 重播。
+--- 返回独立副本，避免外部引用改写存档状态。
+---@param value any
+---@return BottleTutorialState
+function Storage.SetTutorial(value)
+    local state = TutorialState.FromSaved(value, false)
+    local current = Storage.GetTutorial()
+    if current.status == "complete" and state.status ~= "complete" then return current end
+    if current.status == "legacy" and state.status ~= "legacy" then return current end
+    state.examSeen = state.examSeen or current.examSeen
+    state.relicSeen = state.relicSeen or current.relicSeen
+    Storage.tutorial = state
+    return Storage.GetTutorial()
+end
+
+--- 仅显式开始新游戏时重播引导；继续、读档和导入仍使用受保护的 SetTutorial。
+---@return BottleTutorialState
+function Storage.RestartTutorial()
+    Storage.tutorial = TutorialState.New(false)
+    return Storage.GetTutorial()
+end
+
+--- 仅在 Game.Restore 成功后调用，失败的导入不改变本地玩家标记。
+---@return BottleTutorialState
+function Storage.MarkImported()
+    return Storage.SetTutorial(TutorialState.MarkImported(Storage.tutorial))
+end
 
 -- 物理模式是玩家设置，不进入 Game 的回合回滚快照；旧存档默认优化版。
 ---@param value any
----@return number
+---@return integer
 local function PhysicsMode(value)
     if type(value) == "table" and value.physicsMode == 1 then return 1 end
     return 2
@@ -57,6 +99,8 @@ function Storage.Load()
     local bestSequence = -1
     local bestMode = 2
     local bestAtmosphere = "auto"
+    local bestTutorial = TutorialState.New(false)
+    local bestStarted = false
     local best = nil ---@type table?
     for i = 1, 2 do
         local name = "bottle-save-" .. i .. ".json"
@@ -75,9 +119,12 @@ function Storage.Load()
                     local valid = pcall(Game.Restore, value.game)
                     if valid then
                         best = value.game
-                        bestSequence = value.sequence
+                        bestSequence = math.floor(value.sequence)
                         bestMode = PhysicsMode(value.settings)
                         bestAtmosphere = AtmosphereMode(value.settings)
+                        bestTutorial = TutorialState.Reconcile(TutorialState.FromSaved(value.tutorial, true), best)
+                        -- 旧档缺少标记时保守保留继续入口，避免丢掉第一回合的真实进度。
+                        bestStarted = value.runStarted ~= false
                     else
                         print("[存档] 忽略损坏的存档槽 " .. i)
                     end
@@ -89,6 +136,8 @@ function Storage.Load()
     end
     Storage.physicsMode = bestMode
     Storage.atmosphereMode = bestAtmosphere
+    Storage.tutorial = bestTutorial
+    Storage.runStarted = bestStarted
     if best then
         Storage.sequence = bestSequence
         Storage.status = "已读取存档"
@@ -100,9 +149,12 @@ end
 ---@return boolean
 function Storage.Save(game)
     Storage.sequence = Storage.sequence + 1
+    local snapshot = game:Snapshot()
     local ok, text = pcall(cjson.encode, {
-        format = "bottle-lab-v1", sequence = Storage.sequence, game = game:Snapshot(),
+        format = "bottle-lab-v1", sequence = Storage.sequence, game = snapshot,
+        runStarted = Storage.runStarted,
         settings = {physicsMode = Storage.physicsMode,atmosphereMode=Storage.atmosphereMode},
+        tutorial = TutorialState.ForSnapshot(Storage.tutorial, snapshot),
     })
     if not ok then
         Storage.status = "存档编码失败"

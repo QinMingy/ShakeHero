@@ -19,6 +19,7 @@ local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local Extra = require("Bottle.ExtraEffects")
 local Expansion = require("Bottle.ExpansionEffects")
+local TriggerFeedback = require("Bottle.TriggerFeedback")
 
 ---@class Effects
 local Effects = {}
@@ -491,16 +492,22 @@ function Effects.Continuous(game, contacts, events)
                 events[#events + 1] = {
                     kind = "buff", uid = item.uid, id = item.id, value = wanted,
                 }
+                -- 贴底是持续状态，接触切换只同步价值，不作为离散收益跳字。
             end
         elseif item.id == "counter" then
             item.bonus = math.floor(#game:BottleItems() / 3)
         end
         local aura = AuraMult(game, item, contacts) * (item.eventMult or 1)
         if item.mult ~= aura then
+            local previous = item.mult
             item.mult = aura
             events[#events + 1] = {
                 kind = "buff", uid = item.uid, id = item.id, value = aura,
             }
+            if aura > previous and aura > 0 and game.phase == "running" then
+                TriggerFeedback.Reward(events, item, game:_Value(item) * (1 - previous / aura),
+                    "value", "collision", contacts.positions[item.uid])
+            end
         end
     end
 end

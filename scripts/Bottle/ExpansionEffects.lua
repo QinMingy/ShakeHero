@@ -2,6 +2,7 @@
 -- 接触只消费 Physics 的真实 pairs/side/flightHits；此模块不推测物理碰撞。
 -- 冷却由 Game 调度，运动子状态由 Step 推进；所有消费统一走 _Destroy，不能绕开护盾。
 local Items = require("Bottle.Items")
+local TriggerFeedback = require("Bottle.TriggerFeedback")
 local Relics = require("Bottle.Relics")
 local RelicExpansion = require("Bottle.RelicExpansion")
 local Expansion = {}
@@ -684,6 +685,8 @@ function Expansion.Step(game, dt, contacts, events)
                     hits[other.uid] = true
                     item.bonus = item.bonus + 1
                     Buff(game, item, events, 1)
+                    TriggerFeedback.Reward(events, item, 1, "value", "collision",
+                        Position(game, item.uid, contacts))
                 end
             end
             item.calfDashRemaining = math.max(0, item.calfDashRemaining - dt)
@@ -708,6 +711,7 @@ function Expansion.Step(game, dt, contacts, events)
             while (item.distance or 0) >= 5 - EPSILON do
                 item.distance = math.max(0, item.distance - 5)
                 game:_Score(events, item, game:_Value(item), Position(game, item.uid, contacts))
+                events[#events].trigger = "move"
             end
             if item.discusState == "flying" then
                 local hitUid = contacts.flightHits and contacts.flightHits[item.uid]

@@ -4,7 +4,7 @@ local total=0
 local function check(value,message) assert(value,message);total=total+1 end
 local function settle(r) for _=1,600 do r:Tick(1/60) end end
 check(R.Format(12)=="00000012","leading zeroes")
-check(R.Format(12.5)=="00000012.5","fraction is preserved")
+check(R.Format(12.5)=="00000013","fractional money rounds upward")
 check(R.Format(-3)=="-00000003","sign is preserved")
 check(R.Format(123456789)=="123456789","score outgrows eight places")
 local r=R.New();r:SetValue(9);r:SetValue(10)
@@ -18,9 +18,9 @@ check(r.digits[1].position%10==2 and r.digits[2].position%10==1,"retarget settle
 r:SetValue(3);settle(r)
 check(r.digits[1].position%10==3 and r.digits[2].position%10==0,"score decrease settles correctly")
 r:SetValue(1.25);settle(r)
-check(r.text=="00000001.25","fractional score stays literal")
+check(r.text=="00000002","fractional score rounds upward")
 r:SetValue(1e20);settle(r)
-check(r.text:find('e',1,true)~=nil,"large score scientific notation")
+check(r.text=="100000000000000000000","large score stays an integer literal")
 for _,s in ipairs({.55,1,1.65}) do
     for _,name in ipairs({"board","score","round","target","deck","reroll","start"}) do
         local rect=L[name];local p=L.Style(rect,s)

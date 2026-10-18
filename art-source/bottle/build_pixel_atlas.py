@@ -25,6 +25,7 @@ def source_sprites():
     lua.execute("""
         package.loaded['Machine.Palette']={}
         package.loaded['Bottle.PixelAtlasData']={}
+        package.loaded['Bottle.CoinIcon']={}
         local art=require('Bottle.Art')
         local function pool(fn,name)
             for i=1,100 do
@@ -76,6 +77,10 @@ def build():
     x = y = row_height = padding
     entries, tiles = {}, []
     for category, name, sprite in sprites:
+        # Alpha sprites need the rectangle renderer's compositing semantics.
+        if any(group.color[4] is not None and group.color[4] != 255
+               for _, group in sprite.groups.items()):
+            continue
         key = lua.globals().fingerprint(sprite)
         normal, cooling = pixels(sprite, False), pixels(sprite, True)
         signature = (sprite.width, sprite.height, normal, cooling)

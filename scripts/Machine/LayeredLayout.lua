@@ -8,13 +8,19 @@ L.targetProgress={42,158,226,26}
 L.screen={6,190,390,484}
 L.board={16,202,370,458}
 L.felt={16,650,374,206}
-L.clock={20,660,168,56}
-L.meter={174,668,202,44}
-L.deck={296,706,96,44}
--- 牌库页独占底部操作区：原重抽／开始等按钮收起，只保留居中的返回。
-L.deckBack={106,754,190,72}
-L.reroll={26,780,154,60}
-L.start={196,754,190,72}
+-- 倒计时位置改为紧凑操作带；下方毡面专门展示遗物。
+L.deck={300,710,92,34}
+L.relicGrid={34,746,334,96}
+L.relicColumns=6
+L.relicSlot=44
+L.relicColumnGap=12
+L.relicRowGap=8
+-- 牌库页独占底部操作区：两块错落的收藏切换牌，下方居中返回。
+L.inventoryItems={26,704,164,56}
+L.inventoryRelics={210,718,164,56}
+L.deckBack={106,790,190,52}
+L.reroll={22,670,144,44}
+L.start={180,660,208,48}
 -- Draft page: separate shelves and staggered actions below the shared CRT.
 -- 点击框等宽且基线固定；主动选中的整块托盘抬升，不暗示品质或推荐顺序。
 L.draftSlots={{20,722,112,84},{145,722,112,84},{270,722,112,84}}

@@ -6,6 +6,10 @@ local Art = require("Bottle.Art")
 local SoftView = require("Bottle.SoftView")
 local PopIn = require("Bottle.PopIn")
 local GameAudio = require("Bottle.Audio")
+local RoundScore = require("Bottle.RoundScore")
+local CoinPickup = require("Bottle.CoinPickup")
+local TriggerFeedback = require("Bottle.TriggerFeedback")
+local ConsumeFlash = require("Bottle.ConsumeFlash")
 ---@type table<string, RGBAColor>
 local C = (require("Bottle.Theme") --[[@as any]]).colors
 
@@ -119,6 +123,16 @@ local function ShieldBubble(vg, x, y, radius)
     nvgRestore(vg)
 end
 
+---@class BottleRewardPopup
+---@field uid number
+---@field value number
+---@field x number
+---@field y number
+---@field age number
+---@field trigger string?
+---@field rewardKind string?
+---@field lift number?
+
 ---@class BottleBoard : Widget
 ---@field layered boolean?
 ---@field game BottleGame
@@ -139,12 +153,17 @@ end
 ---@field ppu number
 ---@field visualX number
 ---@field visualY number
----@field particles {uid:number,value:number,age:number,x:number,y:number}[]
----@field scoreQueue {uid:number,value:number,x:number,y:number}[] 待逐个弹出的结算浮字
+---@field particles BottleRewardPopup[]
+---@field scoreQueue BottleRewardPopup[] 待逐个弹出的结算浮字
 ---@field scorePopTimer number
 ---@field scorePopInterval number? 本次reveal固定节拍，按Game统计初始总收益事件计算
 ---@field scorePopRevealing boolean
 ---@field displayScore number? 结算展示期间逐件递增的顶部滚轮暂显值；nil 时显示真实余额
+---@field roundScore BottleRoundScore 当前回合逐件累计，与顶部总余额分开显示
+---@field coinPickups BottleCoinPickup
+---@field coinsInFlight number 已发射、尚未抵达的金币收益
+---@field shakeCoinsInFlight number 即时收益中尚未抵达左上角的部分
+---@field isPaused (fun():boolean)? 主菜单覆盖时与玩法一起暂停表现
 ---@field pulses table<number,number>
 ---@field residue table<number,{id:string,x:number,y:number,angle:number,radius:number,rollValue:number?,woolCount:number?,soft:BottleSoftPose[]?}> 结算残留：物品回牌库后保留的最后姿态
 ---@field pops BottlePopPose[] 出现弹跳动效；按 uid 查表的 popByUid 与其同步维护
@@ -154,6 +173,7 @@ end
 ---@field explodedUids table<number,boolean> 已爆气球不得由同批score重建残留
 ---@field inflations table<number,BottleInflation> 气球平滑膨胀，终点保持实例永久尺寸
 ---@field presentUids table<number,boolean> 上一帧瓶内成员，用于差量触发出现动效
+---@field consumeFlash BottleConsumeFlash
 ---@overload fun(props:WidgetProps): BottleBoard
 local Board = UI.Widget:Extend("BottleBoard") --[[@as BottleBoard]]
 
@@ -169,17 +189,29 @@ function Board:Init(props)
     self.selectedUid, self.inspectPress, self.clickMoved = 0, false, false
     self.pressX, self.pressY = 0, 0
     self.visualX, self.visualY = 0, 0
+    self.roundScore = RoundScore.New()
+    self:AddChild(self.roundScore.root)
+    self:AddChild(self.roundScore.shakeRoot)
+    self.coinPickups = CoinPickup {id = "coinPickups", position = "absolute",
+        left = 0, top = 0, width = "100%", height = "100%", pointerEvents = "none", zIndex = 8}
+    self:AddChild(self.coinPickups)
+    self.consumeFlash = ConsumeFlash.New()
     self:ResetEffects()
     self:ResetPopState()
 end
 
 function Board:ResetEffects()
+    if self.consumeFlash then self.consumeFlash:Reset() end
     -- residue：结算后物品已回牌库、刚体被移除，但仍按最后姿态保留绘制；
     -- 新回合重摆布局（prepare/running/settle 相位切换或换回合）时才清空。
     self.particles, self.pulses, self.residue = {}, {}, {}
     self.scoreQueue, self.scorePopTimer = {}, 0
     self.scorePopInterval, self.scorePopRevealing = nil, false
     self.displayScore = nil
+    self.coinPickups:Reset()
+    self.coinsInFlight = 0
+    self.shakeCoinsInFlight = 0
+    self.roundScore:Reset()
     self.bursts, self.burstRings, self.explodedUids, self.inflations = {}, {}, {}, {}
 end
 
@@ -213,6 +245,7 @@ function Board:OnPanStart(event)
     -- 手势只能归属于画布，菜单/按钮起拖不冒泡成摇瓶；第二指不抢占。
     if event.target ~= self or self.shakePressId ~= event.pointerId or self.state.dragging
         or self.game.phase ~= "running"
+        or not self:HitTest(event.x, event.y)
         or (self.physicsMenu and self.physicsMenu:IsVisible())
         or (self.physicsButton and self.physicsButton:HitTest(event.x, event.y)) then return false end
     self.state.dragging = true
@@ -223,24 +256,39 @@ function Board:OnPanStart(event)
     return true
 end
 
-function Board:OnPanEnd(event)
-    if event.pointerId ~= self.pointerId then return end
+---@param pointerId number
+function Board:ReleaseShake(pointerId)
+    if pointerId ~= self.pointerId and pointerId ~= self.shakePressId then return end
+    self.inspectPress, self.clickMoved = false, true
+    if pointerId == self.shakePressId then self.shakePressId = -1 end
+    if pointerId ~= self.pointerId then return end
     self.state.dragging = false
     self.pointerId, self.shakePressId = -1, -1
+    self.lastPanX, self.lastPanY = 0, 0
+    -- 保留当前位置和速度，由已有临界阻尼跟随平滑回中。
     self.physics:EndShake()
 end
 
+---@param event GestureEvent
+function Board:OnPanEnd(event)
+    self:ReleaseShake(event.pointerId)
+end
+
+---@param event PointerEvent
+function Board:OnPointerLeave(event)
+    UI.Widget.OnPointerLeave(self, event)
+    self:ReleaseShake(event.pointerId)
+end
+
+---@param event PointerEvent
 function Board:OnPointerCancel(event)
-    self.inspectPress = false
-    if event.pointerId == self.shakePressId then self.shakePressId = -1 end
-    if event.pointerId ~= self.pointerId then return end
-    self.state.dragging = false
-    self.pointerId, self.shakePressId = -1, -1
-    self.physics:EndShake()
+    self:ReleaseShake(event.pointerId)
 end
 
 function Board:OnPanMove(event)
     if not self.state.dragging or event.pointerId ~= self.pointerId or self.game.phase ~= "running" then return end
+    -- 触摸没有 hover leave；越界手势同样结束，且不把越界的最后一段位移加进目标。
+    if not self:HitTest(event.x, event.y) then self:ReleaseShake(event.pointerId); return end
     if self.physics.mode == 2 then
         -- 使用累计位移差，合并/高频事件不会增加冲量；超大位移由瓶子摆幅限幅。
         local dx, dy = event.totalDeltaX - self.lastPanX, event.totalDeltaY - self.lastPanY
@@ -256,7 +304,62 @@ function Board:OnPanMove(event)
     end
 end
 
+--- 队列和限流中的批次均须播完，主循环才可结束结算展示。
+---@return boolean
+function Board:CoinPickupsBusy()
+    return #self.scoreQueue > 0 or self.coinPickups:Busy()
+end
+
+---@param amount number
+---@param x number 370宽设计坐标
+---@param y number
+---@param source string
+function Board:LaunchCoins(amount, x, y, source)
+    if amount <= 0 then return end
+    local l = self:GetAbsoluteLayout()
+    local scale = math.max(.01, l.w / 370)
+    if source == "running" then
+        self.shakeCoinsInFlight = self.shakeCoinsInFlight + amount
+    else
+        self.coinsInFlight = self.coinsInFlight + amount
+    end
+    self.coinPickups:Burst(amount, x, y, source, l.h / scale)
+end
+
+---@param popup BottleRewardPopup
+---@param source string
+function Board:LaunchRewardCoins(popup, source)
+    local l = self:GetAbsoluteLayout()
+    local x, y, ppu = self:GetBottleTransform()
+    local scale = math.max(.01, l.w / 370)
+    self:LaunchCoins(popup.value, (x - l.x + popup.x * ppu) / scale,
+        (y - l.y - popup.y * ppu) / scale, source)
+end
+
 function Board:Update(dt)
+    if self.isPaused and self.isPaused() then return end
+    if self.consumeFlash then self.consumeFlash:Update(dt) end
+    local l = self:GetAbsoluteLayout()
+    local phase = self.game.phase
+    local previousPhase = self.roundScore.phase
+    ---@type number
+    local pendingScore = 0
+    if self.game.phase == "reveal" then
+        for _, pending in ipairs(self.scoreQueue) do pendingScore = pendingScore + pending.value end
+    end
+    local transfer = self.roundScore:Sync(self.game.phase, self.game.roundScore, pendingScore,
+        self.shakeCoinsInFlight)
+    if transfer then self:LaunchCoins(transfer, 32, 28, "shake") end
+    if phase == "reveal" and previousPhase ~= "reveal" then
+        -- 负收益没有飞币；在揭示开始时补入，避免吞掉负值或重复计算提前收益。
+        self.roundScore:Add(self.game.roundScore - pendingScore
+            - self.roundScore.total - self.coinsInFlight - self.shakeCoinsInFlight)
+    elseif phase ~= "running" and phase ~= "settle" and phase ~= "reveal" then
+        self.displayScore = nil
+        self.coinPickups:Reset()
+        self.coinsInFlight = 0
+        self.shakeCoinsInFlight = 0
+    end
     for uid, inflation in pairs(self.inflations) do
         if PopIn.StepInflation(inflation, dt) then self.inflations[uid] = nil end
     end
@@ -273,7 +376,6 @@ function Board:Update(dt)
         self.visualX = self.visualX * math.exp(-dt * 12)
         self.visualY = self.visualY * math.exp(-dt * 12)
     end
-    local l = self:GetAbsoluteLayout()
     if self.physicsButton and self.physicsButton.parent==self and l.w > 0 and l.h > 0 then
         local ppu = math.max(1, math.min((l.w - 34) / 5.6, (l.h - 38) / 7.1))
         local left = math.max(0, l.w / 2 - 2.4 * ppu - 48)
@@ -313,27 +415,56 @@ function Board:Update(dt)
             local interval = self.scorePopInterval or self.game.REVEAL_SCORE_INTERVAL
             while #self.scoreQueue > 0 and self.scorePopTimer <= 0 do
                 local pending = table.remove(self.scoreQueue, 1)
-                self.particles[#self.particles + 1] = {
-                    uid = pending.uid, value = pending.value, age = 0, x = pending.x, y = pending.y,
-                }
+                pending.age = 0
+                self.particles[#self.particles + 1] = pending
                 -- 顶部滚轮随每件浮字逐步增加（用户要求）：暂显值先停在结算前，
                 -- 每弹出一件加上该件收益，滚轮因此分多次滚动而不是一次跳到最终值。
                 if self.displayScore ~= nil then
                     self.displayScore = self.displayScore + pending.value
                 end
+                self:LaunchRewardCoins(pending, "item")
                 -- 每弹出一件结算浮字播放一次出现音效；音调阶梯由队列起点重置后逐件升高。
                 GameAudio.Pop()
                 self.scorePopTimer = self.scorePopTimer + interval
-            end
-            -- 队列播完：显示值锁定为真实余额（最后一件弹出时已结算完成）。
-            if #self.scoreQueue == 0 and self.displayScore ~= nil then
-                self.displayScore = self.game.score
             end
         elseif self.game.phase ~= "settle" and self.game.phase ~= "running" then
             self.scoreQueue, self.scorePopTimer = {}, 0
             self.displayScore = nil
         end
     end
+    local scale = math.max(.01, l.w / 370)
+    local target = self.roundScore.number:GetAbsoluteLayout()
+    if target.w > 0 and target.h > 0 then
+        self.coinPickups.targetX = (target.x + target.w / 2 - l.x) / scale
+        self.coinPickups.targetY = (target.y + target.h / 2 - l.y) / scale
+    end
+    local shakeTarget = self.roundScore.shakeIcon:GetAbsoluteLayout()
+    if shakeTarget.w > 0 and shakeTarget.h > 0 then
+        self.coinPickups.shakeTargetX = (shakeTarget.x + shakeTarget.w / 2 - l.x) / scale
+        self.coinPickups.shakeTargetY = (shakeTarget.y + shakeTarget.h / 2 - l.y) / scale
+    end
+    ---@type number
+    local collectedAfterShake = 0
+    self.coinPickups:Step(dt, function(amount, source)
+        if source == "shake" then self.roundScore:Depart(amount) end
+    end, function(amount, source)
+        if source == "running" then
+            self.shakeCoinsInFlight = self.shakeCoinsInFlight - amount
+            self.roundScore:SetShake(self.roundScore.shakeTotal + amount)
+            if phase ~= "running" then collectedAfterShake = collectedAfterShake + amount end
+        else
+            self.coinsInFlight = self.coinsInFlight - amount
+            self.roundScore:Add(amount)
+        end
+    end)
+    -- 末帧的即时收益仍先入左上角，再转入结算；回调结束后发射，避免新金币在同帧被推进两次。
+    if collectedAfterShake > 0 then self:LaunchCoins(collectedAfterShake, 32, 28, "shake") end
+    if phase == "reveal" and not self:CoinPickupsBusy() then
+        self.coinsInFlight = 0
+        self.roundScore:SetTotal(self.game.roundScore)
+        if self.displayScore ~= nil then self.displayScore = self.game.score end
+    end
+    self.roundScore:Update(dt, l.w)
     -- 出现动效：以瓶内成员差量识别新入瓶的物品，按 uid 顺序错峰弹跳出现。
     -- 纯表现层，不触碰规则、随机数或物理；刚体由主循环的 Sync 保证已就绪。
     local present = {}
@@ -381,24 +512,49 @@ function Board:Update(dt)
     PopIn.StepParticles(self.bursts, dt)
 end
 
+-- 同一物品同一步可同时产金币和永久价值，错开文字以保留两种真实收益。
+---@param popup BottleRewardPopup
+function Board:AddRewardPopup(popup)
+    local lane = 0
+    for _, active in ipairs(self.particles) do
+        if active.uid == popup.uid and (active.age or 0) < .12 then lane = lane + 1 end
+    end
+    popup.age, popup.lift = 0, lane * 30
+    self.particles[#self.particles + 1] = popup
+end
+
 ---@param events GameEvent[]
 function Board:Effects(events)
     -- 本批结算浮字插入队列前的长度：批结束时据此设置滚轮暂显起点与音调阶梯。
     local queueStart = #self.scoreQueue
+    ---@type table<number,{x:number,y:number}>
+    local origins = {}
     for _, event in ipairs(events) do
+        if (event.kind == "spawn" or event.kind == "merge") and event.x ~= nil and event.y ~= nil then
+            origins[event.uid] = {x = event.x, y = event.y}
+        end
         -- Effects 在物理同步删除实体之前读取事件位置；同一步生成后又消耗的物品
         -- 可能没有刚体，必须用事件 x/y，绝不让 GetPose 的缺失默认值变成瓶中浮字。
         local x, y = event.x, event.y
         if (x == nil or y == nil) and event.uid and self.physics.bodies[event.uid] then
             x, y = self.physics:GetPose(event.uid)
         end
-        if event.kind == "score" and event.uid then
+        if event.kind == "consume" then
+            if self.consumeFlash then self.consumeFlash:Capture(event, self.physics, origins[event.uid]) end
+        elseif event.kind == "score" and event.uid then
             self.pulses[event.uid] = 0
             if (event.value or 0) > 0 and x ~= nil and y ~= nil then
-                -- 结算浮字先入队，由 Board:Update 在 reveal 阶段逐个释放（用户要求）。
-                self.scoreQueue[#self.scoreQueue + 1] = {
-                    uid = event.uid, value = event.value or 0, x = x, y = y,
+                local popup = {
+                    uid = event.uid, value = event.value or 0, x = x, y = y, age = 0,
+                    trigger = event.trigger,
                 }
+                if self.game.phase == "reveal" then
+                    self.scoreQueue[#self.scoreQueue + 1] = popup
+                else
+                    -- 摇晃收益当场跳字并从实际物品位置飞向左上角，抵达后增加计数。
+                    self:AddRewardPopup(popup)
+                    self:LaunchRewardCoins(popup, "running")
+                end
             end
             -- 结算残留：score 事件发出时物品已回牌库（_CleanupRound 已执行），
             -- 刚体要到本步末尾的 physics:Sync 才被移除；此刻捕获最终姿态，
@@ -420,6 +576,12 @@ function Board:Effects(events)
                     woolCount = item.woolCount,
                     soft = self.physics:GetSoftPose(event.uid),
                 }
+            end
+        elseif event.kind == "triggerReward" and event.uid then
+            if x ~= nil and y ~= nil and math.abs(event.value or 0) > 1e-9 then
+                self.pulses[event.uid] = 0
+                self:AddRewardPopup({uid = event.uid, value = event.value or 0, x = x, y = y, age = 0,
+                    trigger = event.trigger, rewardKind = event.rewardKind})
             end
         elseif event.kind == "resize" and event.uid and event.id == "balloon" then
             local item = self.game:Get(event.uid)
@@ -530,6 +692,9 @@ end
 
 ---@param event PointerEvent
 function Board:OnPointerMove(event)
+    if self.state.dragging and event.pointerId == self.pointerId and not self:HitTest(event.x, event.y) then
+        self:ReleaseShake(event.pointerId)
+    end
     if self.inspectPress then
         local dx, dy = event.x - self.pressX, event.y - self.pressY
         if dx * dx + dy * dy > 64 then self.clickMoved = true end
@@ -539,6 +704,12 @@ end
 ---@param event PointerEvent
 function Board:OnPointerUp(event)
     self:OnPointerMove(event)
+    if self.state.dragging then
+        self:ReleaseShake(event.pointerId)
+    elseif event.pointerId == self.shakePressId then
+        -- 普通物品点击还需在随后 OnClick 中消费 inspectPress。
+        self.shakePressId = -1
+    end
 end
 
 ---@param event PointerEvent?
@@ -547,23 +718,42 @@ function Board:OnClick(event)
     if not event or not event:IsPrimaryButton() or Busy(self.game)
         or not self.inspectPress or self.clickMoved then return end
     self.inspectPress = false
+    event:StopPropagation()
     self.inspect(self:PickItem(event.x, event.y))
 end
 
 -- 普通/软体沿用原绘制；只有气球resize在真实尺寸上叠加单调视觉膨胀。
-function Board:DrawItem(vg, item, x, y, cooling)
+function Board:DrawItem(vg, item, x, y, cooling, outlineWidth)
     local inflation = self.inflations[item.uid]
     if item.id == "balloon" and inflation then
         local px, py, angle = self.physics:GetPose(item.uid)
+        if outlineWidth then
+            Art.ItemOutline(vg, item.id, x + px * self.ppu, y - py * self.ppu,
+                inflation.radius * self.ppu, -angle, item.rollValue, item.woolCount, outlineWidth)
+        end
         Art.Item(vg, item.id, x + px * self.ppu, y - py * self.ppu,
             inflation.radius * self.ppu, -angle, cooling)
     else
+        if outlineWidth then
+            local poses = self.physics:GetSoftPose(item.uid)
+            if poses then
+                -- 全部白色段先于全部原色段绘制，关节重叠处不产生白色接缝。
+                for _, pose in ipairs(poses) do
+                    Art.BaconSegmentOutline(vg, x + pose.x * self.ppu, y - pose.y * self.ppu, -pose.angle,
+                        pose.halfLength * self.ppu, pose.halfWidth * self.ppu, pose.u0, pose.u1, outlineWidth)
+                end
+            else
+                local px, py, angle, radius = self.physics:GetPose(item.uid)
+                Art.ItemOutline(vg, item.id, x + px * self.ppu, y - py * self.ppu,
+                    radius * self.ppu, -angle, item.rollValue, item.woolCount, outlineWidth)
+            end
+        end
         SoftView.Item(vg, self.physics, item, x, y, self.ppu, cooling)
     end
 end
 
 function Board:Render(vg)
-    local l = self:GetAbsoluteLayout()
+    local l = self:GetAbsoluteLayout() --[[@as {x:number,y:number,w:number,h:number}]]
     if l.w <= 0 or l.h <= 0 then return end
     local x, y = self:GetBottleTransform()
     nvgSave(vg)
@@ -595,10 +785,12 @@ function Board:Render(vg)
         -- 厨师本体源表未写冷却，只有持帽时显示遗物明确声明的1秒。
         local hasCooldown = Items.HasCooldown(item.id)
             or (item.id == "chef" and Relics.Has(self.game, "chef_hat"))
-        local cooling = self.game.phase == "running" and hasCooldown and item.remaining > 0
+        local coolingPhase = self.game.phase == "running" or self.game.phase == "settle"
+        local cooling = coolingPhase and hasCooldown and item.remaining > 0
         local pop = self.popByUid and self.popByUid[item.uid] or nil
         -- 错峰等待中的物品保持不可见（含选中框与冷却环），轮到它时才弹跳出现。
         local visible = not pop or pop.delay <= 0
+        local outlineWidth = item.uid == self.selectedUid and not Busy(self.game) and 4 or nil
         if visible then
             if pop then
                 -- 出现弹跳：绕物品中心缩放＋轻微角回摆，与三选一选中 icon 同一响应形式。
@@ -607,7 +799,7 @@ function Board:Render(vg)
                 nvgScale(vg, math.max(.001, pop.scale), math.max(.001, pop.scale))
                 nvgRotate(vg, pop.angle)
                 nvgTranslate(vg, -sx, -sy)
-                self:DrawItem(vg, item, x, y, cooling)
+                self:DrawItem(vg, item, x, y, cooling, outlineWidth)
                 nvgRestore(vg)
                 -- 出现瞬间的白色像素环快速扩张淡出，强化“炸出”的第一帧。
                 if pop.age < .22 then
@@ -616,16 +808,11 @@ function Board:Render(vg)
                         math.floor(170 * (1 - t)))
                 end
             else
-                self:DrawItem(vg, item, x, y, cooling)
+                self:DrawItem(vg, item, x, y, cooling, outlineWidth)
             end
         end
         if visible and item.shielded then
             ShieldBubble(vg, sx, sy, Art.ItemExtent(item.id, sr, -angle, item.woolCount) + 6)
-        end
-        if visible and item.uid == self.selectedUid and not Busy(self.game) then
-            local extent = Art.ItemExtent(item.id, sr, -angle, item.woolCount) + 4
-            PixelFrame(vg, sx, sy, extent + 2, C.primary, 100)
-            PixelFrame(vg, sx, sy, extent, C.warning)
         end
         if visible and self.game.phase == "running" and hasCooldown and self.game:CooldownOf(item.id) > 0 then
             local ratio = math.max(0, math.min(1, 1 - item.remaining / self.game:CooldownOf(item.id)))
@@ -662,6 +849,7 @@ function Board:Render(vg)
         if res.soft then SoftView.Draw(vg, res.soft, x, y, self.ppu)
         else Art.Item(vg, res.id, sx, sy, sr, -res.angle, false, res.rollValue, res.woolCount) end
     end
+    if self.consumeFlash then self.consumeFlash:Render(vg, x, y, self.ppu, l) end
     for _, ring in ipairs(self.burstRings) do
         BurstRing(vg, x + ring.x * self.ppu, y - ring.y * self.ppu,
             ring.radius * self.ppu, ring.age / ring.life)
@@ -683,19 +871,34 @@ function Board:Render(vg)
         end
         nvgRestore(vg)
     end
-    nvgFontFace(vg, UI.Theme.FontFace("pixel", "normal"))
-    nvgTextAlign(vg, NVG_ALIGN_CENTER + NVG_ALIGN_MIDDLE)
     for _, p in ipairs(self.particles) do
-        local text = "+" .. string.format("%g", p.value)
+        local prefix, text, valueIcon = TriggerFeedback.Content(p.value, p.trigger, p.rewardKind)
+        nvgFontFace(vg, UI.Theme.FontFace(p.trigger and "sans" or "pixel", "normal"))
+        nvgTextAlign(vg, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
         -- 不淡出：保持完全不透明，生命周期结束时直接消失（用户要求）。
         local alpha = 255
         local tx = x + p.x * self.ppu
         -- 上升动画（用户要求恢复）。
-        local ty = y - p.y * self.ppu - 20 - p.age * 42
+        local ty = y - p.y * self.ppu - 20 - p.age * 42 - (p.lift or 0)
         -- 字号随字数增大；"+N"是最少字数，使用最小字号22。
+        local numberLength = utf8.len(text) or #text
+        if p.rewardKind == "permanent" then numberLength = numberLength - 2 end
         local size = math.min(SCORE_FONT_MAX,
-            SCORE_FONT_BASE + SCORE_FONT_PER_CHAR * math.max(0, #text - 2))
+            SCORE_FONT_BASE + SCORE_FONT_PER_CHAR * math.max(0, numberLength - 2))
+        if p.trigger then size = math.min(36, size) end
         nvgFontSize(vg, UI.Theme.FontSize(size))
+        local prefixWidth = prefix ~= "" and nvgTextBounds(vg, 0, 0, prefix) or 0
+        local textWidth = nvgTextBounds(vg, 0, 0, text)
+        local iconWidth = valueIcon and size + 4 or 0
+        local width = prefixWidth + iconWidth + textWidth
+        local fit = p.trigger and math.min(1, math.max(1, l.w - 20) / math.max(1, width * 1.3)) or 1
+        if p.trigger then
+            local half = width * fit * 1.3 / 2 + 5
+            tx = math.max(l.x + half, math.min(l.x + l.w - half, tx))
+            ty = math.max(l.y + size * fit, math.min(l.y + l.h - size * fit, ty))
+        end
+        local left = -width / 2
+        local amountX = left + prefixWidth + iconWidth
         nvgSave(vg)
         nvgTranslate(vg, tx, ty)
         -- 弹性摇晃：弹出的同时左右大幅摇摆（约±14度）后衰减停稳，方向按 uid 错开。
@@ -703,14 +906,17 @@ function Board:Render(vg)
             * math.exp(-2.5 * p.age) * math.sin(12 * p.age)
         local s = popScale(p.age)
         nvgRotate(vg, wobble)
-        nvgScale(vg, s, s)
+        nvgScale(vg, s * fit, s * fit)
         -- 先铺8方向黑色描边，再盖白色填充，保证跳字在任意底色上都清晰可读。
         nvgFillColor(vg, nvgRGBA(0, 0, 0, alpha))
         for _, o in ipairs(SCORE_OUTLINE) do
-            nvgText(vg, o.x, o.y, text, nil)
+            if prefix ~= "" then nvgText(vg, left + o.x, o.y, prefix, nil) end
+            nvgText(vg, amountX + o.x, o.y, text, nil)
         end
         nvgFillColor(vg, nvgRGBA(255, 255, 255, alpha))
-        nvgText(vg, 0, 0, text, nil)
+        if prefix ~= "" then nvgText(vg, left, 0, prefix, nil) end
+        nvgText(vg, amountX, 0, text, nil)
+        if valueIcon then Art.StatIcon(vg, "gain", left + prefixWidth + size / 2, 0, size / 2) end
         nvgRestore(vg)
     end
     nvgRestore(vg)

@@ -7,6 +7,7 @@ local Screen=require("Machine.Screen")
 local Keys=require("Machine.Keys")
 local Atmosphere=require("Machine.Atmosphere")
 local Storage=require("Bottle.Storage")
+local Money=require("Bottle.Money")
 local Skin={}
 
 local function Place(widget,x,y,w,h,style)
@@ -198,7 +199,7 @@ function Skin.FitNumbers(view)
     local s=P.Scale()*P.FontScale(110)
     for _,entry in ipairs({{view.scoreLabel,view.game.score,"scoreWidth"},
         {view.goalLabel,view.game.target,"goalWidth"}}) do
-        local width=#string.format("%g",entry[2])
+        local width=#Money.Format(entry[2])
         if m[entry[3]]~=width then
             m[entry[3]]=width
             entry[1]:SetStyle({fontSize=math.max(16,math.min(34,170/width))*s})

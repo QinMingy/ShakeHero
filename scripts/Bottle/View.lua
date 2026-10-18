@@ -1,14 +1,19 @@
 local UI = require("urhox-libs/UI")
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
+local RelicView = require("Bottle.RelicView")
 local Art = require("Bottle.Art")
 local Board = require("Bottle.Board")
 local Storage = require("Bottle.Storage")
 local Description = require("Bottle.Description")
 local DeckBoard = require("Bottle.DeckBoard")
 local ItemText = require("Bottle.ItemText")
-local ItemDetail = require("Bottle.ItemDetail")
+local Money = require("Bottle.Money")
+local PaperNote = require("Bottle.PaperNote")
+local RemovalConfirm = require("Bottle.RemovalConfirm")
+local SaveCodeField = require("Bottle.SaveCodeField")
 local RefreshUI = require("Bottle.RefreshUI")
+local RulesUI = require("Bottle.RulesUI")
 local MachineSkin = require("Machine.LayeredSkin")
 local Atmosphere=require("Machine.Atmosphere")
 local GameAudio = require("Bottle.Audio")
@@ -25,6 +30,8 @@ local C = (require("Bottle.Theme") --[[@as any]]).colors
 local function Busy(game)
     return game.phase == "running" or game.phase == "settle" or game.phase == "reveal"
 end
+
+local NO_REMOVALS_MESSAGE = "当前无移除机会0"
 
 -- 品质铭牌文字色，与三选一候选、详情共用同一组。
 local QUALITY_INK = {
@@ -79,7 +86,7 @@ end
 ---@return Label goldLabel
 ---@return Label tagLabel
 local function ItemStats(gold, tags)
-    local goldLabel = UI.Label {id = "goldValue", text = string.format("%g", gold),
+    local goldLabel = UI.Label {id = "goldValue", text = Money.Format(gold),
         textMotionDisabled = true, fontSize = 11.25, fontFamily = "mono", fontColor = C.warning}
     local tagText = tags or ""
     local tagLabel = UI.Label {id = "itemTag", text = tagText, visible = tagText ~= "",
@@ -154,7 +161,8 @@ end
 ---@field root Panel
 ---@field container Panel
 ---@field board BottleBoard
----@field detail Card
+---@field detail Panel
+---@field detailOverlay Panel
 ---@field detailIcon BottleItemIcon
 ---@field detailTitle Label
 ---@field detailStats Panel
@@ -192,11 +200,16 @@ end
 ---@field inventoryOpen boolean
 ---@field inventoryPanel Card?
 ---@field inventoryTitle Label?
+---@field inventoryHead Panel?
+---@field inventoryRemovalLabel Label?
 ---@field deckBody Panel?
 ---@field deckBoard any
 ---@field deckSim any
+---@field removalConfirm any
 ---@field deckBackButton Button?
 ---@field deckDetailUid integer
+---@field inventoryTab string
+---@field relicDetailId string
 ---@field deckDraftWasOpen boolean
 ---@field choiceHidden boolean
 ---@field lastRevision number
@@ -218,47 +231,36 @@ function View:Init(game, physics, actions)
     self.currentPhase = ""
     self.inventoryOpen, self.choiceHidden = false, false
     self.deckDetailUid, self.deckDraftWasOpen = 0, false
+    self.inventoryTab, self.relicDetailId = "items", ""
     self.lastRevision, self.lastDisplayedScore, self.lastRound = -1, -1, -1
     self.lastRerollUsed = false
     self.lastRefreshes = RefreshUI.Count(game)
     self.selectedUid, self.detailRound, self.detailRevision = 0, -1, -1
-    self.detailIcon = Icon {itemId = "apple", width = 42, height = 42, pointerEvents = "none"}
-    self.detailTitle = UI.Label {text = "", fontSize = 14.25, fontWeight = "bold",
-        whiteSpace = "normal", width = "100%", fontColor = C.text}
+    self.detailSource = ""
+    self.detailIcon = Icon {itemId = "apple", width = 64, height = 64, pointerEvents = "none"}
     self.detailStats, self.detailGold, self.detailTag = ItemStats(0)
-    self.detailEffect = Description {id = "detailDescription", text = "", fontSize = 12, fontColor = C.text,
-        onInspect = function(id) self:InspectDefinition(id) end}
-    self.detailScroll = UI.ScrollView {id = "detailScroll", width = "100%", height = 32,
-        bounces = false, children = {self.detailEffect}}
-    self.detail = UI.Card {id = "itemDetail", position = "absolute", visible = false,
-        width = 280, padding = 12, gap = 8, backgroundColor = C.surface,
-        borderColor = C.border, zIndex = 15, pointerEvents = "auto",
-        onClick = function() end, children = {
-            UI.Panel {flexDirection = "row", alignItems = "center", gap = 10, children = {
-                self.detailIcon,
-                UI.Panel {flexGrow = 1, flexBasis = 0, gap = 4, children = {self.detailTitle, self.detailStats}},
-            }},
-            self.detailScroll,
-        }}
+    self.itemNote = PaperNote.New {prefix = "detail", icon = self.detailIcon, stats = self.detailStats,
+        zIndex = 32, onClose = function() self:CloseItemDetail() end,
+        onInspect = function(id) self:InspectDefinition(id) end,
+        scale = function() return self.machineSkin and self.machineSkin.scale or 1 end}
+    self.detail, self.detailOverlay = self.itemNote.card, self.itemNote.overlay
+    self.detailTitle, self.detailEffect, self.detailScroll = self.itemNote.title, self.itemNote.effect, self.itemNote.scroll
     self.definitionId = ""
-    self.definitionIcon = Icon {id = "definitionIcon", itemId = "apple", width = 52, height = 52,
+    self.definitionIcon = Icon {id = "definitionIcon", itemId = "apple", width = 64, height = 64,
         pointerEvents = "none", flexShrink = 0}
     ---@type Panel
     local definitionStats
     definitionStats, self.definitionGold, self.definitionTag = ItemStats(0)
-    local definitionClose = Button("关闭", function(widget, event)
-        if event then event:StopPropagation() end
-        self:CloseDefinition()
-    end)
-    definitionClose:SetStyle({width = 70, height = 40, flexShrink = 0})
-    definitionClose.id = "definitionClose"
-    local popup = Description.CreatePopup(self.definitionIcon, definitionStats, definitionClose,
-        function(id) self:InspectDefinition(id) end, function() self:CloseDefinition() end)
+    local popup = PaperNote.New {prefix = "definition", icon = self.definitionIcon, stats = definitionStats,
+        zIndex = 34, onClose = function() self:CloseDefinition() end,
+        onInspect = function(id) self:InspectDefinition(id) end,
+        scale = function() return self.machineSkin and self.machineSkin.scale or 1 end}
+    self.definitionNote = popup
     self.definitionModal, self.definitionTitle = popup.overlay, popup.title
     self.definitionEffect, self.definitionScroll = popup.effect, popup.scroll
     self.scoreLabel = Label("0", 27, C.warning)
     self.scoreLabel:SetStyle({fontFamily = "mono"})
-    self.roundLabel = Label("回合 1/5", 12, C.textSecondary)
+    self.roundLabel = Label("天数 1/5", 12, C.textSecondary)
     self.goalLabel = Label("40", 27, C.warning)
     self.badgeLabel = Label("考核阶段 1", 10, C.textSecondary)
     -- 统计区整体固定，不让回合／分数的文字基线随装饰时钟漂移。
@@ -339,13 +341,14 @@ function View:Init(game, physics, actions)
                 UI.Panel {flexGrow = 1, children = {self.statusLabel}}, self.deckButton,
             }},
             self.timer, self.board, self.footer,
-            self.detail, self.draft, self.modal,
+            self.detailOverlay, self.definitionModal, self.draft, self.modal,
         }}
     self.root = UI.Panel {width = "100%", height = "100%", backgroundColor = C.background,
         pointerEvents = "auto", onClick = function() self:CloseItemDetail() end,
         children = {UI.SafeAreaView {width = "100%", height = "100%", nativeMenuInset = true,
-            children = {self.container}}, self.definitionModal}}
+            children = {self.container}}}}
     MachineSkin.Apply(self,title,help,save,gm)
+    self.removalConfirm = RemovalConfirm.New(self)
     UI.SetRoot(self.root)
     self:UpdatePhysicsMode()
     self:Update(true)
@@ -375,8 +378,21 @@ function View:SetSensorStatus(status)
 end
 
 function View:CloseItemDetail()
+    if self.removalConfirm then self.removalConfirm:Close() end
+    if self.deckBoard then self.deckBoard.selectedUid = 0 end
     self.selectedUid, self.board.selectedUid = 0, 0
-    self.detail:Hide()
+    self.detailSource = ""
+    self.deckDetailUid, self.relicDetailId = 0, ""
+    self.itemNote:Close()
+end
+
+function View:NoteBounds()
+    -- The playable portrait area excludes the window's side bars, but includes the whole machine.
+    -- The note itself counters camera translation; these are stable layout-space edges.
+    local game = self.container:GetAbsoluteLayout()
+    local left, top = math.max(0, game.x), math.max(0, game.y)
+    local right, bottom = math.min(UI.GetWidth(), game.x + game.w), math.min(UI.GetHeight(), game.y + game.h)
+    return {x = left, y = top,w = math.max(1, right - left), h = math.max(1, bottom - top)}
 end
 
 -- 查看定义，不查询/创建实例，不改变牌库、三选一或瓶中选择。
@@ -389,22 +405,22 @@ function View:InspectDefinition(id)
     self.board:ResetShake()
     self.definitionId = id
     self.definitionIcon.itemId, self.definitionIcon.woolCount = id, nil
-    self.definitionTitle:SetText(def.name .. " · " .. Items.rarityNames[def.rarity])
-    self.definitionGold:SetText(string.format("%g", ItemText.InitialValue(self.game, id)))
+    self.definitionTitle:SetText(def.name)
+    self.definitionNote:SetMeta("物品图鉴 · " .. Items.rarityNames[def.rarity])
+    self.definitionGold:SetText(Money.Format(ItemText.InitialValue(self.game, id)))
     self.definitionTag:SetText(Items.TagsText(def))
     self.definitionTag:SetVisible(Items.TagsText(def) ~= "")
     self.definitionEffect:SetText(ItemText.Effect(self.game, id))
     self.definitionEffect:RestartReveal()
-    self.definitionModal:Show()
-    UI.Layout()
-    self.definitionEffect:Measure(self.definitionEffect:GetLayout().w)
-    UI.Layout()
-    self.definitionScroll:ScrollToTop()
+    self.definitionNote:Open(self.itemNote.anchor or function()
+        local b = self:NoteBounds()
+        return {x = b.x + b.w / 2, y = b.y + b.h / 2, w = 0, h = 0}
+    end, function() return self:NoteBounds() end, self.machineSkin.scale)
     return true
 end
 
 function View:CloseDefinition()
-    self.definitionModal:Hide()
+    self.definitionNote:Close()
     self.definitionId = ""
 end
 
@@ -417,58 +433,76 @@ function View:InspectItem(uid)
         self:CloseItemDetail()
         return
     end
+    self:ShowItemNote(item, "bottle")
+end
+
+function View:ShowItemNote(item, source)
     local def = Items.byId[item.id]
-    self.selectedUid, self.board.selectedUid = uid, uid
+    self.detailSource = source
+    self.selectedUid = item.uid
+    self.board.selectedUid = source == "bottle" and item.uid or 0
+    self.deckDetailUid = source == "deck" and item.uid or 0
+    if self.deckBoard then self.deckBoard.selectedUid = self.deckDetailUid end
+    self.relicDetailId = ""
     self.detailRound, self.detailRevision = self.game.round, self.game.revision
     self.detailIcon.itemId, self.detailIcon.rollValue, self.detailIcon.woolCount = item.id, item.rollValue, item.woolCount
-    self.detailTitle:SetText(def.name .. "  #" .. uid .. " · " .. Items.rarityNames[def.rarity])
-    self.detailGold:SetText(string.format("%g", self.game:_Value(item)))
+    self.detailIcon.isRelic = false
+    self.detailTitle:SetText(def.name)
+    self.itemNote:SetMeta(Items.rarityNames[def.rarity] .. " · 持有编号 #" .. item.uid)
+    self.itemNote:SetStatus(nil); self.itemNote:SetAction(nil, nil)
+    if source == "deck" and self.inventoryOpen and self.inventoryTab == "items" then
+        self.itemNote:SetAction("移除", function() self:ConfirmRemoveDeckItem(item.uid) end,
+            {danger = true, disabled = Busy(self.game)})
+    end
+    self.itemNote:SetStatsVisible(true)
+    self.detailGold:SetText(Money.Format(self.game:_Value(item)))
     self.detailTag:SetText(Items.TagsText(def))
     self.detailTag:SetVisible(Items.TagsText(def) ~= "")
     self.detailEffect:SetText(ItemText.Effect(self.game, item.id, item))
     self.detailEffect:RestartReveal()
-    self.detailTitle:SetStyle({textReveal = true})
-    self.detailScroll:ScrollToTop()
-    self.detail:SetStyle({borderColor = C.border})
-    self.detail:Show()
-    self:PositionItemDetail()
+    self.itemNote:Open(function()
+        local board = source == "deck" and self.deckBoard or self.board
+        return board and board:GetItemBounds(item.uid) or nil
+    end, function() return self:NoteBounds() end, self.machineSkin.scale)
 end
 
 function View:PositionItemDetail()
-    if self.selectedUid == 0 then return end
-    local rootBounds = self.container:GetAbsoluteLayout()
-    local container = self.board.layered and self.board:GetAbsoluteLayout() or rootBounds
-    local width = math.min(300, math.max(1, container.w - 24))
-    if self.detail.props.width ~= width then self.detail:SetWidth(width) end
-    UI.Layout()
-    local effectHeight = self.detailEffect:Measure(self.detailEffect:GetLayout().w)
-    -- 常规内容自然展开；极小屏或长说明仅滚动效果区，保留标题、属性和关闭提示。
-    local chromeHeight = self.detail:GetAbsoluteLayout().h - self.detailScroll:GetAbsoluteLayout().h
-    local effectBudget = math.max(32, container.h - math.max(124, chromeHeight) - 32)
-    local effectViewport = math.min(effectHeight, effectBudget)
-    if self.detailScroll.props.height ~= effectViewport then self.detailScroll:SetHeight(effectViewport) end
-    UI.Layout()
-    local bounds = self.board:GetItemBounds(self.selectedUid)
-    local detail = self.detail:GetAbsoluteLayout()
-    local centerX = bounds.x + bounds.w / 2
-    local x = math.max(container.x + 12,
-        math.min(centerX - width / 2, container.x + container.w - width - 12))
-    local gap = 10
-    local y = bounds.y - detail.h - gap
-    local minY = container.y + 8
-    local maxY = container.y + container.h - detail.h - 8
-    if y < minY then y = bounds.y + bounds.h + gap end
-    y = math.max(minY, math.min(y, maxY))
-    local left, top = x - rootBounds.x, y - rootBounds.y
-    if self.detail.props.left ~= left or self.detail.props.top ~= top then
-        self.detail:SetStyle({left = left, top = top})
-    end
+    self.itemNote:Place()
+end
+
+-- Both the bottom relic icons and the relic sandbox inspect through this note.
+function View:InspectRelic(id)
+    if Busy(self.game) or not Relics.Has(self.game, id) then return end
+    self:CloseDefinition()
+    self:CloseItemDetail()
+    self.board:ResetShake()
+    local inDeck = self.inventoryOpen and self.inventoryTab == "relics"
+    if self.modal:IsVisible() and not inDeck then return end
+    local def = assert(Relics.byId[id])
+    self.detailSource = inDeck and "relic-deck" or "relic"
+    if inDeck and self.deckBoard then self.deckBoard.selectedUid = def.numberId end
+    self.relicDetailId = id
+    self.detailRound, self.detailRevision = self.game.round, self.game.revision
+    self.detailIcon.itemId, self.detailIcon.isRelic = id, true
+    self.detailTitle:SetText(def.name)
+    self.itemNote:SetStatsVisible(false)
+    self.itemNote:SetMeta("遗物 · " .. Items.rarityNames[def.rarity])
+    self.itemNote:SetStatus(RelicView.Status(self.game, id))
+    self.detailEffect:SetText(def.effect); self.detailEffect:RestartReveal()
+    self.itemNote:SetAction(id == "juicer" and ("生成果汁 · " .. string.format("%g", self.game.juicerValue or 0)) or nil,
+        id == "juicer" and function() RelicView.ConfirmJuicer(self) end or nil)
+    self.itemNote:Open(function()
+        if inDeck and self.deckBoard then return self.deckBoard:GetItemBounds(def.numberId) end
+        local button = self.machineSkin.relicGrid:FindById("relicSlot_" .. id)
+        return button and button:GetAbsoluteLayout() or self:NoteBounds()
+    end, function() return self:NoteBounds() end, self.machineSkin.scale)
 end
 
 function View:Rebind(game)
     if self.machineSkin then
         self.machineSkin.pageMotion:Reset()
         self.machineSkin.draftMotionKey=nil
+        self.machineSkin.deductionNote:Reset()
     end
     self:CloseDefinition()
     self:CloseItemDetail()
@@ -483,34 +517,52 @@ function View:Rebind(game)
     self.lastRefreshes = RefreshUI.Count(game)
     self.choiceHidden, self.inventoryOpen = false, false
     self.deckDetailUid, self.deckDraftWasOpen = 0, false
+    self.inventoryTab, self.relicDetailId = "items", ""
     self:DisposeDeckSim()
     if self.physicsButton then self.physicsButton:Show() end
     self.modal:Hide()
     self:Update(true)
 end
 
+---只响应实际发生的考核扣款；余额与规则已由 Game 结算。
+---@param amount number
+function View:ShowDeduction(amount)
+    if not (amount>0) then return end
+    self.board.displayScore=nil
+    self.machineSkin.deductionNote:Show(amount)
+    GameAudio.Deduction()
+end
+
 ---@param force? boolean
 function View:Update(force)
     MachineSkin.Update(self)
+    if self.removalConfirm then self.removalConfirm:Update() end
     local game = self.game
-    if self.selectedUid ~= 0 then
+    if self.detailOverlay:IsVisible() then
         local item = game:Get(self.selectedUid)
+        local source = self.detailSource
+        local invalid = source == "bottle" and (self.modal:IsVisible() or self.draft:IsVisible()
+                or not item or item.location ~= "bottle")
+            or source == "deck" and (not self.inventoryOpen or self.inventoryTab ~= "items" or not item)
+            or source == "relic-deck" and (not self.inventoryOpen or self.inventoryTab ~= "relics"
+                or not Relics.Has(game, self.relicDetailId))
+            or source == "relic" and (self.modal:IsVisible() or self.draft:IsVisible()
+                or not Relics.Has(game, self.relicDetailId))
         if Busy(game) or game.round ~= self.detailRound or game.revision ~= self.detailRevision
-            or self.modal:IsVisible() or self.draft:IsVisible() or self.physicsMenu:IsVisible()
-            or not item or item.location ~= "bottle" then
+            or self.physicsMenu:IsVisible() or invalid then
             self:CloseItemDetail()
         else
             self:PositionItemDetail()
         end
     end
     if force or game.score ~= self.lastDisplayedScore or game.target ~= self.lastDisplayedTarget then
-        self.scoreLabel:SetText(string.format("%g", game.score))
+        self.scoreLabel:SetText(Money.Format(game.score))
         self.lastDisplayedScore = game.score
         self.lastDisplayedTarget = game.target
         self.progress:SetValue(math.min(1, game.score / game.target))
     end
-    self.roundLabel:SetText("回合 " .. (((game.round - 1) % 5) + 1) .. "/5")
-    self.goalLabel:SetText(string.format("%g", game.target))
+    self.roundLabel:SetText("天数 " .. (((game.round - 1) % 5) + 1) .. "/5")
+    self.goalLabel:SetText(Money.Format(MachineSkin.TargetValue(self)))
     MachineSkin.FitNumbers(self)
     self.badgeLabel:SetText("考核阶段 " .. game.stage)
     if game.phase == "running" then
@@ -523,8 +575,8 @@ function View:Update(force)
     end
     self.deckButton:SetText("牌库 " .. #game.deck)
     self.deckButton:SetDisabled(Busy(game))
-    -- 每次成功准备重抽都会扣共享池；即使抽回同批uid，也重新错峰弹跳。
-    -- 旧布尔字段只作为动画兼容基线，不再限制同回合多次重抽。
+    self:UpdateRemovalCount()
+    -- 独立重抽机会用尽时，即使抽回同批 uid，也重新错峰弹跳。
     local refreshes = RefreshUI.Count(game)
     local refreshChanged = refreshes ~= self.lastRefreshes
     if game.phase == "prepare" and (refreshes < self.lastRefreshes
@@ -594,12 +646,12 @@ function View:BuildFooter()
         label:SetStyle({height = 52, textAlign = "center", verticalAlign = "middle"})
         self.footer:AddChild(label)
     elseif game.phase == "reveal" then
-        self.statusLabel:SetText("本回合 +" .. string.format("%g", game.lastRoundScore) .. " 金币")
+        self.statusLabel:SetText("本回合 +" .. Money.Format(game.lastRoundScore) .. " 金币")
         local label = Label("结算完成", 15, C.primary)
         label:SetStyle({height = 52, textAlign = "center", verticalAlign = "middle"})
         self.footer:AddChild(label)
     elseif game.phase == "draft" then
-        self.statusLabel:SetText("本回合 +" .. string.format("%g", game.lastRoundScore)
+        self.statusLabel:SetText("本回合 +" .. Money.Format(game.lastRoundScore)
             .. (game.relicDraft and " · 选一件遗物永久生效" or " · 选一件加入牌库"))
         local show = Button("查看本回合三选一", function()
             self:CloseItemDetail()
@@ -609,7 +661,7 @@ function View:BuildFooter()
         self.footer:AddChild(show)
     else
         self.statusLabel:SetText("未达到阶段目标，本局结束")
-        local result = Label("坚持了 " .. game.bestRound .. " 回合 · 累计 " .. string.format("%g", game.totalScore) .. " 分", 12)
+        local result = Label("坚持了 " .. game.bestRound .. " 回合 · 累计 " .. Money.Format(game.totalScore) .. " 分", 12)
         self.footer:AddChild(result)
         self.footer:AddChild(Button("重新开始", function() self:ConfirmNewRun() end, true))
     end
@@ -637,7 +689,7 @@ function View:BuildDraft()
             UI.Label {text = relicDraft and "挑选你的下一件遗物" or "挑选你的下一件物品",
                 fontSize = 20.25, fontWeight = "bold",
                 whiteSpace = "normal", width = "100%", fontColor = C.text},
-            Label("本回合 +" .. string.format("%g", self.game.lastRoundScore) .. " · 三选一", 12, C.textSecondary),
+            Label("本回合 +" .. Money.Format(self.game.lastRoundScore) .. " · 三选一", 12, C.textSecondary),
         }}, eye,
     }})
     if self.game.lastResult ~= "" then
@@ -697,12 +749,14 @@ function View:Modal(title, noClose)
         -- 打开其它面板即离开牌库页：恢复机台输入与牌库页暂时接管的三选一页面。
         self.inventoryOpen=false
         self.deckDetailUid=0
+        self.relicDetailId=""
         self:DisposeDeckSim()
         if self.game.phase=="draft" and self.deckDraftWasOpen then self.draft:Show() end
         self.deckDraftWasOpen=false
         if self.physicsButton then self.physicsButton:Show() end
     end
     self.inventoryPanel,self.inventoryTitle,self.deckBody=nil,nil,nil
+    self.inventoryHead,self.inventoryRemovalLabel=nil,nil
     local children = self.modal:GetChildren()
     for i = #children, 1, -1 do children[i]:Destroy() end
     self.modal:ClearChildren()
@@ -736,28 +790,22 @@ function View:BuildDeckSandbox(body, s)
     if not self.deckSim or #self.deckSim.order == 0 then
         body:AddChild(UI.Panel {flexGrow = 1, flexBasis = 0,
             justifyContent = "center", alignItems = "center",
-            children = {UI.Label {text = "牌库为空", fontSize = 12 * s, fontColor = C.textSecondary}}})
+            children = {UI.Label {text = self.inventoryTab == "relics"
+                and "尚未拥有遗物\n每5回合考核达标后可额外挑选一件" or "牌库为空",
+                textAlign = "center", whiteSpace = "normal", width = "100%",
+                fontSize = 12 * s, fontColor = C.textSecondary}}})
         return
     end
     local board = DeckBoard.Widget {id = "deckBoard", sim = self.deckSim,
-        onPick = function(uid) self:ShowDeckItem(uid) end,
+        onPick = function(uid)
+            if self.inventoryTab == "relics" then
+                local def = Relics.byNumber[uid]
+                if def then self:ShowDeckRelic(def.id) end
+            else self:ShowDeckItem(uid) end
+        end,
         width = "100%", flexGrow = 1, flexBasis = 0, minHeight = 40, pointerEvents = "auto"}
     body:AddChild(board)
     self.deckBoard = board
-end
-
--- 牌库与三选一共用详情版式；实例数值与编号仍来自当前持有物品。
-function View:BuildDeckDetail(body, item, s)
-    local def = Items.byId[item.id]
-    local content = ItemDetail.Create {prefix = "deck", scale = s, def = def,
-        caption = "物品详情", meta = "持有编号 #" .. item.uid,
-        gold = self.game:_Value(item),
-        icon = Icon {itemId = item.id, rollValue = item.rollValue, woolCount = item.woolCount,
-            width = 88 * s, height = 88 * s, pointerEvents = "none"},
-        descriptionId = "deckDescription", effect = ItemText.Effect(self.game, item.id, item),
-        onInspect = function(id) self:InspectDefinition(id) end}
-    content:SetStyle({height = "auto", flexGrow = 1, flexBasis = 0})
-    body:AddChild(content)
 end
 
 ---@param syncLayout boolean? 事件回调中立即排版；尺寸变化时由 UI 帧自行排版。
@@ -769,29 +817,106 @@ function View:BuildDeckPage(syncLayout)
     body:ClearChildren()
     self.deckBoard = nil
     local s = self.machineSkin and self.machineSkin.scale or 1
-    local item = self.deckDetailUid ~= 0 and self.game:Get(self.deckDetailUid) or nil
-    if item then
-        self:BuildDeckDetail(body, item, s)
-    else
-        self:BuildDeckSandbox(body, s)
+    local relicCount = #RelicView.Entries(self.game)
+    if self.inventoryTitle then
+        self.inventoryTitle:SetText(self.inventoryTab == "relics"
+            and "我的遗物 · " .. relicCount .. " 件" or "我的牌库 · " .. #self.game.deck .. " 件")
+        self.inventoryTitle:SetStyle({fontSize = 18 * s})
     end
+    if self.inventoryHead then
+        self.inventoryHead:SetStyle({paddingLeft = 12 * s, paddingRight = 12 * s,
+            paddingTop = 6 * s, paddingBottom = 4 * s, gap = 8 * s})
+    end
+    if self.inventoryRemovalLabel then
+        self.inventoryRemovalLabel:SetStyle({fontSize = 14 * s})
+    end
+    self:UpdateRemovalCount()
+    self:BuildDeckSandbox(body, s)
+    MachineSkin.InventoryTabs(self)
     if syncLayout then UI.Layout() end
+end
+
+function View:CreateDeckSim()
+    self:DisposeDeckSim()
+    local relics = self.inventoryTab == "relics"
+    self.deckSim = DeckBoard.Sim.New(relics and RelicView.Entries(self.game) or self.game.deck, relics)
+end
+
+function View:SwitchInventoryTab(tab)
+    if Busy(self.game) or not self.inventoryOpen or (tab ~= "items" and tab ~= "relics")
+        or self.inventoryTab == tab then return end
+    self:CloseDefinition()
+    self:CloseItemDetail()
+    self.inventoryTab = tab
+    self.deckDetailUid, self.relicDetailId = 0, ""
+    self:CreateDeckSim()
+    self:BuildDeckPage(true)
+end
+
+function View:ShowDeckRelic(id)
+    if Busy(self.game) or not self.inventoryOpen or self.inventoryTab ~= "relics"
+        or not Relics.Has(self.game, id) then return end
+    self:InspectRelic(id)
 end
 
 ---@param uid integer
 function View:ShowDeckItem(uid)
-    if Busy(self.game) or not self.game:Get(uid) then return end
-    self.deckDetailUid = uid
-    self:BuildDeckPage(true)
+    local item = self.game:Get(uid)
+    if Busy(self.game) or not self.inventoryOpen or self.inventoryTab ~= "items" or not item then return end
+    self:CloseDefinition()
+    self:ShowItemNote(item, "deck")
+end
+
+---@param uid integer
+function View:ConfirmRemoveDeckItem(uid)
+    if Busy(self.game) or not self.inventoryOpen or self.inventoryTab ~= "items"
+        or self.detailSource ~= "deck" or self.deckDetailUid ~= uid then return end
+    if (self.game.removals or 0) <= 0 then
+        UI.Toast.Show(NO_REMOVALS_MESSAGE, {duration = 2, variant = "info"})
+        return
+    end
+    self.removalConfirm:Open(uid, function(confirmedUid) self:RemoveDeckItem(confirmedUid) end)
+end
+
+-- Only the confirmed owned item is removed; keep the live sandbox and all remaining bodies.
+---@param uid integer
+function View:RemoveDeckItem(uid)
+    if Busy(self.game) or not self.inventoryOpen or self.inventoryTab ~= "items"
+        or self.detailSource ~= "deck" or self.deckDetailUid ~= uid then return end
+    local board = self.deckBoard
+    if not board or not self.deckSim or not self.deckSim.records[uid] then return end
+    local ok, message = self.actions.remove(uid)
+    if not ok then
+        UI.Toast.Show((self.game.removals or 0) <= 0 and NO_REMOVALS_MESSAGE
+            or message or "暂时无法移除", {variant = "info"})
+        self:UpdateRemovalCount()
+        return
+    end
+    self:CloseDefinition()
+    self:CloseItemDetail()
+    board:RemoveItem(uid)
+    if self.inventoryTitle then self.inventoryTitle:SetText("我的牌库 · " .. #self.game.deck .. " 件") end
+    self:UpdateRemovalCount()
+    self:Update()
+end
+
+function View:UpdateRemovalCount()
+    local count = math.max(0, math.floor(self.game.removals or 0))
+    if self.inventoryRemovalLabel then
+        local text = "移除机会 · " .. count
+        if self.inventoryRemovalLabel.props.text ~= text then self.inventoryRemovalLabel:SetText(text) end
+        self.inventoryRemovalLabel:SetVisible(self.inventoryTab == "items")
+    end
+    if self.detailSource == "deck" and self.itemNote.actionDanger then
+        self.itemNote.action:SetDisabled(Busy(self.game))
+    end
 end
 
 -- 返回按钮分层后退：详情 → 沙盒 → 离开牌库回到原页面。
 function View:DeckBack()
-    if self.deckDetailUid ~= 0 then
-        self.deckDetailUid = 0
-        self:BuildDeckPage(true)
-        return
-    end
+    if self.removalConfirm and self.removalConfirm:IsOpen() then self.removalConfirm:Close(); return end
+    if self.definitionModal:IsVisible() then self:CloseDefinition(); return end
+    if self.detailOverlay:IsVisible() then self:CloseItemDetail(); return end
     self:CloseInventory()
 end
 
@@ -805,9 +930,12 @@ function View:DisposeDeckSim()
 end
 
 function View:CloseInventory()
+    self:CloseDefinition()
+    self:CloseItemDetail()
     self.modal:Hide()
     self.inventoryOpen = false
     self.deckDetailUid = 0
+    self.relicDetailId = ""
     self:DisposeDeckSim()
     if self.physicsButton then self.physicsButton:Show() end
     if self.game.phase == "draft" and self.deckDraftWasOpen then self.draft:Show() end
@@ -815,8 +943,13 @@ function View:CloseInventory()
     self:Update(true)
 end
 
-function View:OpenInventory()
+function View:OpenInventory(tab)
     if Busy(self.game) then return end
+    tab = tab == "relics" and "relics" or "items"
+    if self.inventoryOpen then
+        self:SwitchInventoryTab(tab)
+        return
+    end
     self:CloseDefinition()
     self:CloseItemDetail()
     -- 三选一页面被牌库页整体接管；返回时恢复原候选页。
@@ -826,15 +959,21 @@ function View:OpenInventory()
         panel=self:Modal("我的牌库", true)
         self.inventoryPanel=panel
         self.inventoryTitle=panel:FindById("modalTitle") --[[@as Label]]
+        self.inventoryHead=panel:GetChildren()[1] --[[@as Panel]]
+        self.inventoryHead:GetChildren()[1]:SetStyle({minWidth = 0, flexBasis = 0})
+        self.inventoryRemovalLabel=UI.Label {id = "deckRemovalCount", text = "", fontSize = 14,
+            fontColor = C.error, flexShrink = 0, textAlign = "right", textMotionDisabled = true,
+            pointerEvents = "none"}
+        self.inventoryHead:AddChild(self.inventoryRemovalLabel)
         self.deckBody=UI.Panel {id = "deckBody", width = "100%", flexGrow = 1, flexBasis = 0}
         panel:AddChild(self.deckBody)
     end
     self.inventoryOpen = true
     self.deckDetailUid = 0
-    self:DisposeDeckSim()
-    -- 每次打开牌库都让全部持有实例重新从顶部落下。
-    self.deckSim = DeckBoard.Sim.New(self.game.deck)
-    self.inventoryTitle:SetText("我的牌库 · "..#self.game.deck.." 件")
+    self.relicDetailId = ""
+    self.inventoryTab = tab
+    -- 每次打开相应收藏，都让持有的物品或遗物从顶部落下。
+    self:CreateDeckSim()
     if self.machineSkin then MachineSkin.Modal(self,panel,true) end
     self.modal:Show()
     -- 面板可见后再排版，隐藏节点的 Yoga display=none 会得到零尺寸。
@@ -843,40 +982,13 @@ function View:OpenInventory()
     self.physicsButton:Hide()
     self.physicsMenu:Hide()
     self:Update(true)
-    print(string.format("[牌库] 物理沙盒打开：%d件从顶部落下",#self.game.deck))
+    print(string.format("[%s] 物理沙盒打开：%d件从顶部落下",
+        self.inventoryTab == "relics" and "遗物" or "牌库", #self.deckSim.order))
 end
 
 function View:OpenHelp()
     if Busy(self.game) then return end
-    local panel = self:Modal("摇摇牌库 · 玩法")
-    local mood=Button("机台氛围 · "..Atmosphere.names[Storage.atmosphereMode],
-        function() self:OpenAtmosphere() end)
-    mood:SetStyle({width="100%",height=42})
-    panel:AddChild(mood)
-    local scroll = UI.ScrollView {width = "100%", flexGrow = 1, flexBasis = 0, gap = 12, padding = 4}
-    local rules = {
-        {"01  抽取与刷新", "回合开始从牌库随机抽取最多20件进入瓶中，不足时全部入瓶。准备重抽、物品三选一与遗物三选一共用刷新池：新局1次，每完成两回合+1；成功刷新消耗1次，有次数即可连续刷新，回合开始不重置。[[egg]]入瓶满3回合消耗自身，50%概率增加1次免费刷新。"},
-        {"02  摇晃", "点击开始后运行10秒（遗物最后一秒可增加1秒），不操作照常计时。瓶中物品按说明实时反应。瓶子左上可切换物理；手机原生端可启用体感，网页预览可触摸拖动。"},
-        {"03  结算", "摇晃结束后禁止摇晃，物品自然下落2秒；持续接触加成继续同步，不再执行离散触发。随后按当前有效价值产金币，逐件弹出收益，全部展示后再停留2秒。"},
-        {"04  价值与冷却", "价值增益默认临时，回合末清除；明确永久的加值与倍率跨回合保留。冷却下限1秒（特别说明除外），仅在瓶中推进，每回合重置且入场不进入冷却。描述未写冷却的内部防抖、周期计时不显示冷却环。"},
-        {"05  消耗与生成", "消耗默认离开拥有牌库与瓶中，记入本回合弃牌堆，不在回合末自动恢复；临时消耗才会回牌库。生成默认永久，只有明确临时生成才在回合末移除。[[banana]]被消耗变为[[banana_peel]]等特例遵循各自说明。"},
-        {"06  入瓶计时", "每x秒、过x回合只在瓶中计算，未入瓶牌库不计时。[[banana]]、[[egg]]读取各自的瓶中回合数；[[chicken_keeper]]的每5次刷新永久+1明确在牌库也生效。"},
-        {"07  构筑与遗物", "结算后进入物品三选一，可选一件永久加入牌库或跳过；考核达标后还可选择遗物。候选稀有度概率随考核阶段变化；每次考核回合的物品及遗物三选一都不会出现普通品质，刷新后同样如此。已拥有的唯一物品与遗物不再作为对应候选。刷新使用同一累计池。"},
-        {"08  考核", "每5回合考核并扣除目标分数，余额保留。目标40/80/140/220/320/450/600/780，之后每阶段×1.3并向上取整到10；不足则结束本局。"},
-        {"09  上限与物理", "瓶中上限100件，超出的新生成物按顺序等待入瓶；等待物品不算瓶中物品，回合末回牌库。时间上限99秒。体积、重量默认100%，常规范围50%至200%；物理修改默认永久，特殊物品按自身说明。"},
-        {"10  存档", "非摇晃/结算阶段自动保存。运行中退出回退到本回合开始前，包括生成与永久变化。网页刷新可能丢失本地文件，请导出存档码。"},
-        {"11  物品目录", "当前93件物品均已实装；仅源表标记屏蔽的物品不进入普通卡池，GM可添加全部93件。分类严格按标签，不按名称或外观推测；士兵与医生保留人类标签。"},
-    }
-    for _, rule in ipairs(rules) do
-        scroll:AddChild(UI.Card {width = "100%", gap = 5, padding = 12, backgroundColor = C.background,
-            children = {Label(rule[1], 13, C.primary),
-                Description {text = rule[2], fontSize = 11.25, fontColor = C.text,
-                    onInspect = function(id) self:InspectDefinition(id) end}}})
-    end
-    panel:AddChild(scroll)
-    local sensor = Button("启用／校准手机体感", function() self.actions.sensor() end)
-    sensor:SetStyle({width = "100%"})
-    panel:AddChild(sensor)
+    RulesUI.Open(self)
 end
 
 function View:OpenAtmosphere()
@@ -902,7 +1014,6 @@ end
 
 --- GM 面板：接受数字编号 1–93 或字符串 id，由 Game:GmAddItem 统一匹配；未实装物品会被拒绝。
 function View:OpenGm()
-    if Busy(self.game) then return end
     local panel = self:Modal("GM 面板")
     panel:SetStyle({textMotionDisabled = true})
     panel:AddChild(UI.Label {text = "功能一 · 添加物品：输入数字编号 1–93 或字符串 id，全部93件可添加，加入牌库供后续抽取",
@@ -967,7 +1078,7 @@ function View:OpenSave()
     panel:AddChild(UI.Label {text = "网页预览刷新后本地文件可能丢失。请复制下方存档码到外部保存，再粘贴导入。原生平台使用本地自动存档。",
         whiteSpace = "normal", width = "100%", fontSize = 11, fontColor = C.textSecondary})
     local code = Storage.Export(self.game)
-    local field = UI.TextField {value = code, width = "100%", height = 54, fontSize = 10,
+    local field = SaveCodeField {id = "saveCode", value = code, width = "100%", height = 54, fontSize = 10,
         fontFamily = "mono"}
     panel:AddChild(field)
     panel:AddChild(Label("点击输入框，全选并复制；导入时替换为已保存的完整内容。", 10, C.textSecondary))

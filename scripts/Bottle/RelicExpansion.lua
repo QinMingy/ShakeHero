@@ -111,6 +111,7 @@ function RelicExpansion.TrackDistance(game, item, stepDistance, events)
     while item.ghostTravel >= 5 - EPSILON do
         item.ghostTravel = math.max(0, item.ghostTravel - 5)
         game:_Score(events, item, 1, game._lastPositions[item.uid])
+        events[#events].trigger = "move"
     end
 end
 
@@ -140,6 +141,7 @@ function RelicExpansion.Step(game, dt, state, events)
             while item.spinProgress >= TURN - EPSILON do
                 item.spinProgress = math.max(0, item.spinProgress - TURN)
                 game:_Score(events, item, 1, state.positions and state.positions[item.uid])
+                events[#events].trigger = "rotate"
             end
         end
     end

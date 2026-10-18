@@ -85,6 +85,11 @@ function Lifecycle.Destroy(game, uid, temporary, events, consumer, reason)
     local cause = reason or (consumer and "consume" or "self")
     if cause ~= "exhausted" and cause ~= "merge_checked"
         and not Expansion.BeforeDestroy(game, item, consumer, events, cause) then return false end
+    -- 动效只记录消耗前外观；实际消耗、转化、重生和收益继续在本次调用内立即完成。
+    local position = game._lastPositions[uid]
+    events[#events + 1] = {kind = "consume", uid = uid, id = item.id, reason = cause,
+        scale = item.scale, rollValue = item.rollValue, woolCount = item.woolCount,
+        x = position and position.x, y = position and position.y}
     local value = game:_Value(item)
     local originalId = item.id
     local function Complete()

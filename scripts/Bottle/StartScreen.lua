@@ -1,10 +1,12 @@
 -- 开始页：自绘天空渐变背景，游戏道具随机从天而降；
--- 标题“摇摇英雄／Shake Hero”每2秒弹性缩放摇晃一次；入口为“开始游戏”和“退出”。
+-- 按进行中存档切换开始／继续入口；新局确认复用移除物品弹窗。
 -- 文字沿用全局上下浮动；点击开始后整页淡出并交还牌桌。
 local UI = require("urhox-libs/UI")
 local L = require("Machine.LayeredLayout")
 local Art = require("Bottle.Art")
 local GameAudio = require("Bottle.Audio")
+local Storage = require("Bottle.Storage")
+local Confirmation = require("Bottle.RemovalConfirm")
 
 ---@class BottleStartScreen
 ---@field view any
@@ -13,6 +15,8 @@ local GameAudio = require("Bottle.Audio")
 ---@field subtitle Label
 ---@field startButton Button
 ---@field exitButton Button
+---@field newRunButton Button
+---@field newRunConfirm any
 ---@field active boolean
 ---@field closing boolean
 ---@field exitElapsed number
@@ -170,6 +174,7 @@ function StartScreen.New(view)
     self.floatTime = 0.0
     self.fallItems = {}
     self:Build()
+    self.newRunConfirm = Confirmation.New(view, "newRunConfirm")
     self:InitFalling()
     self:Layout()
     self:MaskGameUi()
@@ -231,12 +236,14 @@ function StartScreen:Build()
         })
         return button
     end
-    self.startButton = option("开始游戏", function() self:Close() end, true)
+    self.startButton = option("开始游戏", function() self:Activate() end, true)
+    self.newRunButton = option("开始新游戏", function() self:RequestNewRun() end, false)
     self.exitButton = option("退出", function() self:Exit() end, false)
 
     self.root:AddChild(self.title)
     self.root:AddChild(self.subtitle)
     self.root:AddChild(self.startButton)
+    self.root:AddChild(self.newRunButton)
     self.root:AddChild(self.exitButton)
     self.view.container:AddChild(self.root)
 end
@@ -324,9 +331,14 @@ function StartScreen:Layout()
         fontSize = 20 * s, letterSpacing = 2 * s})
     local buttonW, buttonH = 240 * s, 64 * s
     local left = (L.width - 240) * .5 * s
+    local hasRun = self:HasRun()
+    self.startButton:SetText(hasRun and "继续游戏" or "开始游戏")
+    self.newRunButton:SetVisible(hasRun)
     self.startButton:SetStyle({left = left, top = 492 * s, width = buttonW, height = buttonH,
         fontSize = 20 * s})
-    self.exitButton:SetStyle({left = left, top = 570 * s, width = buttonW, height = buttonH,
+    self.newRunButton:SetStyle({left = left, top = 570 * s, width = buttonW, height = buttonH,
+        fontSize = 20 * s})
+    self.exitButton:SetStyle({left = left, top = (hasRun and 648 or 570) * s, width = buttonW, height = buttonH,
         fontSize = 17 * s})
 end
 
@@ -336,9 +348,9 @@ function StartScreen:MaskGameUi()
     local m = self.view.machineSkin
     if not m then return end
     if #self.masked == 0 then
-        for _, widget in ipairs({self.view.footer, self.view.deckButton, self.view.physicsButton,
+        for _, widget in ipairs({self.view.footer, self.view.deckButton,
             self.view.mainMenuButton,
-            m.help, m.save, m.gm, m.presentationButton}) do
+            m.help, m.save}) do
             if widget then self.masked[#self.masked + 1] = widget end
         end
     end
@@ -350,17 +362,44 @@ function StartScreen:IsActive()
     return self.active
 end
 
+---@return boolean
+function StartScreen:HasRun()
+    return Storage.runStarted and self.view.game.phase ~= "over"
+end
+
+function StartScreen:StartNewRun()
+    if not self.active or self.closing then return end
+    if self.view.actions.newrun() == false then return end
+    self:Close()
+end
+
+-- 鼠标和键盘共用入口；确认框打开时不能透过遮罩继续游戏。
+function StartScreen:Activate()
+    if not self.active or self.closing or self.newRunConfirm:IsOpen() then return end
+    if self:HasRun() then self:Close() else self:StartNewRun() end
+end
+
+function StartScreen:RequestNewRun()
+    if not self.active or self.closing or self.newRunConfirm:IsOpen() then return end
+    if not self:HasRun() then self:StartNewRun(); return end
+    self.newRunConfirm:OpenMessage("开始新游戏", "上局游戏进度将会丢失，是否开始新游戏？",
+        function() self:StartNewRun() end,
+        function() return self.active and not self.closing and self:HasRun() end)
+end
+
 function StartScreen:Close()
     if not self.active or self.closing then return end
+    if self.newRunConfirm:IsOpen() then return end
     self.closing = true
     self.exitElapsed = 0
     self.startButton:SetDisabled(true)
+    self.newRunButton:SetDisabled(true)
     self.exitButton:SetDisabled(true)
     print("[开始页] 开始游戏")
 end
 
 -- 从游戏内返回主菜单：重新显示开始页并暂停回合，游戏状态保留。
--- 再次点击“开始游戏”即从原阶段继续。
+-- 继续游戏从内存中的原阶段恢复，不重置对局。
 function StartScreen:Open()
     if self.active then return end
     self.active = true
@@ -372,6 +411,7 @@ function StartScreen:Open()
     self.root:SetStyle({opacity = 1})
     self.root:Show()
     self.startButton:SetDisabled(false)
+    self.newRunButton:SetDisabled(false)
     self.exitButton:SetDisabled(false)
     self.masked = {}
     self:Layout()
@@ -381,6 +421,7 @@ function StartScreen:Open()
 end
 
 function StartScreen:Exit()
+    if self.closing or self.newRunConfirm:IsOpen() then return end
     print("[开始页] 请求退出游戏")
     local ok, err = pcall(function() engine:Exit() end)
     if not ok then

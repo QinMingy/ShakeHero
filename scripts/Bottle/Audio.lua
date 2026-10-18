@@ -24,6 +24,10 @@ local reelStopSound = nil
 local calfSound = nil
 ---@type SoundSource?
 local calfSource = nil
+---@type Sound?
+local deductionSound = nil
+---@type SoundSource?
+local deductionSource = nil
 local lastCalfTime = -1
 local calfTime = 0
 local FADE_SECONDS = 1.2
@@ -43,6 +47,7 @@ local IMPACTS_PER_FRAME = 2   -- 只裁掉同帧弱碰撞；不限制相邻帧�
 local REEL_LOOP_GAIN = .38
 local REEL_START_GAIN = .7
 local REEL_STOP_GAIN = .75
+local DEDUCTION_GAIN = 1.0
 -- 出现音调阶梯（用户要求：音调从低到高，超出上限后从最低开始）：
 -- 每批出现都从低于原调3个半音起，每次升高1.5个半音，共8档
 -- （约0.84 → 1.55倍速），用完回到本批最低档；批次开始时由调用方重置。
@@ -77,6 +82,8 @@ local POP_CHIP_FILE = "sfx/balatro_chip.wav"
 local IMPACT_FILE = "sfx/balatro_coin.wav"
 -- 本地合成的卡通短牛叫，不访问外部服务、不占用玩法随机序列。
 local CALF_FILE = "sfx/calf_moo.wav"
+-- 用户指定的超市柜员机提示音；保留原始 MP3，运行使用同源 OGG。
+local DEDUCTION_FILE = "sfx/cash_register_deduction.ogg"
 
 local function Load(path, looped)
     local sound = cache:GetResource("Sound", path) --[[@as Sound?]]
@@ -161,6 +168,9 @@ function Music.Init()
     calfSound = Load(AUDIO_DIR .. CALF_FILE, false)
     calfSource = audioScene:CreateChild("CalfDash"):CreateComponent("SoundSource")
     calfSource:SetSoundType(SOUND_EFFECT)
+    deductionSound = Load(AUDIO_DIR .. DEDUCTION_FILE, false)
+    deductionSource = audioScene:CreateChild("MoneyDeduction"):CreateComponent("SoundSource")
+    deductionSource:SetSoundType(SOUND_EFFECT)
     print("[音频] 双状态BGM与机械按钮音已启用")
 end
 
@@ -202,6 +212,12 @@ function Music.Calf()
     if not calfSource or not calfSound or calfTime - lastCalfTime < .2 then return end
     calfSource:Play(calfSound, 0, .55)
     lastCalfTime = calfTime
+end
+
+-- 每次五回合扣款开始时调用一次；独立声源不与转轮循环或按钮提示互抢。
+function Music.Deduction()
+    if not audioScene or not deductionSource or not deductionSound then return end
+    deductionSource:Play(deductionSound, 0, DEDUCTION_GAIN)
 end
 
 function Music.Click()
@@ -318,6 +334,8 @@ function Music.Shutdown()
         if source then source:Stop(); source:Dispose() end
     end
     if calfSource then calfSource:Stop(); calfSource:Dispose(); calfSource = nil end
+    if deductionSource then deductionSource:Stop(); deductionSource:Dispose(); deductionSource = nil end
+    deductionSound = nil
     calfSound, lastCalfTime, calfTime = nil, -1, 0
     if audioScene then audioScene:Dispose(); audioScene = nil end
     Music.current, Music.tracks, Music.clicks, Music.pops, Music.impacts = "", {}, {}, {}, {}

@@ -1,6 +1,7 @@
 -- The score uses animated numeral strips; the target is a fixed brass plaque.
 -- A new score retargets the moving strips in place; it never restarts a queued tween.
 local Orientation=require("Machine.RenderOrientation")
+local Money=require("Bottle.Money")
 
 local Reels={}
 Reels.__index=Reels
@@ -8,13 +9,7 @@ local WIDTH,HEIGHT=800,320
 local MIN_REELS=8
 
 local function numericLiteral(value)
-    value=tonumber(value) or 0
-    if value==math.floor(value) and math.abs(value)<=9007199254740991 then
-        return string.format("%.0f",value)
-    end
-    local literal=string.format("%.10g",value)
-    if #literal>10 then return string.format("%.4e",value) end
-    return literal
+    return Money.Format(tonumber(value) or 0)
 end
 
 local function formatted(value)

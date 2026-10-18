@@ -1,12 +1,10 @@
 -- The existing directional, interruptible numeral-belt behavior without scene geometry.
+local Money=require("Bottle.Money")
 ---@type any
 local Reels={}
 Reels.__index=Reels
 function Reels.Literal(value)
-    value=tonumber(value) or 0
-    if value==math.floor(value) and math.abs(value)<=9007199254740991 then return string.format("%.0f",value) end
-    local literal=string.format("%.10g",value)
-    return #literal>10 and string.format("%.4e",value) or literal
+    return Money.Format(tonumber(value) or 0)
 end
 function Reels.Format(value)
     local literal=Reels.Literal(value)

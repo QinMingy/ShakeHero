@@ -1,11 +1,11 @@
 -- Bottle 纯 Lua 规则核心（V0.3 新结算模型）；不依赖引擎、文件系统或全局 math.random。
 -- 主流程（docs/游戏流程.txt）：
---   prepare  回合开始：从牌库普通抽最多20件，共享刷新次数重抽
+--   prepare  回合开始：从牌库普通抽最多20件，每回合独立一次免费重抽
 --   running  摇晃阶段：10秒，物品按 trigger 实时执行效果，明确即时收益当场入账
 --   settle   结算阶段：禁止摇晃，物体自然下落2秒，不执行非结算效果；
 --            2秒后全体物品按当前价值一次性结算金币
 --   考核      每5回合扣除阶段目标（40/80/140…×1.3），余额不足则 over
---   draft    三选一：按考核次数查 docs/概率.txt 稀有度权重，共享次数刷新/可跳过
+--   draft    三选一：物品刷新池每两回合+1并累计；遗物每组独立一次免费刷新/可跳过
 -- 基础设定（docs/基础设定.txt）：
 --   价值增益默认临时（bonus，结算后回合末清零）；“永久+N”写入 permBonus。
 --   冷却下限1秒、每回合重置、不跨回合。瓶中物品上限100。消耗≠移除：进弃牌堆。
@@ -26,6 +26,9 @@ local PhysicalState = require("Bottle.PhysicalState")
 local Expansion = require("Bottle.ExpansionEffects")
 local RelicExpansion = require("Bottle.RelicExpansion")
 local Lifecycle = require("Bottle.GameLifecycle")
+local TriggerFeedback = require("Bottle.TriggerFeedback")
+local Money = require("Bottle.Money")
+local Removal = require("Bottle.Removal")
 local DURATION = 10
 local SETTLE_DELAY = 2
 -- 结算展示：先逐个弹出收益浮字（队列），队列结束后再停留 REVEAL_DELAY 秒进入考核/三选一。
@@ -100,7 +103,12 @@ local MAX_COUNTER = 2147483647
 ---@field spinForced number? 转圈圈排除强制转角采样
 
 ---@class GameEvent
----@field kind 'spawn'|'remove'|'score'|'merge'|'buff'|'transform'|'respawn'|'resize'|'burst'|'anchor'|'rotate'|'impulse'|'flight'|'teleport'|'dash'
+---@field kind 'spawn'|'remove'|'score'|'merge'|'buff'|'transform'|'respawn'|'resize'|'burst'|'anchor'|'rotate'|'impulse'|'flight'|'teleport'|'dash'|'deduction'|'triggerReward'|'consume'
+---@field reason string? 消耗原因，仅供表现与回归检查，不延后规则生效
+---@field scale number? 消耗前物品体积倍率
+---@field woolCount number? 消耗前小羊羊毛库存
+---@field trigger 'move'|'rotate'|'distance'|'collision'?
+---@field rewardKind 'value'|'permanent'|'size'?
 ---@field uid integer
 ---@field id string?
 ---@field value number?
@@ -154,7 +162,8 @@ local MAX_COUNTER = 2147483647
 
 ---@class BottleSnapshot
 ---@field rulesVersion integer? 扩展规则版本，当前6；外层存档版本保持2
----@field refreshes integer 跨回合共享刷新次数
+---@field refreshes integer 物品三选一跨回合累计刷新次数；不含准备重抽和遗物免费刷新
+---@field removals integer? 跨回合累计移除机会；旧档缺省0
 ---@field version integer 固定 2（V0.3 新表；v1 旧档不兼容）
 ---@field phase BottlePhase 只保存 prepare/draft/over
 ---@field round integer
@@ -171,7 +180,7 @@ local MAX_COUNTER = 2147483647
 ---@field drawn number[]
 ---@field options string[]
 ---@field rerollUsed boolean
----@field refreshUsed boolean
+---@field refreshUsed boolean 当前候选组是否已刷新；遗物组独立限一次免费刷新
 ---@field revision number
 ---@field rngState integer 自有 PRNG 状态
 ---@field nextUid integer
@@ -206,7 +215,7 @@ local MAX_COUNTER = 2147483647
 ---@field drawn number[] 准备阶段的抽取 uid
 ---@field options string[]
 ---@field rerollUsed boolean
----@field refreshUsed boolean
+---@field refreshUsed boolean 当前候选组是否已刷新；遗物组独立限一次免费刷新
 ---@field revision number
 ---@field juicerValue number 榨汁机跨回合累计价值
 ---@field huntTargetUid integer 江湖追杀稳定目标，0为无目标
@@ -218,7 +227,8 @@ local MAX_COUNTER = 2147483647
 ---@field _instances table<number, ItemInstance>
 ---@field _lastPositions table<number, {x:number,y:number}> 位移累计用的上次采样位置
 ---@field _rollback BottleSnapshot?
----@field refreshes integer 跨回合共享刷新次数
+---@field refreshes integer 物品三选一跨回合累计刷新次数；不含准备重抽和遗物免费刷新
+---@field removals integer 跨回合累计移除机会
 ---@field spawnQueue integer[] 等待入瓶的生成物FIFO
 ---@field _queueOrigins table<number,{x:number,y:number}>
 ---@field _drainingQueue boolean
@@ -352,6 +362,7 @@ function Game:_Init(seed)
     self._rollback = nil
     self.startEvents = {}
     self.refreshes = 1
+    self.removals = 0
     self.spawnQueue, self._queueOrigins = {}, {}
     self._drainingQueue = false
 end
@@ -408,11 +419,11 @@ end
 function Game.New(seed)
     local self = setmetatable({}, Game)
     self:_Init(seed)
-    -- 初始牌库：苹果、香蕉、小球、橘子各1件（用户确认 2026-10-16）。
+    -- 初始牌库：小羊、小草、苹果、小球各1件（用户确认 2026-10-18）。
+    self:_Create("sheep")
+    self:_Create("grass")
     self:_Create("apple")
-    self:_Create("banana")
     self:_Create("ball")
-    self:_Create("orange")
     self:_Prepare()
     return self
 end
@@ -513,8 +524,7 @@ end
 
 ---@return boolean
 function Game:Reroll()
-    if self.phase ~= "prepare" or self.refreshes <= 0 then return false end
-    self.refreshes = self.refreshes - 1
+    if self.phase ~= "prepare" or self.rerollUsed then return false end
     Expansion.OnRefresh(self)
     for _, item in ipairs(self:BottleItems()) do item.location = "deck" end
     self.rerollUsed = true
@@ -602,11 +612,12 @@ end
 ---@param value number
 ---@param position {x:number,y:number}?
 function Game:_Score(events, item, value, position)
-    self.score = self.score + value
-    self.totalScore = self.totalScore + value
-    self.roundScore = self.roundScore + value
-    if value > 0 then self._roundPopCount = (self._roundPopCount or 0) + 1 end
-    Emit(events, "score", item, value)
+    local amount = Money.Round(value)
+    self.score = self.score + amount
+    self.totalScore = self.totalScore + amount
+    self.roundScore = self.roundScore + amount
+    if amount > 0 then self._roundPopCount = (self._roundPopCount or 0) + 1 end
+    Emit(events, "score", item, amount)
     events[#events].rollValue = item.rollValue
     if position then
         local event = events[#events]
@@ -691,9 +702,14 @@ Game.ApplyWeight = PhysicalState.Apply
 ---@return boolean
 function Game:_Merge(a, b, resultId, contacts, events)
     if a.location ~= "bottle" or b.location ~= "bottle" then return false end
+    local feedback = TriggerFeedback.Capture(self)
+    local firstReward = #events + 1
     -- 双材料先预检，不能先耗掉一方才发现另一方受护盾保护。
     if not Expansion.BeforeDestroy(self, a, nil, events, "merge")
-        or not Expansion.BeforeDestroy(self, b, nil, events, "merge") then return false end
+        or not Expansion.BeforeDestroy(self, b, nil, events, "merge") then
+        TriggerFeedback.Finish(self, feedback, events, firstReward, "collision", contacts)
+        return false
+    end
     local posA, posB = contacts.positions[a.uid], contacts.positions[b.uid]
     local origin = (posA and posB)
         and { x = (posA.x + posB.x) * 0.5, y = (posA.y + posB.y) * 0.5 } or nil
@@ -708,6 +724,7 @@ function Game:_Merge(a, b, resultId, contacts, events)
         if origin then event.x, event.y = origin.x, origin.y end
     end
     Expansion.OnMerge(self, a, b, item, contacts, events)
+    TriggerFeedback.Finish(self, feedback, events, firstReward, "collision", contacts)
     return true
 end
 
@@ -774,6 +791,7 @@ end
 
 --- 消耗生命周期独立模块；新增消费者上下文供草、便便、果汁、保镖共用。
 Game._Destroy = Lifecycle.Destroy
+Game.RemoveItem = Removal.Remove
 
 --- 普通消耗永久移出牌库，临时消耗在回合末恢复；均记录在本回合弃牌堆。
 --- running/settle 之外拒绝。
@@ -927,8 +945,15 @@ function Game:_Resolve(contacts, events)
     for _, item in ipairs(ready) do
         if item.location == "bottle" and self:_Touches(item, contacts) then
             local firstEvent = #events + 1
+            local trigger = Items.byId[item.id].trigger
+            local contactTrigger = trigger == "touch" or trigger == "wall" or trigger == "bottom"
+                or trigger == "top" or trigger == "side"
+            local feedback = contactTrigger and TriggerFeedback.Capture(self) or nil
             Effects.Apply(self, item, contacts, events)
             RelicEffects.Maintain(self, events)
+            if feedback then
+                TriggerFeedback.Finish(self, feedback, events, firstEvent, "collision", contacts)
+            end
             if item.location == "bottle" then item.remaining = self:CooldownOf(item.id) end
             InvalidateContacts(self, contacts, events, firstEvent)
             Effects.Continuous(self, contacts, events)
@@ -937,7 +962,13 @@ function Game:_Resolve(contacts, events)
             InvalidateContacts(self, contacts, events, firstMaintain)
         end
     end
-    self:_DrainQueue(events)
+    if #self.spawnQueue > 0 then
+        -- 满瓶时延后入场的厨师产物，等真正入瓶再在生成位置显示其永久加成。
+        local feedback = TriggerFeedback.Capture(self)
+        local firstReward = #events + 1
+        self:_DrainQueue(events)
+        TriggerFeedback.Finish(self, feedback, events, firstReward, "collision", contacts)
+    end
     local firstRelic = #events + 1
     RelicEffects.Maintain(self, events)
     InvalidateContacts(self, contacts, events, firstRelic)
@@ -1067,20 +1098,23 @@ function Game:_Settle(state)
 end
 
 --- reveal 结算展示阶段推进：逐件弹出收益浮字（队列），队列播完后再停留
---- REVEAL_DELAY 秒执行考核扣款与三选一（用户要求：队列结束之后暂停两秒）。
+--- REVEAL_DELAY 秒执行考核扣款与三选一；接入飞币时从全部抵达后保留两秒。
 --- 该阶段不产金币、无物理步进，仅等待玩家看清分数。
 ---@param dt number
+---@param presentationPending? boolean 飞币/浮字仍在播放时，保留完整的末尾停留时间
 ---@return GameEvent[]
-function Game:RevealStep(dt)
+function Game:RevealStep(dt, presentationPending)
     ---@type GameEvent[]
     local events = {}
     if self.phase ~= "reveal" then return events end
     assert(IsFinite(dt) and dt >= 0, "dt 必须为非负有限数字")
     local duration = REVEAL_DELAY + Game.ScorePopTime(self._revealPopCount or 0)
-    self.revealElapsed = math.min(duration, self.revealElapsed + dt)
+    local limit = presentationPending and duration - REVEAL_DELAY or duration
+    self.revealElapsed = math.min(limit, self.revealElapsed + dt)
     if self.revealElapsed >= duration - EPSILON then
         self.revealElapsed = duration
-        self:_FinishReveal()
+        local paid = self:_FinishReveal()
+        if paid > 0 then events[#events + 1] = {kind = "deduction", uid = 0, value = paid} end
     end
     return events
 end
@@ -1088,8 +1122,11 @@ end
 --- 结算展示结束：执行考核扣款（每5回合）与三选一；余额不足则结束。
 --- 考核达标的回合标记 pendingRelicDraft：物品三选一结束后追加遗物三选一
 --- （游戏流程：考核后增加一个遗物的三选一；默认约定沿用 draft 交互，待用户确认）。
+---@return number paid 实际考核扣款额，未扣款时为0
 function Game:_FinishReveal()
-    if self.phase ~= "reveal" then return end
+    if self.phase ~= "reveal" then return 0 end
+    ---@type number
+    local paid = 0
     self._rollback = nil
     if self.round % 5 == 0 then
         local paidTarget = self.target
@@ -1097,11 +1134,13 @@ function Game:_FinishReveal()
             self.phase = "over"
             self.lastResult = self.lastResult .. string.format("，余额%g未达到考核目标%g", self.score, paidTarget)
             self.revision = self.revision + 1
-            return
+            return 0
         end
         local nextStage = self.stage + 1
         local nextTarget = Game.GetTarget(nextStage)
         self.score = self.score - paidTarget
+        self.removals = self.removals + 1
+        paid = paidTarget
         self.stage = nextStage
         self.target = nextTarget
         self.lastResult = self.lastResult .. string.format("，考核达标扣除%g，下一目标%g", paidTarget, self.target)
@@ -1111,6 +1150,7 @@ function Game:_FinishReveal()
     self.relicDraft = false
     self.options = self:_DraftOptions()
     self.revision = self.revision + 1
+    return paid
 end
 
 --- 考核当回合的物品和遗物候选均排除普通，不修改共享概率表。
@@ -1174,7 +1214,7 @@ function Game:_RelicDraftOptions()
     return options
 end
 
---- 进入遗物三选一：复用 draft 阶段与刷新/跳过交互；候选为空时直接推进回合。
+--- 进入遗物三选一：每组重置一次独立免费刷新；候选为空时直接推进回合。
 function Game:_EnterRelicDraft()
     self.pendingRelicDraft = false
     self.relicDraft = true
@@ -1323,8 +1363,13 @@ end
 
 ---@return boolean
 function Game:DraftRefresh()
-    if self.phase ~= "draft" or self.refreshes <= 0 then return false end
-    self.refreshes = self.refreshes - 1
+    if self.phase ~= "draft" then return false end
+    if self.relicDraft then
+        if self.refreshUsed then return false end
+    else
+        if self.refreshes <= 0 then return false end
+        self.refreshes = self.refreshes - 1
+    end
     Expansion.OnRefresh(self)
     self.refreshUsed = true
     -- 不排除上一组，允许刷新得到以前的 id。

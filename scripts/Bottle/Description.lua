@@ -214,12 +214,15 @@ function Description:Render(vg)
     nvgTextAlign(vg, math.floor(NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE))
     local color = self.props.fontColor --[[@as RGBAColor]]
     nvgFillColor(vg, nvgRGBA(color[1], color[2], color[3], color[4] or 255))
+    local animated=self.props.textMotionDisabled~=true
     for _, run in ipairs(self.runs) do
         local order = run.order or 1
-        local alpha, rise, age = TextMotion.Appearance(self.revealElapsed, order)
+        local alpha, rise, age = 1, 0, 1
+        if animated then alpha, rise, age = TextMotion.Appearance(self.revealElapsed, order) end
         if alpha > 0 then
             local x = l.x + run.x
-            local y = l.y + run.y + TextMotion.Offset(order, self.measuredFont) + rise * self.measuredFont * .08
+            local y = l.y + run.y
+                + (animated and (TextMotion.Offset(order, self.measuredFont) + rise * self.measuredFont * .08) or 0)
             nvgSave(vg)
             nvgGlobalAlpha(vg, alpha)
             if run.kind == "gain" then
@@ -231,7 +234,11 @@ function Description:Render(vg)
                 local fittedRadius = extent > radius and radius * radius / extent or radius
                 Art.Item(vg, run.itemId, x + run.w / 2, y + run.h / 2, fittedRadius)
             else
-                local r, g, b = TextMotion.Ink(color, age, run.tone or "text")
+                local r, g, b = color[1],color[2],color[3]
+                if animated then r,g,b=TextMotion.Ink(color, age, run.tone or "text")
+                elseif run.tone=="number" then r,g,b=139,193,109
+                elseif run.tone=="chance" then r,g,b=230,179,81
+                elseif run.tone=="multiplier" then r,g,b=100,177,206 end
                 nvgFillColor(vg, nvgRGBA(r, g, b, color[4] or 255))
                 nvgText(vg, x, y + run.h / 2, run.text)
             end
@@ -248,7 +255,7 @@ function Description:GetLinkBounds()
     self:Measure(l.w)
     local result = {}
     for _, run in ipairs(self.runs) do
-        local alpha = TextMotion.Appearance(self.revealElapsed, run.order or 1)
+        local alpha = self.props.textMotionDisabled==true and 1 or TextMotion.Appearance(self.revealElapsed, run.order or 1)
         if run.kind == "item" and alpha >= 1 then
             result[#result + 1] = {kind = run.kind, text = "", itemId = run.itemId,
                 x = l.x + run.x, y = l.y + run.y, w = run.w, h = run.h, index = run.index}

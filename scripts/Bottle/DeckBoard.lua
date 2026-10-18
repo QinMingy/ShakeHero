@@ -2,11 +2,13 @@
 -- 独立 Scene／World，只用于牌库页表现；不接入回合物理、玩法随机与存档。
 local UI = require("urhox-libs/UI")
 local Items = require("Bottle.Items")
+local Relics = require("Bottle.Relics")
 local Shapes = require("Bottle.Shapes")
 local Art = require("Bottle.Art")
 local SoftBacon = require("Bottle.SoftBacon")
 local SoftView = require("Bottle.SoftView")
 local PhysicalState = require("Bottle.PhysicalState")
+local ConsumeFlash = require("Bottle.ConsumeFlash")
 -- 碰撞设计（米）：培根 [1]-o-[2]-o-[3]-o-[4]-o-[5]，与瓶中同一5段4关节。
 -- 任意段均可撞墙/物品；弯曲后逐段拾取，所有段仍只返回一个实例 uid。
 -- 缩窄面板时整条等量平移，不只移动中心破坏关节；释放先关节后所有段。
@@ -22,6 +24,7 @@ local MAX_STEPS = 3
 local ITEM_CATEGORY = 2
 local WALL_CATEGORY = 1
 local ITEM_MASK = WALL_CATEGORY | ITEM_CATEGORY
+local RELIC_RADIUS = .27 -- 与常规牌库物品共用米制尺寸及屏幕比例。
 
 local function finite(value)
     return type(value) == "number" and value == value and math.abs(value) < math.huge
@@ -90,6 +93,7 @@ end
 ---@field source ItemInstance 实例实时引用，只读；用于沙盒已打开时同步物理倍率
 ---@field shapes CollisionShape2D[] 普通物品的全部 fixture，基准密度保持原1
 ---@field rollValue number? 骰子实际点数，仅供绘制
+---@field isRelic boolean
 ---@field radius number?
 ---@field node Node?
 ---@field body RigidBody2D?
@@ -180,7 +184,7 @@ end
 ---@param x number
 ---@param y number
 function Sim:_CreateBody(item, x, y)
-    local def = Items.byId[item.id]
+    local def = item.isRelic and {radius = RELIC_RADIUS, shape = "circle"} or Items.byId[item.id]
     local radius = def.radius * item.scale
     if item.id == "bacon" then
         local soft = SoftBacon.New(self.scene, item.uid, radius, x, y,
@@ -230,9 +234,10 @@ function Sim:_CreateBody(item, x, y)
     item.node, item.body, item.radius = node, body, radius
 end
 
----@param entries ItemInstance[]
+---@param entries table[]
+---@param isRelic boolean?
 ---@return BottleDeckSim
-function Sim.New(entries)
+function Sim.New(entries, isRelic)
     local self = setmetatable({records = {}, order = {}, wallNodes = {}}, Sim)
     self.scene = Scene()
     self.scene.updateEnabled = false
@@ -250,14 +255,21 @@ function Sim.New(entries)
     self.disposed = false
 
     for _, item in ipairs(entries) do
-        if Items.byId[item.id] then
-            local scale = PhysicalState.Clamp(item.id, "scale", item.scale)
-            local weight = PhysicalState.Clamp(item.id, "weight", item.weight)
-            local woolCount = item.woolCount or 0
+        if (isRelic and Relics.byId[item.id]) or (not isRelic and Items.byId[item.id]) then
+            local scale
+            if isRelic then
+                scale = item.scale
+                if type(scale) ~= "number" or scale ~= scale or scale <= 0 then scale = 1 end
+            else
+                scale = PhysicalState.Clamp(item.id, "scale", item.scale)
+            end
+            local woolCount = isRelic and 0 or (item.woolCount or 0)
             ---@type BottleDeckSimRecord
-            local record = {uid = item.uid, id = item.id, scale = scale, weight = weight,
-                woolCount = woolCount, woolTier = woolCount >= 5 and 5 or (woolCount >= 1 and 1 or 0),
-                source = item, shapes = {}, rollValue = item.rollValue}
+            local record = {uid = item.uid, id = item.id, scale = scale,
+                weight = isRelic and 1 or PhysicalState.Clamp(item.id, "weight", item.weight),
+                woolCount = woolCount,
+                woolTier = woolCount >= 5 and 5 or (woolCount >= 1 and 1 or 0),
+                source = item, shapes = {}, rollValue = item.rollValue, isRelic = isRelic == true}
             self.records[item.uid] = record
             self.order[#self.order + 1] = record
         end
@@ -267,7 +279,7 @@ function Sim.New(entries)
     -- 生成高度：按最大旋转包络排成若干行，整批从可见区域上方落下。
     local maxExtent = .1
     for _, record in ipairs(self.order) do
-        local def = Items.byId[record.id]
+        local def = record.isRelic and {radius = RELIC_RADIUS, shape = "circle"} or Items.byId[record.id]
         local radius = def.radius * record.scale
         local extent = record.id == "bacon" and SoftBacon.Envelope(radius)
             or Shapes.Envelope(Shapes.Variant(def.shape, record.woolCount), radius)
@@ -309,42 +321,44 @@ end
 function Sim:Sync()
     if self.disposed then return end
     for _, record in ipairs(self.order) do
-        local source = record.source
-        local scale = PhysicalState.Clamp(source.id, "scale", source.scale)
-        local weight = PhysicalState.Clamp(source.id, "weight", source.weight)
-        local woolCount = source.woolCount or 0
-        local woolTier = source.id == "sheep" and (woolCount >= 5 and 5 or (woolCount >= 1 and 1 or 0)) or 0
-        record.rollValue, record.woolCount = source.rollValue, woolCount
-        if record.node and (record.id ~= source.id or record.scale ~= scale or record.woolTier ~= woolTier) then
-            local position = record.node.position2D
-            local angle = record.node.rotation2D
-            local velocity = record.body and record.body.linearVelocity or Vector2(0, 0)
-            local angularVelocity = record.body and record.body.angularVelocity or 0
-            if record.soft then record.soft:Dispose()
-            else record.node:Remove(); record.node:Dispose() end
-            record.soft, record.node, record.body = nil, nil, nil
-            record.shapes = {}
-            record.id, record.scale, record.weight, record.woolTier = source.id, scale, weight, woolTier
-            self:_CreateBody(record, position.x, position.y)
-            if record.soft then
-                for _, segment in ipairs(record.soft.segments) do
-                    segment.body.linearVelocity = velocity
-                    segment.body.angularVelocity = angularVelocity
+        if not record.isRelic then
+            local source = record.source
+            local scale = PhysicalState.Clamp(source.id, "scale", source.scale)
+            local weight = PhysicalState.Clamp(source.id, "weight", source.weight)
+            local woolCount = source.woolCount or 0
+            local woolTier = source.id == "sheep" and (woolCount >= 5 and 5 or (woolCount >= 1 and 1 or 0)) or 0
+            record.rollValue, record.woolCount = source.rollValue, woolCount
+            if record.node and (record.id ~= source.id or record.scale ~= scale or record.woolTier ~= woolTier) then
+                local position = record.node.position2D
+                local angle = record.node.rotation2D
+                local velocity = record.body and record.body.linearVelocity or Vector2(0, 0)
+                local angularVelocity = record.body and record.body.angularVelocity or 0
+                if record.soft then record.soft:Dispose()
+                else record.node:Remove(); record.node:Dispose() end
+                record.soft, record.node, record.body = nil, nil, nil
+                record.shapes = {}
+                record.id, record.scale, record.weight, record.woolTier = source.id, scale, weight, woolTier
+                self:_CreateBody(record, position.x, position.y)
+                if record.soft then
+                    for _, segment in ipairs(record.soft.segments) do
+                        segment.body.linearVelocity = velocity
+                        segment.body.angularVelocity = angularVelocity
+                    end
+                elseif record.node and record.body then
+                    record.node.rotation2D = record.id == "ghost" and 0 or angle
+                    record.body.linearVelocity = velocity
+                    record.body.angularVelocity = record.id == "ghost" and 0 or angularVelocity
                 end
-            elseif record.node and record.body then
-                record.node.rotation2D = record.id == "ghost" and 0 or angle
-                record.body.linearVelocity = velocity
-                record.body.angularVelocity = record.id == "ghost" and 0 or angularVelocity
+            elseif record.weight ~= weight then
+                if record.soft then
+                    record.soft:SetWeight(weight)
+                else
+                    local density = weight * (record.id == "balloon" and .35 or 1)
+                    for _, fixture in ipairs(record.shapes) do fixture.density = density end
+                    if record.body then record.body.awake = true end
+                end
+                record.weight = weight
             end
-        elseif record.weight ~= weight then
-            if record.soft then
-                record.soft:SetWeight(weight)
-            else
-                local density = weight * (record.id == "balloon" and .35 or 1)
-                for _, fixture in ipairs(record.shapes) do fixture.density = density end
-                if record.body then record.body.awake = true end
-            end
-            record.weight = weight
         end
     end
 end
@@ -375,6 +389,10 @@ function Sim:ContainsPoint(uid, x, y)
     if self.disposed or not record or not record.node or not finite(x) or not finite(y) then return false end
     if record.soft then return record.soft:ContainsPoint(x, y) end
     local position = record.node.position2D
+    if record.isRelic then
+        return Art.HitRelic(record.id, x - position.x, position.y - y,
+            record.radius or .27, -record.node.rotation2D * math.pi / 180)
+    end
     return Art.HitItem(record.id, x - position.x, position.y - y,
         record.radius or .27, -record.node.rotation2D * math.pi / 180, record.woolCount)
 end
@@ -389,6 +407,21 @@ function Sim:GetPose(uid)
     if self.disposed or not record or not record.node then return 0, 0, 0, .27 end
     local position = record.node.position2D
     return position.x, position.y, record.node.rotation2D * math.pi / 180, record.radius or .27
+end
+
+-- 仅释放目标实例；其余刚体、速度、场景和生成顺序保持不变。
+---@param uid number
+---@return boolean
+function Sim:Remove(uid)
+    local record = self.records[uid]
+    if self.disposed or not record then return false end
+    if record.soft then record.soft:Dispose()
+    elseif record.node then record.node:Remove(); record.node:Dispose() end
+    self.records[uid] = nil
+    for index = #self.order, 1, -1 do
+        if self.order[index].uid == uid then table.remove(self.order, index) end
+    end
+    return true
 end
 
 function Sim:Dispose()
@@ -416,6 +449,8 @@ end
 ---@field sim BottleDeckSim
 ---@field onPick fun(uid:number)
 ---@field accumulator number
+---@field consumeFlash BottleConsumeFlash
+---@field selectedUid number 当前打开详情的牌库实例；0为未选中
 ---@overload fun(props:WidgetProps): BottleDeckBoard
 local Board = UI.Widget:Extend("BottleDeckBoard")
 
@@ -423,11 +458,28 @@ function Board:Init(props)
     self.sim = props.sim
     self.onPick = props.onPick
     self.accumulator = 0
+    self.selectedUid = 0
+    self.consumeFlash = ConsumeFlash.New()
     self.pressId = -1
     self.pressX, self.pressY = 0, 0
     self.clickMoved = false
     props.sim, props.onPick = nil, nil
     UI.Widget.Init(self, props)
+end
+
+-- 规则移除成功后调用；保留当前沙盒，只对白闪残影使用原来的物品姿态。
+---@param uid integer
+---@return boolean
+function Board:RemoveItem(uid)
+    local record = self.sim.records[uid]
+    if self.sim.disposed or not record or record.isRelic then return false end
+    local x, y, angle = self.sim:GetPose(uid)
+    self.consumeFlash:CapturePose({kind = "consume", uid = uid, id = record.id,
+        scale = record.scale, rollValue = record.rollValue, woolCount = record.woolCount},
+        x, y, angle, self.sim:GetSoftPose(uid))
+    local removed = self.sim:Remove(uid)
+    if removed and self.selectedUid == uid then self.selectedUid = 0 end
+    return removed
 end
 
 -- 世界米制坐标 → 屏幕坐标：高度铺满面板，宽度按面板宽高比同步收缩/扩张，
@@ -461,8 +513,13 @@ function Board:GetItemBounds(uid)
     end
     local px, py, angle, radius = self.sim:GetPose(uid)
     local record = self.sim.records[uid]
-    local extent = Art.ItemExtent(record and record.id or "apple", radius * ppu, -angle,
-        record and record.woolCount or nil) + 4
+    local extent
+    if record and record.isRelic then
+        extent = Art.RelicExtent(record.id, radius * ppu, -angle) + 4
+    else
+        extent = Art.ItemExtent(record and record.id or "apple", radius * ppu, -angle,
+            record and record.woolCount or nil) + 4
+    end
     return {x = x + px * ppu - extent, y = y - py * ppu - extent, w = extent * 2, h = extent * 2}
 end
 
@@ -484,6 +541,7 @@ end
 
 function Board:Update(dt)
     if self.sim.disposed then return end
+    self.consumeFlash:Update(dt)
     local layout = self:GetAbsoluteLayout()
     if layout.w <= 0 or layout.h <= 0 then return end
     -- 先按当前面板尺寸校准沙盒边界，再推进物理。
@@ -520,26 +578,48 @@ end
 function Board:OnClick(event)
     if not event or not event:IsPrimaryButton() or self.clickMoved then return end
     self.clickMoved = true
+    event:StopPropagation()
     local uid = self:PickItem(event.x, event.y)
     if uid ~= 0 and self.onPick then self.onPick(uid) end
 end
 
 function Board:Render(vg)
-    local layout = self:GetAbsoluteLayout()
+    local layout = self:GetAbsoluteLayout() --[[@as {x:number,y:number,w:number,h:number}]]
     if layout.w <= 0 or layout.h <= 0 or self.sim.disposed then return end
     local originX, originY, ppu = self:GetTransform()
     nvgSave(vg)
     nvgIntersectScissor(vg, layout.x, layout.y, layout.w, layout.h)
     for _, record in ipairs(self.sim.order) do
+        local selected = record.uid == self.selectedUid
         local poses = self.sim:GetSoftPose(record.uid)
         if poses then
+            if selected then
+                for _, pose in ipairs(poses) do
+                    Art.BaconSegmentOutline(vg, originX + pose.x * ppu, originY - pose.y * ppu, -pose.angle,
+                        pose.halfLength * ppu, pose.halfWidth * ppu, pose.u0, pose.u1, 4)
+                end
+            end
             SoftView.Draw(vg, poses, originX, originY, ppu)
         else
             local px, py, angle, radius = self.sim:GetPose(record.uid)
-            Art.Item(vg, record.id, originX + px * ppu, originY - py * ppu,
-                radius * ppu, -angle, false, record.rollValue, record.woolCount)
+            if record.isRelic then
+                if selected then
+                    Art.RelicOutline(vg, record.id, originX + px * ppu, originY - py * ppu,
+                        radius * ppu, -angle, 4)
+                end
+                Art.Relic(vg, record.id, originX + px * ppu, originY - py * ppu,
+                    radius * ppu, false, -angle)
+            else
+                if selected then
+                    Art.ItemOutline(vg, record.id, originX + px * ppu, originY - py * ppu,
+                        radius * ppu, -angle, record.rollValue, record.woolCount, 4)
+                end
+                Art.Item(vg, record.id, originX + px * ppu, originY - py * ppu,
+                    radius * ppu, -angle, false, record.rollValue, record.woolCount)
+            end
         end
     end
+    self.consumeFlash:Render(vg, originX, originY, ppu, layout)
     nvgRestore(vg)
 end
 

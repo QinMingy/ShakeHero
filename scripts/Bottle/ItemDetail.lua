@@ -2,6 +2,7 @@
 local UI = require("urhox-libs/UI")
 local Description = require("Bottle.Description")
 local Items = require("Bottle.Items")
+local Money = require("Bottle.Money")
 local Art = require("Bottle.Art")
 local C = (require("Bottle.Theme") --[[@as any]]).colors
 local Detail = {}
@@ -38,8 +39,8 @@ function Detail.Create(props)
         fontSize = 15 * s, fontColor = C.text, onInspect = props.onInspect}
     local stats = props.isRelic and UI.Panel {id = "draftRelicInfo", width = "100%",
         padding = 12 * s, backgroundColor = field, children = {
-            UI.Label {text = "遗物 · 永久生效", fontSize = 14 * s, fontColor = C.primary,
-                textMotionDisabled = true},
+            UI.Label {text = props.relicStatus or "遗物 · 永久生效", fontSize = 14 * s, fontColor = C.primary,
+                textMotionDisabled = true, width = "100%", whiteSpace = "normal"},
         }} or UI.Panel {id = prefix .. "DetailStats", width = "100%", flexDirection = "row",
             alignItems = "center", paddingHorizontal = 12 * s, paddingVertical = 8 * s,
             gap = 10 * s, backgroundColor = field,
@@ -47,7 +48,7 @@ function Detail.Create(props)
                 StatIcon {kind = "gain", width = 28 * s, height = 28 * s, pointerEvents = "none"},
                 UI.Label {text = props.valueCaption or "当前收益", fontSize = 12 * s,
                     fontColor = C.textSecondary, textMotionDisabled = true, flexGrow = 1, flexBasis = 0},
-                UI.Label {id = "goldValue", text = string.format("%g", props.gold),
+                UI.Label {id = "goldValue", text = Money.Format(props.gold),
                     fontSize = 23 * s, fontColor = C.warning, textMotionDisabled = true,
                     width = 104 * s, height = 38 * s, textAlign = "right", verticalAlign = "middle"},
             }}
@@ -78,7 +79,7 @@ function Detail.Create(props)
                 children = {
                     UI.Panel {width = "100%", flexDirection = "row", alignItems = "center", gap = 10 * s,
                         children = {
-                            UI.Label {text = "物品效果", fontSize = 12 * s, fontColor = C.primary,
+                            UI.Label {text = props.isRelic and "遗物效果" or "物品效果", fontSize = 12 * s, fontColor = C.primary,
                                 textMotionDisabled = true},
                             UI.Panel {height = s, flexGrow = 1, backgroundColor = C.secondary},
                         }},

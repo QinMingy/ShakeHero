@@ -21,12 +21,13 @@ local digits={
     [5]="afgcd",[6]="afgecd",[7]="abc",[8]="abcdefg",[9]="abfgcd",
 }
 
-function Clock.Centiseconds(phase,elapsed,settleElapsed)
-    if phase=="prepare" then return 1000 end
+function Clock.Centiseconds(phase,elapsed,settleElapsed,duration)
+    local seconds=duration or 10
+    if phase=="prepare" then return math.floor(seconds*100+.5) end
     -- 结算与结算展示阶段不显示倒计时：间隔期间由时钟红色闪动提示（用户要求）。
     if phase~="running" then return 0 end
-    -- Ceil keeps 00.00 exclusive to the actual end of the 10-second round.
-    return math.max(0,math.ceil((10-(elapsed or 0))*100-0.000001))
+    -- Ceil keeps 00.00 exclusive to the actual end, including duration relics.
+    return math.max(0,math.ceil((seconds-(elapsed or 0))*100-0.000001))
 end
 
 function Clock.Format(centis)

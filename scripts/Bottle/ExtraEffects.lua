@@ -15,6 +15,7 @@
 -- 位移（健身教练/兔子）、计数器持续加成、水果商人光环由 Game/Effects 维护。
 
 local Items = require("Bottle.Items")
+local TriggerFeedback = require("Bottle.TriggerFeedback")
 local Relics = require("Bottle.Relics")
 local RelicEffects = require("Bottle.RelicEffects")
 
@@ -465,8 +466,11 @@ function Extra.TrackDistance(game, item, events)
         local shrink = 0.1 * (2 ^ coaches)
         while item.distance >= 10 and item.scale > 1 do
             item.distance = item.distance - 10
+            local previousScale = item.scale
             item.scale = math.max(1, item.scale - shrink)
             game:ApplyScale(item, events)
+            TriggerFeedback.Reward(events, item, (item.scale - previousScale) * 100,
+                "size", "distance", game._lastPositions[item.uid])
         end
         if item.distance >= 10 and item.scale <= 1 then item.distance = 0 end
     elseif item.id == "rabbit" then
@@ -474,10 +478,16 @@ function Extra.TrackDistance(game, item, events)
             item.distance = item.distance - 10
             if Relics.Has(game, "in_groups") then
                 for _, other in ipairs(game:BottleItems()) do
-                    if other.id == "rabbit" then Permanent(game, other, events, 1) end
+                    if other.id == "rabbit" then
+                        Permanent(game, other, events, 1)
+                        TriggerFeedback.Reward(events, other, 1, "permanent", "move",
+                            game._lastPositions[other.uid])
+                    end
                 end
             else
                 Permanent(game, item, events, 1)
+                TriggerFeedback.Reward(events, item, 1, "permanent", "move",
+                    game._lastPositions[item.uid])
             end
         end
     end

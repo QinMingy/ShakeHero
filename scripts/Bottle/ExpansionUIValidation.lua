@@ -1,6 +1,7 @@
 -- 官方运行器真实main隔离UI验收入口，同时作为-validate-test脚本。
 -- 启动先mock玩家存档；建议360x780、26帧、截图第20帧，不修改现有Tests。
 -- 默认截图扩展画廊；传-expansion-ui-pig保留猪详情，-expansion-ui-relics展示九遗物徽记。
+---@type any
 local Storage = require("Bottle.Storage")
 local V = _G["V"]
 if not V then
@@ -28,7 +29,11 @@ for _, argument in ipairs(GetArguments()) do
     if argument == "-expansion-ui-relics" then relicScreenshot = true end
 end
 ---@type any
-local view, game, physics = {}, {}, {}
+local view = {}
+---@type any
+local game = {}
+---@type any
+local physics = {}
 local firstPigUid, secondPigUid, bodyguardUid, eggUid = 0, 0, 0, 0
 
 local function Check(condition, message) V.assert(condition, message) end
@@ -129,10 +134,10 @@ Guard(3,function()
     Press(view.draft,"draftRefresh")
     Check(game.refreshes==1 and not Button(view.draft,"draftRefresh"):IsDisabled(),"物品刷新成功扣1可再次刷新")
     Check(beforeKey~=view.machineSkin.draftMotionKey,"多次刷新重置候选动画生命周期")
-    game.relicDraft=true;game.options={"chef_hat","wash_hands","lucky_charm"};view:Update(true)
-    Check(Button(view.draft,"draftRefresh").props.text=="刷新 · 1 次","遗物三选一与物品共用剩余池")
+    game.relicDraft=true;game.refreshUsed=false;game.options={"chef_hat","wash_hands","lucky_charm"};view:Update(true)
+    Check(Button(view.draft,"draftRefresh").props.text=="免费刷新 · 1 次","遗物三选一独立一次免费刷新")
     Press(view.draft,"draftRefresh")
-    Check(game.refreshes==0 and Button(view.draft,"draftRefresh"):IsDisabled(),"遗物刷新耗尽共享池即禁用")
+    Check(game.refreshes==1 and Button(view.draft,"draftRefresh"):IsDisabled(),"遗物免费次数用完禁用且保留物品余额")
 end)
 
 Guard(4,function()
@@ -203,7 +208,8 @@ Guard(6,function()
     sim:Dispose();assert(ok,err)
     game.relics.wash_hands=true;game.relics.teach_all=true;game.relics.lucky_charm=true
     view:InspectDefinition("hay")
-    Check(Contains(view.definitionEffect:GetText(),"价值永久+1"),"真实定义弹窗幸运符草堆说明")
+    Check(view.definitionEffect.props.text==Items.byId.hay.effect
+        and Contains(view.definitionEffect:GetText(),"价值永久-1"),"真实定义弹窗不混入幸运符效果")
     view:CloseDefinition()
     view:OpenGm()
     local field=assert(view.modal:FindById("gmItemId")) --[[@as TextField]]
@@ -277,14 +283,17 @@ Guard(9,function()
     game.relics.premium_grass=true;game.relics.wool_market=true;game.relics.coin_rain=true
     game.phase="draft";game.relicDraft=false;game.options={"apple","tomato","sheep"}
     view.draftSelected=1;view:Update(true)
-    Check(ItemText.InitialValue(game --[[@as BottleGame]],"apple")==4 and Contains(Prose(view.draft,"draftDescription_1"),"当前价值+2"),
-        "真实食物候选价值及持有说明一致")
+    local appleProse=assert(view.draft:FindById("draftDescription_1"))
+    Check(ItemText.InitialValue(game --[[@as BottleGame]],"apple")==4 and appleProse.props.text==Items.byId.apple.effect,
+        "真实食物候选价值保留遗物加成且正文不混入遗物效果")
     view:InspectDefinition("poop")
-    Check(Contains(view.definitionEffect:GetText(),"自由飘动，可穿透物品"),"真实便便定义弹窗反映遗物穿透")
+    Check(view.definitionEffect.props.text==Items.byId.poop.effect and Items.IsPiercing("poop",game)
+        and Contains(view.definitionEffect:GetText(),"被相邻植物消耗"),"真实便便定义正文独立于遗物穿透效果")
     view:CloseDefinition()
     view:InspectDefinition("cloud")
-    Check(Contains(view.definitionEffect:GetText(),"6个临时") and not Contains(view.definitionEffect:GetText(),"水珠"),
-        "真实云定义保持额外批临时并替换硬币")
+    Check(view.definitionEffect.props.text==Items.byId.cloud.effect
+        and Contains(view.definitionEffect:GetText(),"水珠"),
+        "真实云定义保持基础水珠说明")
     view:CloseDefinition()
     game.relics.food_comfort=nil;game.relics.tomato_tycoon=nil;game.relics.ghost_poop=nil
     game.relics.premium_grass=nil;game.relics.wool_market=nil;game.relics.coin_rain=nil
@@ -387,10 +396,10 @@ Guard(13,function()
     end
     Check(NoCommon(),"第5回合物品候选不出现普通品质")
     exam:DraftRefresh();Check(NoCommon(),"第5回合物品刷新仍不出现普通品质")
-    exam.relicDraft=true;exam.options=exam:_RelicDraftOptions()
+    exam:_EnterRelicDraft()
     Check(NoCommon(),"第5回合追加遗物候选不出现普通品质")
     exam:DraftRefresh();Check(NoCommon(),"第5回合遗物刷新仍不出现普通品质")
-    Check(exam.refreshes==2,"考核两类刷新仍共享原次数池")
+    Check(exam.refreshes==3 and exam.refreshUsed,"考核遗物刷新独立免费且保留物品次数")
 end)
 
 Guard(19,function()

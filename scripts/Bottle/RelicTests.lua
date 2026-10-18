@@ -143,6 +143,90 @@ Test("原五遗物仍全部入候选、拥有后排除且33件耗尽", function(
     assert(#Relics.Available(game) == 0)
 end)
 
+Test("遗物选择一次后连点不重复领取，后续考核刷新与读档始终排除", function()
+    local snapshot = Fixture({}, 0):Snapshot()
+    snapshot.phase, snapshot.round, snapshot.stage = "draft", 5, 2
+    snapshot.target, snapshot.relicDraft = Game.GetTarget(2), true
+    snapshot.options = { "juicer" }
+    local game = Game.Restore(snapshot)
+    assert(game:Choose(1) and game.relics.juicer and game.round == 6)
+    local acquired = game:Snapshot()
+    assert(not game:Choose(1), "选择完成后的连点必须拒绝")
+    assert(Equal(acquired, game:Snapshot()), "重复点击不得改变回合、遗物、刷新次数或RNG")
+
+    snapshot = Game.Restore(acquired):Snapshot()
+    snapshot.phase, snapshot.round, snapshot.stage = "draft", 10, 3
+    snapshot.target, snapshot.relicDraft, snapshot.refreshes = Game.GetTarget(3), true, 12
+    game = Game.Restore(snapshot)
+    game.options = game:_RelicDraftOptions()
+    for remaining = 1, 0, -1 do
+        local seen = {}
+        for _, id in ipairs(game.options) do
+            assert(not game.relics[id] and not seen[id], "后续候选不能包含已拥有或组内重复遗物")
+            seen[id] = true
+        end
+        assert(#game.options == 3 and game.relics.juicer, "新考核有三个未拥有候选且保留已选遗物")
+        game = Game.Restore(game:Snapshot())
+        Close(game.refreshes, 12, "遗物免费刷新不扣物品余额")
+        assert(game.refreshUsed == (remaining == 0), "读档保留本组遗物免费次数")
+        if remaining > 0 then assert(game:DraftRefresh()) end
+    end
+end)
+
+Test("过时的已拥有遗物候选原子拒绝，读档拒绝已有或同组重复候选", function()
+    local snapshot = Fixture({}, 0):Snapshot()
+    snapshot.phase, snapshot.round, snapshot.stage = "draft", 5, 2
+    snapshot.target, snapshot.relicDraft = Game.GetTarget(2), true
+    snapshot.options = { "juicer" }
+    local game = Game.Restore(snapshot)
+    -- 模拟候选生成后所有权已变化：提交端仍须复核，不能靠候选界面防重。
+    game.relics.juicer = true
+    game.juicerValue = 17
+    local before = game:Snapshot()
+    assert(not game:Choose(1), "过时的已拥有候选不得再次领取")
+    assert(Equal(before, game:Snapshot()), "拒绝不得重置效果状态、推进回合或消耗刷新/RNG")
+
+    snapshot = before
+    assert(not pcall(Game.Restore, snapshot), "已拥有遗物不得通过存档重新成为候选")
+    snapshot.relics = {}
+    snapshot.options = { "juicer", "juicer" }
+    assert(not pcall(Game.Restore, snapshot), "存档中的同组重复遗物必须拒绝")
+end)
+
+Test("遗物只剩一两件时不重复补足，全部拥有后跳过遗物选择", function()
+    for remaining = 1, 2 do
+        local snapshot = Fixture({}, 0):Snapshot()
+        snapshot.phase, snapshot.round, snapshot.stage = "draft", 5, 2
+        snapshot.target, snapshot.pendingRelicDraft = Game.GetTarget(2), true
+        for _, def in ipairs(Relics.list) do snapshot.relics[def.id] = true end
+        snapshot.relics.juicer = nil
+        if remaining == 2 then snapshot.relics.lucky_charm = nil end
+        local game = Game.Restore(snapshot)
+        game:_EnterRelicDraft()
+        assert(game.relicDraft and #game.options == remaining, "候选不足三件时只显示实际剩余数量")
+        local seen = {}
+        for _, id in ipairs(game.options) do
+            assert(not game.relics[id] and not seen[id], "剩余候选不能用已拥有或重复遗物补足")
+            seen[id] = true
+        end
+        assert(game:Choose(1))
+        if remaining == 2 then
+            game.phase = "draft"
+            game:_EnterRelicDraft()
+            assert(#game.options == 1 and not game.relics[game.options[1]])
+            assert(game:Choose(1))
+        end
+        local round, refreshes = game.round, game.refreshes
+        local rngState = game:Snapshot().rngState
+        game.phase = "draft"
+        game:_EnterRelicDraft()
+        assert(game.phase == "prepare" and game.round == round + 1 and #game.options == 0
+            and not game.relicDraft and not game.pendingRelicDraft, "全部拥有后平稳推进回合")
+        Close(game.refreshes, refreshes)
+        assert(game:Snapshot().rngState == rngState, "空遗物池不得消耗随机状态")
+    end
+end)
+
 Test("令牌49不判定、达到50成功转化保身份与有效价值", function()
     local game = Fixture({ "gambler" })
     game.relics.gambling_token = true
@@ -758,7 +842,7 @@ Test("提前Finish同样使用最终接触倍率和半橘贴底加成", function
     Close(game.juicerValue, 12, "提前结束不能遗漏最终接触价值")
 end)
 
-Test("榨汁零值半果仍被消耗、负值与小数不擅自截断", function()
+Test("榨汁保留零负小数价值、最终金币逐笔向上取整", function()
     local game = Fixture({ "apple_half", "banana_half", "cherry_half" })
     game.relics.juicer = true
     game.juicerValue = 10
@@ -767,7 +851,7 @@ Test("榨汁零值半果仍被消耗、负值与小数不擅自截断", function
     local events = Finish(game)
     Close(game.juicerValue, 9.5, "0-2.5+2=-0.5，半樱桃只累计本体一次")
     assert(#game.discard == 3 and #game.deck == 0)
-    Close(game.lastRoundScore, 1.5, "零值0、负值-2.5、半樱桃两次4")
+    Close(game.lastRoundScore, 2, "零值0、负值-2.5取整为-2、半樱桃两次4")
     assert(#Events(events, "remove") == 3)
 end)
 

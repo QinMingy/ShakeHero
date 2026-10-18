@@ -12,6 +12,8 @@ local GameAudio = require("Bottle.Audio")
 local RelicEffects = require("Bottle.RelicEffects")
 local Relics = require("Bottle.Relics")
 local StartScreen = require("Bottle.StartScreen")
+local Tutorial = require("Bottle.Tutorial")
+local DeveloperOverlay = require("Machine.DeveloperOverlay")
 
 -- WebGPU 校验 SetScissorRect 必须落在渲染区域内：全屏 scissor 按 ceil(逻辑尺寸 × scale) 取设备像素。
 -- UI.Scale.DEFAULT 在部分窗口下（如 449×1000、DPR=3 → scale=1.875）会发生浮点往返上浮：
@@ -46,6 +48,7 @@ local game = nil
 local physics = nil
 ---@type any
 local view = nil
+---@type number
 local accumulator = 0
 local STEP = 1 / 60
 local sensorEnabled = false
@@ -54,6 +57,7 @@ local sensorSampled = false
 local sensorAx = 0
 ---@type number
 local sensorAy = 0
+---@type number
 local sensorWait = 0
 local lastSensorNotice = "off"
 local SENSOR_READY_TIMEOUT = 2 -- 秒；开启异步注册，不能把首帧空读认作永久不支持。
@@ -123,12 +127,14 @@ end
 
 local function StartRound()
     if not game or not view then return end
+    if view.tutorial and not view.tutorial:OnStartRequested() then return end
     view.modal:Hide()
     view.inventoryOpen = false
     view.deckDetailUid = 0
     view:DisposeDeckSim()
     if view.physicsButton then view.physicsButton:Show() end
     if game:Start() then
+        if view.tutorial then view.tutorial:OnStarted() end
         -- 篮筐沿用准备阶段位置；开始按钮不重新随机设施。
         accumulator = 0
         ResetSensor()
@@ -144,14 +150,18 @@ local function StartRound()
 end
 
 local function NewRun()
-    if not view or not physics then return end
+    if not view or not physics then return false end
     game = Game.New(math.floor(os.time() % 2147483646) + 1)
+    Storage.runStarted = true
+    Storage.RestartTutorial()
     accumulator = 0
     physics:Clear()
     SyncPhysics(true)
     view:Rebind(game)
+    if view.tutorial then view.tutorial:Rebind(false) end
     Save()
-    print("[对局] 新局：苹果、香蕉、小球、橘子各一件")
+    print("[对局] 新局：小羊、小草、苹果、小球各一件")
+    return true
 end
 
 local function Import(text)
@@ -164,6 +174,7 @@ local function Import(text)
     end
     if not view or not physics then return false, "游戏尚未就绪" end
     game = restored
+    Storage.runStarted = true
     Storage.SetPhysicsMode(physicsMode or 2)
     Storage.SetAtmosphere(atmosphereMode or "auto")
     physics:SetMode(Storage.physicsMode)
@@ -173,6 +184,7 @@ local function Import(text)
     -- 存档含 revision：同一份存档恢复出同一布局，保持可复现。
     SyncPhysics(true)
     view:Rebind(game)
+    if view.tutorial then view.tutorial:Rebind(true) end
     Save()
     return true, nil
 end
@@ -199,6 +211,8 @@ function Start()
     local tests = require("Bottle.Tests")
     local passed, result = pcall(tests.Run)
     if not passed then error("[规则自检] " .. tostring(result)) end
+    result = result + require("Bottle.TutorialStateTests").Run()
+        + require("Bottle.TutorialHandMotionTests").Run()
     print("[规则自检] 全部通过，共 " .. result .. " 项")
 
     local snapshot = Storage.Load()
@@ -213,23 +227,39 @@ function Start()
     view = View.New(game, physics, {
         start = StartRound,
         shake = function(dx, dy)
-            if game and physics and game.phase == "running" then physics:Shake(dx, dy) end
+            if game and physics and game.phase == "running"
+                and (not view.tutorial or view.tutorial:Allows("shake")) then physics:Shake(dx, dy) end
         end,
         reroll = function()
+            if view.tutorial and not view.tutorial:Allows("reroll") then return end
             if game and game:Reroll() then Refresh(true); print("[抽取] 本回合重抽已使用") end
         end,
         refresh = function()
+            if view.tutorial and not view.tutorial:Allows("refresh") then return end
             if game and game:DraftRefresh() then
+                if view.tutorial then view.tutorial:OnRefreshed() end
                 view:Update(true); Save(); print("[三选一] 刷新已使用")
             end
         end,
         choose = function(index)
-            if game and game:Choose(index) then Refresh(true); print("[三选一] 选择完成，当前状态：" .. game.phase .. (game.relicDraft and "（遗物）" or "")) end
+            if view.tutorial and not view.tutorial:Allows("choose") then return end
+            if game and game:Choose(index) then
+                if view.tutorial then view.tutorial:OnChosen() end
+                Refresh(true)
+                print("[三选一] 选择完成，当前状态：" .. game.phase .. (game.relicDraft and "（遗物）" or ""))
+            end
         end,
         skip = function()
+            if view.tutorial and not view.tutorial:Allows("skip") then return end
             if game and game:Skip() then Refresh(true); print("[三选一] 跳过完成，当前状态：" .. game.phase .. (game.relicDraft and "（遗物）" or "")) end
         end,
         newrun = NewRun, import = Import,
+        remove = function(uid)
+            if not game then return false, "游戏尚未就绪" end
+            local ok, message = game:RemoveItem(uid)
+            if ok then SyncPhysics(false); Save() end
+            return ok, message
+        end,
         juicer = function()
             if not game then return false, "游戏尚未就绪" end
             local ok, message = RelicEffects.UseJuicer(game)
@@ -258,6 +288,10 @@ function Start()
         end,
     })
     view.startScreen = StartScreen.New(view)
+    view.tutorial = Tutorial.New(view, {save=Save,start=StartRound})
+    view.board.isPaused = function()
+        return view.startScreen:IsActive() or view.tutorial:IsPaused()
+    end
     -- Android/iOS 原生端默认接通体感；Web/桌面仅显示触摸回退提示。
     Sensor(false)
     TextMotion.Update(0)
@@ -270,6 +304,7 @@ function Start()
             GetView = function() return view end,
             GetPhysics = function() return physics end,
             GetStartScreen = function() return view and view.startScreen or nil end,
+            GetTutorial = function() return view and view.tutorial or nil end,
             StartRound = StartRound, NewRun = NewRun,
         }
     end
@@ -289,8 +324,18 @@ function HandleUpdate(eventType, eventData)
     local dt = math.max(0, eventData:GetFloat("TimeStep"))
     if view.startScreen and view.startScreen:IsActive() then
         -- 开始页期间不推进回合、体感或物理；只保留机台动画、文字浮动与按钮反馈。
+        if view.tutorial then view.tutorial.overlay:Hide(true) end
         view:Update()
         view.startScreen:Update(dt)
+        GameAudio.Update(dt)
+        TextMotion.Update(dt)
+        ButtonMotion.Update(dt)
+        return
+    end
+    view.tutorial:Update(dt)
+    if view.tutorial:IsPaused() then
+        accumulator = 0
+        view:Update()
         GameAudio.Update(dt)
         TextMotion.Update(dt)
         ButtonMotion.Update(dt)
@@ -305,7 +350,10 @@ function HandleUpdate(eventType, eventData)
                 and ax == ax and ay == ay and math.abs(ax) < math.huge and math.abs(ay) < math.huge
             if valid then
                 if game.phase == "running" and physics.mode == 2 then
-                    physics:Sensor(-ax, ay, dt)
+                    -- Android 轴已按屏幕方向归一：只把向下的Y转为世界向上。
+                    -- SensorImpulse 负责反向惯性，不能在这里再次把两轴反转。
+                    if PlatformUtils.IsAndroid() then physics:Sensor(ax --[[@as number]], -ay, dt)
+                    else physics:Sensor(-ax, ay --[[@as number]], dt) end
                 elseif sensorSampled and game.phase == "running" then
                     -- 物理一的体感差分与冲量增益原样保留。
                     local dx, dy = ax - sensorAx, ay - sensorAy
@@ -370,7 +418,10 @@ function HandleUpdate(eventType, eventData)
     end
     if game.phase == "reveal" then
         -- 结算展示：分数弹出后停留2秒让玩家看清，不做物理步进；结束再存档并打印结算。
-        game:RevealStep(dt)
+        local revealEvents = game:RevealStep(dt, view.board:CoinPickupsBusy())
+        for _, event in ipairs(revealEvents) do
+            if event.kind == "deduction" then view:ShowDeduction(event.value or 0) end
+        end
         if game.phase ~= "reveal" then
             accumulator = 0
             view:Update(true)
@@ -387,7 +438,10 @@ end
 
 -- 统一在渲染开始前更新全屏RTT；不能等到Widget.Render里才追赶窗口尺寸。
 function HandleRenderPrepare()
-    if view and view.machineSkin then view.machineSkin.litScene.post:PrepareFrame() end
+    if view and view.machineSkin then
+        DeveloperOverlay.Sync(view)
+        view.machineSkin.litScene.post:PrepareFrame()
+    end
 end
 
 ---@param eventType string
@@ -406,14 +460,26 @@ end
 ---@param eventData KeyDownEventData
 function HandleKeyDown(eventType, eventData)
     if not game or not view then return end
+    -- Developer visibility stays available above start pages and tutorial steps.
+    if DeveloperOverlay.HandleKeyDown(view,eventData) then return end
     if view.startScreen and view.startScreen:IsActive() then
         local key = eventData:GetInt("Key")
+        if view.startScreen.newRunConfirm:IsOpen() then
+            if key == KEY_ESCAPE then view.startScreen.newRunConfirm:Close() end
+            return
+        end
         if key == KEY_SPACE or key == KEY_RETURN or key == KEY_RETURN2 then
-            view.startScreen:Close()
+            view.startScreen:Activate()
         end
         return
     end
     local key = eventData:GetInt("Key")
+    -- Required teaching steps cannot be bypassed by Space, Escape or hidden controls.
+    if view.tutorial and view.tutorial:Active() then return end
+    if key == KEY_ESCAPE and view.removalConfirm and view.removalConfirm:IsOpen() then
+        view.removalConfirm:Close()
+        return
+    end
     if key == KEY_ESCAPE and view.machineSkin and view.machineSkin.presentationMenu:IsVisible() then
         view.machineSkin.presentationMenu:Hide()
         return

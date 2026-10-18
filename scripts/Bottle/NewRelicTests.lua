@@ -399,10 +399,10 @@ Test("第5与10回合物品和追加遗物三选一及刷新全部排普通", fu
         assert(not game:Choose(1) and not game.relics.gambling_token and game.revision == revision,
             "考核Choose也须拒绝伪造普通遗物")
         game.options = validOptions
-        for _=1,3 do
-            for _,id in ipairs(game.options) do assert(Relics.byId[id].rarity > 1) end
-            assert(game:DraftRefresh())
-        end
+        local balance = game.refreshes
+        for _,id in ipairs(game.options) do assert(Relics.byId[id].rarity > 1) end
+        assert(game:DraftRefresh() and not game:DraftRefresh())
+        Close(game.refreshes,balance,"遗物免费刷新不消耗物品余额")
         for _,id in ipairs(game.options) do assert(Relics.byId[id].rarity > 1) end
         Game.Restore(game:Snapshot())
     end

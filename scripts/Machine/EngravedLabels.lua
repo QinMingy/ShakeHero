@@ -68,7 +68,7 @@ function Labels:SetText(name,text)
 end
 
 function Labels:SetRound(round)
-    self:SetText("round","回合 "..tostring(((round-1)%5)+1).."/5")
+    self:SetText("round","天数 "..tostring(((round-1)%5)+1).."/5")
 end
 
 function Labels:SetHint(text)

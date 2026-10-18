@@ -76,16 +76,16 @@ V.atFrame(120, function()
     CoreUI.Layout()
     local view = api.GetView()
     local game = api.GetGame()
-    -- 点击橘子（按 id 查找，不依赖入瓶顺序）。
-    local orange
+    -- 点击小羊（按 id 查找，不依赖入瓶顺序）。
+    local sheep
     for _, item in ipairs(game:BottleItems()) do
-        if item.id == "orange" then orange = item end
+        if item.id == "sheep" then sheep = item end
     end
-    V.assert(orange ~= nil, "初始牌库包含橘子")
-    local x, y = ItemPoint(view, orange.uid)
+    V.assert(sheep ~= nil, "初始牌库包含小羊")
+    local x, y = ItemPoint(view, sheep.uid)
     Click(x, y)
-    V.assert(view.selectedUid == orange.uid and view.detail:IsVisible(), "点击橘子高亮并打开详情")
-    V.assert(view.detailEffect:GetText():find("与瓶底接触时", 1, true) ~= nil, "详情显示对应物品的具体效果")
+    V.assert(view.selectedUid == sheep.uid and view.detail:IsVisible(), "点击小羊高亮并打开详情")
+    V.assert(view.detailEffect:GetText():find("剧烈摇晃时", 1, true) ~= nil, "详情显示对应物品的具体效果")
 end)
 
 V.atFrame(130, function()
@@ -95,7 +95,11 @@ V.atFrame(130, function()
     local view = api.GetView()
     local physics = api.GetPhysics()
     V.assert(game.phase == "prepare", "初始进入准备阶段")
-    V.assert(#game.deck == 4 and #game:BottleItems() == 4, "初始牌库为苹果香蕉小球橘子各1件")
+    V.assert(#game.deck == 4 and #game:BottleItems() == 4, "初始牌库为小羊小草苹果小球各1件")
+    local starterIds = { "sheep", "grass", "apple", "ball" }
+    for i, id in ipairs(starterIds) do
+        V.assert(game.deck[i].id == id, "初始牌库第" .. i .. "件为" .. Items.byId[id].name)
+    end
     local bottle = view.board:GetAbsoluteLayout()
     V.assert(bottle.w > 100 and bottle.h > 100, "瓶子区域有可用布局空间")
     local item = PickTestItem(view, game)
@@ -271,6 +275,9 @@ V.atFrame(330, function()
     V.assert(game.phase == "settle", "摇晃10秒后进入结算阶段")
     V.assert(game.roundScore == 0, "摇晃阶段不产金币")
     view:Update(true)
+    -- 小草可能已被小羊消耗，便便/羊毛也可能入瓶；按实际结算事件验收浮字数量。
+    local settlementItems = #game:BottleItems()
+    local settlementScores = 0
     -- 结算下落2秒：物体自然下落，随后一次性结算。
     local guard = 0
     while game.phase == "settle" do
@@ -279,6 +286,9 @@ V.atFrame(330, function()
         local dt = math.min(1 / 60, 2 - game.settleElapsed)
         physics:Step(dt)
         local events = game:SettleStep(dt, physics:Contacts())
+        for _, event in ipairs(events) do
+            if event.kind == "score" and (event.value or 0) > 0 then settlementScores = settlementScores + 1 end
+        end
         physics:RememberEvents(events)
         view.board:Effects(events)
         physics:Sync(game:BottleItems())
@@ -306,9 +316,9 @@ V.atFrame(330, function()
     end
     view:Update(true)
     V.assert(game.phase == "draft", "结算完成进入三选一")
-    V.assert(game.totalScore >= 4, "苹果香蕉小球橘子按价值结算至少得4金币")
-    V.assert(floatsSeen >= 4 and sequentialSaw, "结算浮字逐个弹出而非一次性全部出现")
-    V.assert(GameAudio.popCount >= soundBeforeReveal + 4, "逐件结算浮字播放出现音效")
+    V.assert(game.totalScore >= 6 and settlementScores >= 3, "小羊苹果小球按价值结算至少得6金币")
+    V.assert(floatsSeen >= settlementScores and sequentialSaw, "结算浮字逐个弹出而非一次性全部出现")
+    V.assert(GameAudio.popCount >= soundBeforeReveal + settlementScores, "逐件结算浮字播放出现音效")
     -- 顶部滚轮随逐件结算递增，并在队列结束时到达最终余额。
     V.assert(stagedStart ~= nil and stagedStart < game.score and stagedEnd == game.score,
         "顶部滚轮随逐件结算逐步增加并在队列结束前到位")
@@ -318,7 +328,7 @@ V.atFrame(330, function()
     -- 结算表现：物品回牌库后画布保留最终姿态残留，不再瞬间消失。
     local residueCount = 0
     for _ in pairs(view.board.residue) do residueCount = residueCount + 1 end
-    V.assert(residueCount >= 4, "结算后保留瓶中物品残留姿态")
+    V.assert(residueCount >= settlementItems, "结算后保留瓶中物品残留姿态")
     V.assert(#game.options >= 1 and #game.options <= 3, "三选一生成候选物品")
     V.assert(not view.draft:IsVisible(), "倒计时闪烁期间三选一面板暂缓显示")
     view.machineSkin.cabinet.clock:Tick(.84)

@@ -1,5 +1,6 @@
 -- 软体物品的显示、拾取与结算残留统一读取真实分段姿态。
 local Art = require("Bottle.Art")
+---@class BottleSoftView
 local SoftView = {}
 
 ---@param vg NVGContextWrapper
@@ -8,10 +9,11 @@ local SoftView = {}
 ---@param y number
 ---@param ppu number 米到UI逻辑像素
 ---@param cooling boolean?
-function SoftView.Draw(vg, poses, x, y, ppu, cooling)
+---@param whiteFlash boolean?
+function SoftView.Draw(vg, poses, x, y, ppu, cooling, whiteFlash)
     for _, pose in ipairs(poses) do
         Art.BaconSegment(vg, x + pose.x * ppu, y - pose.y * ppu, -pose.angle,
-            pose.halfLength * ppu, pose.halfWidth * ppu, pose.u0, pose.u1, cooling)
+            pose.halfLength * ppu, pose.halfWidth * ppu, pose.u0, pose.u1, cooling, whiteFlash)
     end
 end
 

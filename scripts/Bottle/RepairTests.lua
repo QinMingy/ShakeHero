@@ -317,7 +317,8 @@ Case("当前数值在新候选和定义中使用默认值而非同名实例", fu
     assert(text.Effect(game,"tomato_egg",Item(game,4)):find("当前：4",1,true))
     game.relics.scramble_recipe = true
     local eggText = text.Effect(game,"tomato_egg",Item(game,4))
-    assert(eggText:find("被消耗10次",1,true) and eggText:find("当前：4",1,true))
+    assert(eggText:find("被消耗5次",1,true) and eggText:find("当前：4",1,true),
+        "遗物不改写基础消耗次数，实例当前计数仍正确")
     game.relics.scramble_recipe = nil
     local function Equal(a,b)
         if type(a)~=type(b) then return false end

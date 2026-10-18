@@ -7,6 +7,7 @@ local Reels=require("Machine.FlatReelState")
 local LitScene=require("Machine.LitSpriteScene")
 local Clock=require("Machine.Clock")
 local Items=require("Bottle.Items")
+local Money=require("Bottle.Money")
 local ItemText=require("Bottle.ItemText")
 local ItemDetail=require("Bottle.ItemDetail")
 local RefreshUI=require("Bottle.RefreshUI")
@@ -17,8 +18,12 @@ local ButtonMotion=require("Bottle.ButtonMotion")
 local ScreenAssembly=require("Machine.ScreenAssembly")
 local PageMotion=require("Machine.PageMotion")
 local TargetProgress=require("Machine.TargetProgress")
+local TargetSwap=require("Machine.TargetSwap")
 local GameAudio=require("Bottle.Audio")
 local RelicView=require("Bottle.RelicView")
+local DeductionNote=require("Machine.DeductionNote")
+local DeveloperOverlay=require("Machine.DeveloperOverlay")
+local RulesUI=require("Bottle.RulesUI")
 ---@type any
 local Skin={}
 local ink={226,214,174,255}
@@ -168,13 +173,6 @@ local function glyph(vg,char,x,y,p,c)
         end
     end
 end
-local function numbers(vg,text,x,y,w,h,c)
-    local p=math.min(h/7,w/(#text*6-1))
-    local left=x+(w-(#text*6-1)*p)/2
-    for i=1,#text do glyph(vg,text:sub(i,i),left+(i-1)*6*p,
-        y+(h-7*p)/2,p,c) end
-end
-
 local function panel(view,kind,rect,z,frameOnly)
     local m=view.machineSkin
     local widget=UI.Widget{pointerEvents="none",zIndex=z or 1} --[[@as any]]
@@ -201,7 +199,7 @@ local function buttonStyle(button,size,s)
         pressedBoxShadow=false,disabledBoxShadow=false})
 end
 -- decor 返回 true 表示它自绘了整块底图：跳过九宫格底板，避免叠在下面露出边角。
-local function spriteButton(view,button,kind,size,decor)
+local function spriteButton(view,button,kind,size,decor,elevation)
     buttonStyle(button,size,view.machineSkin.scale)
     if button.layeredFace then return end
     button.layeredFace=true
@@ -214,7 +212,7 @@ local function spriteButton(view,button,kind,size,decor)
         local offset=pressed and 2*s or 0
         local replaces=decor and decor(b,vg,l,s,true) or false
         if not replaces then
-            view.machineSkin.sprites:Panel(vg,kind,l.x,l.y,l.w,l.h,s,nil,nil,
+            view.machineSkin.sprites:Panel(vg,kind,l.x,l.y,l.w,l.h,s,nil,elevation,
                 PageMotion.Transform(b,l,ButtonMotion.Transform(b,l,offset)))
         end
         if pressed then nvgTranslate(vg,0,offset) end
@@ -225,6 +223,27 @@ local function spriteButton(view,button,kind,size,decor)
     end
 end
 
+-- 与右侧状态牌共用页面动效；准备阶段由同位置的重抽按钮接替。
+local function phaseClock(view)
+    local clock=UI.Widget{id="phaseClock",pointerEvents="none"} --[[@as any]]
+    function clock:Render(vg)
+        local m=view.machineSkin
+        local b=self:GetAbsoluteLayout();local s=m.scale
+        m.sprites:Panel(vg,"metal",b.x,b.y,b.w,b.h,s,nil,-.23,
+            PageMotion.Transform(self,b,{cx=b.x+b.w/2,cy=b.y+b.h/2,y=0,angle=0,scale=1}))
+        if not m.clock.visible then return end
+        local text=Clock.Format(m.clock.centis)
+        local p=math.min(22*s/7,(b.w-28*s)/(#text*6-1))
+        local x=b.x+(b.w-(#text*6-1)*p)/2
+        local y=b.y+(b.h-7*p)/2
+        local color=m.clock.phase=="running" and ink or {205,103,83}
+        nvgSave(vg);nvgShapeAntiAlias(vg,0)
+        for i=1,#text do glyph(vg,text:sub(i,i),x+(i-1)*6*p,y,p,color) end
+        nvgRestore(vg)
+    end
+    return clock
+end
+
 -- 牌库入口：袋子取代木底板，文字直接写在袋身上。
 -- 纵向略微内收，避免束口顶端被按钮上沿切掉。
 local function deckButtonDecor(b,vg,l,s,probe)
@@ -233,7 +252,62 @@ local function deckButtonDecor(b,vg,l,s,probe)
     Art.DeckPlate(vg,l.x,l.y+inset,l.w,l.h-inset,b.props.disabled)
 end
 
+-- 收藏切换复用机台九宫格、受光与页面/悬停的同源变换。
+local function inventoryTabDecor(button,vg,b,s,probe)
+    if probe then return true end
+    local selected=button.inventoryTabKey==button.inventoryView.inventoryTab
+    local pressed=button.state.pressed and not button.props.disabled
+    button.inventoryView.machineSkin.sprites:Panel(vg,selected and "green" or "wood",
+        b.x,b.y,b.w,b.h,s,nil,-.12,
+        PageMotion.Transform(button,b,ButtonMotion.Transform(button,b,pressed and 2*s or 0)))
+end
+
+function Skin.AttachInventoryTabs(view)
+    local m=view.machineSkin
+    m.inventoryButtons={}
+    for _,entry in ipairs({{"items","inventoryItems",L.inventoryItems,.08},
+        {"relics","inventoryRelics",L.inventoryRelics,.14}}) do
+        local key=entry[1]
+        local button=GameAudio.Button{id=entry[2],text="",textMotionDisabled=true,
+            zIndex=9,onClick=function() view:SwitchInventoryTab(key) end} --[[@as any]]
+        button.inventoryTabKey=key;button.inventoryView=view
+        place(button,entry[3],m.scale)
+        spriteButton(view,button,"wood",18,inventoryTabDecor)
+        view.container:AddChild(button)
+        m.inventoryButtons[key]=button
+        m.pageMotion:Attach(button,"inventory-"..key,"deckpage",entry[3],"bottom",entry[4])
+    end
+end
+
+function Skin.InventoryTabs(view)
+    local m=view.machineSkin
+    if not m or not m.inventoryButtons then return end
+    local deckOpen=view.inventoryOpen and view.modal:IsVisible()
+    local changed=deckOpen and m.inventoryActive~=nil and m.inventoryActive~=view.inventoryTab
+    local resized=m.inventoryButtonsScale~=m.scale
+    local counts={items=#view.game.deck,relics=#RelicView.Entries(view.game)}
+    for _,entry in ipairs({{"items","物品",L.inventoryItems},{"relics","遗物",L.inventoryRelics}}) do
+        local key=entry[1]
+        local button=m.inventoryButtons[key]
+        if resized then
+            place(button,entry[3],m.scale)
+            buttonStyle(button,18,m.scale)
+        end
+        local text=entry[2].." · "..counts[key]
+        if button.props.text~=text then button:SetText(text) end
+        -- 只在实际切换时补一次选中回弹；持久按钮保留悬停/页面弹簧与指针门控。
+        if changed and key==view.inventoryTab and button.hoverPose then
+            local pose=button.hoverPose
+            pose.scale=.94;pose.velocity=1.8
+            pose.angularVelocity=key=="items" and -1.5 or 1.5
+        end
+    end
+    m.inventoryButtonsScale=m.scale
+    m.inventoryActive=deckOpen and view.inventoryTab or nil
+end
+
 function Skin.Apply(view,title,help,save,gm)
+    RulesUI.Attach(view,help)
     local old=view.container
     local safe=old.parent
     ---@type any
@@ -268,6 +342,7 @@ function Skin.Apply(view,title,help,save,gm)
     spriteButton(view,view.deckBackButton,"wood",18)
     view.container:AddChild(view.deckBackButton)
     m.pageMotion:Attach(view.deckBackButton,"deck-back","deckpage",L.deckBack,"bottom",.03)
+    Skin.AttachInventoryTabs(view)
     -- 左上角返回主菜单：与牌库/重抽同一套 wood 九宫格按钮风格。
     view.mainMenuButton=GameAudio.Button{id="mainMenu",text="主菜单",onClick=function()
         if view.startScreen and view.startScreen.Open then view.startScreen:Open() end
@@ -286,6 +361,12 @@ function Skin.Apply(view,title,help,save,gm)
         m.clock:Tick(dt)
         m.litScene:Tick(dt)
         TargetProgress.Update(view,dt)
+        TargetSwap.Sync(view)
+        m.targetSwap:Tick(dt)
+        m.deductionNote:Tick(dt)
+        -- UI与玩法Update的订阅次序不同也不能让换牌时的数字落后一帧。
+        view.goalLabel:SetText(Money.Format(TargetSwap.Value(view)))
+        Skin.FitNumbers(view)
         Skin.TickDraft(view,dt)
         m.pageMotion:Tick(dt)
         -- UI applies the same reference-plane movement, including inverse hit tests.
@@ -332,10 +413,9 @@ function Skin.Apply(view,title,help,save,gm)
         nvgRestore(vg)
     end
     TargetProgress.Attach(view)
-    panel(view,"wood",L.target,3)
     panel(view,"screen",L.screen,2)
     for _,w in ipairs({view.board,view.roundLabel,view.goalLabel,view.deckButton,view.footer,
-        view.detail,view.draft,view.modal,help,save,gm,view.physicsButton,view.physicsMenu}) do
+        view.detailOverlay,view.definitionModal,view.draft,view.modal,help,save,gm,view.physicsButton,view.physicsMenu}) do
         view.container:AddChild(w)
     end
     -- Hidden retained controls remain valid for Bottle.View's updates and assertions.
@@ -355,37 +435,13 @@ function Skin.Apply(view,title,help,save,gm)
     end
     panel(view,"screen",L.screen,4,true)
     ScreenAssembly.Attach(view)
-    m.meterPlate=panel(view,"metal",L.meter,5)
-    local meter=UI.Widget{pointerEvents="none",zIndex=6} --[[@as any]]
-    function meter:Render(vg)
-        local b=self:GetAbsoluteLayout();local s=m.scale
-        local remaining=view.game.phase=="prepare" and 1
-            or view.game.phase=="settle" and 0
-            or math.max(0,1-view.game.elapsed/10)
-        for i=1,12 do
-            fill(vg,b.x+(18+(i-1)*13)*s,b.y+14*s,8*s,16*s,
-                i<=math.ceil(remaining*12) and {222,197,126} or {47,62,48})
-        end
-    end
-    m.placements[#m.placements+1]={widget=meter,rect=L.meter};view.container:AddChild(meter)
-    m.meterWidget=meter
-    local clock=panel(view,"metal",L.clock,7)
-    m.clockPlate=clock
-    local clockFace=clock.Render
-    function clock:Render(vg)
-        clockFace(self,vg)
-        local b=self:GetAbsoluteLayout();local s=m.scale
-        nvgSave(vg);nvgShapeAntiAlias(vg,0)
-        if m.clock.visible then
-            numbers(vg,Clock.Format(m.clock.centis),b.x+18*s,b.y+16*s,b.w-36*s,24*s,
-                (m.clock.phase=="prepare" or m.clock.phase=="running") and ink or {205,103,83})
-        end
-        nvgRestore(vg)
-    end
+    -- 数字倒计时仅随进行中的底部状态牌显示，计时灯条不再绘制。
     view.roundLabel:SetStyle({zIndex=2})
     view.goalLabel:SetStyle({zIndex=4})
     m.targetCaption=UI.Label{text="目标",pointerEvents="none",zIndex=4,fontColor={190,160,106,255}}
     view.container:AddChild(m.targetCaption)
+    TargetSwap.Attach(view)
+    DeductionNote.Attach(view)
     view.deckButton:SetStyle({zIndex=8})
     view.footer:SetStyle({zIndex=8,pointerEvents="box-none"})
     for _,b in ipairs({help,save,gm,view.physicsButton}) do b:SetStyle({zIndex=40}) end
@@ -470,7 +526,7 @@ function Skin.Apply(view,title,help,save,gm)
         nvgFillColor(vg,nvgRGBA(0,0,0,0));nvgFill(vg)
         nvgRestore(vg)
     end
-    require("Machine.DeveloperOverlay").Attach(view,gm)
+    DeveloperOverlay.Attach(view,gm)
     print("[Machine.Layered] 402x874 / independent sprite slices / flat animated slot reels")
 end
 
@@ -493,14 +549,16 @@ function Skin.Layout(view)
         textColor=selectedInk,textShadow=false,paddingTop=8*s})
     place(view.deckBackButton,L.deckBack,s)
     view.deckBackButton:SetStyle({fontSize=18*s})
+    Skin.InventoryTabs(view)
     -- Development tools are ordinary UI, deliberately separate from the painted machine.
-    for i,b in ipairs({m.help,m.gm,m.save,view.physicsButton}) do
-        place(b,{214+(i-1)*45,24,43,32},s)
+    for i,b in ipairs({m.gm,m.save,view.physicsButton}) do
+        place(b,{213+(i-1)*45,26,43,32},s)
         b:SetStyle({fontSize=11*s,padding=0,borderWidth=1,boxShadow=false,
             backgroundColor={24,30,27,235},textColor=ink,borderColor={94,96,97,255}})
     end
+    RulesUI.Layout(view,m.help)
     view.physicsButton:SetText("物理")
-    place(m.presentationButton,{308,64,84,30},s)
+    place(m.presentationButton,{308,74,84,30},s)
     m.presentationButton:SetStyle({fontSize=11*s,padding=0,borderWidth=1,boxShadow=false,
         backgroundColor={24,30,27,235},textColor=ink,borderColor={94,96,97,255}})
     place(m.presentationPanel,{190,100,202,272},s)
@@ -536,11 +594,12 @@ function Skin.Footer(view)
         children[1]:SetStyle({pointerEvents="box-none",padding=0,gap=0})
         local buttons=children[1]:GetChildren()
         if buttons[1] then
-            place(buttons[1],L.reroll,s);spriteButton(view,buttons[1],"wood",17)
+            place(buttons[1],L.reroll,s);spriteButton(view,buttons[1],"wood",14,nil,-.23)
             m.pageMotion:Attach(buttons[1],"prepare-reroll","footer",L.reroll,"bottom",.11)
         end
         if buttons[2] then
-            place(buttons[2],L.start,s);spriteButton(view,buttons[2],"green",22)
+            -- 操作带叠在CRT下沿前方，沿用原计时铭牌的深度，避免顶边被屏框遮挡。
+            place(buttons[2],L.start,s);spriteButton(view,buttons[2],"green",18,nil,-.23)
             m.pageMotion:Attach(buttons[2],"prepare-start","footer",L.start,"bottom",.03)
         end
         if children[2] then
@@ -548,12 +607,12 @@ function Skin.Footer(view)
             labelStyle(children[2],11,s)
         end
     elseif (phase=="running" or phase=="settle" or phase=="reveal") and children[1] then
-        place(children[1],L.start,s);labelStyle(children[1],18,s)
+        place(children[1],L.start,s);labelStyle(children[1],16,s)
         if not children[1].layeredStatus then
             local render=children[1].Render
             children[1].Render=function(w,vg)
                 local b=w:GetAbsoluteLayout()
-                m.sprites:Panel(vg,"green",b.x,b.y,b.w,b.h,m.scale,nil,nil,
+                m.sprites:Panel(vg,"green",b.x,b.y,b.w,b.h,m.scale,nil,-.23,
                     PageMotion.Transform(w,b,{cx=b.x+b.w/2,cy=b.y+b.h/2,y=0,angle=0,scale=1}))
                 render(w,vg)
             end
@@ -561,9 +620,16 @@ function Skin.Footer(view)
         end
         m.pageMotion:Attach(children[1],phase=="running" and "running-status" or "settle-status",
             "footer",L.start,"bottom",.17)
+        local clock=view.footer:FindById("phaseClock")
+        if not clock then
+            clock=phaseClock(view)
+            view.footer:AddChild(clock)
+        end
+        place(clock,L.reroll,s)
+        m.pageMotion:Attach(clock,"phase-clock","footer",L.reroll,"bottom",.11)
     elseif phase=="draft" and children[1] then
-        local rect={26,778,354,60}
-        place(children[1],rect,s);spriteButton(view,children[1],"green",18)
+        local rect={26,662,354,52}
+        place(children[1],rect,s);spriteButton(view,children[1],"green",18,nil,-.23)
         m.pageMotion:Attach(children[1],"draft-show","footer",rect,"bottom",.06)
     elseif phase=="over" then
         if children[1] then place(children[1],{28,744,348,28},s);labelStyle(children[1],12,s) end
@@ -583,6 +649,7 @@ function Skin.SyncPages(view)
     local m=view.machineSkin
     if not m then return end
     local deckOpen=view.inventoryOpen and view.modal:IsVisible()
+    Skin.InventoryTabs(view)
     -- 三选一页本身处于展示状态；牌库页打开时暂时接管屏幕与底部操作区。
     local draftPage=view.game.phase=="draft" and (view.draft:IsVisible() or view.deckDraftWasOpen)
     local drafting=draftPage and not deckOpen
@@ -602,9 +669,7 @@ function Skin.SyncPages(view)
     end
     view.footer:SetVisible(not draftPage and not deckOpen)
     view.board:SetVisible(not draftPage)
-    m.clockPlate:SetVisible(not draftPage)
-    m.meterPlate:SetVisible(not draftPage)
-    m.meterWidget:SetVisible(not draftPage)
+    RelicView.SetVisible(view,not draftPage and not deckOpen and view.game.phase~="over")
     local props=view.deckButton.props
     if props.left~=deckRect[1]*m.scale or props.top~=deckRect[2]*m.scale
         or props.width~=deckRect[3]*m.scale or props.height~=deckRect[4]*m.scale then
@@ -620,9 +685,11 @@ function Skin.SetDraftOpen(view,open)
 end
 
 function Skin.FitNumbers(view)
-    local size=math.min(22,92/math.max(2,#Reels.Literal(view.game.target)))*view.machineSkin.scale
+    local size=math.min(22,92/math.max(2,#Reels.Literal(TargetSwap.Value(view))))*view.machineSkin.scale
     if view.goalLabel.props.fontSize~=size then view.goalLabel:SetStyle({fontSize=size}) end
 end
+
+function Skin.TargetValue(view) return TargetSwap.Value(view) end
 
 -- The three choices are separate trays below the CRT; the selected description
 -- and all scrollable prose occupy the same screen used by the bottle/inventory.
@@ -670,7 +737,9 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
         local itemId,_,itemDef=DraftValue(view.game,choice)
         local button=GameAudio.Button{id="draftSlot_"..index,text="",onClick=function()
             if view.inventoryOpen or view.draftSelected==index then return end
+            if view.tutorial and not view.tutorial:Allows("switch") then return end
             view.draftSelected=index;view:BuildDraft()
+            if view.tutorial then view.tutorial:OnSwitched() end
         end}
         place(button,L.draftSlots[index],s)
         local isSelected=index==selected
@@ -747,6 +816,7 @@ end
 
 function Skin.Modal(view,panel,inScreen)
     local s=view.machineSkin.scale
+    DeveloperOverlay.ApplyOpacity(view)
     view.machineSkin.modalPanel=panel
     view.machineSkin.modalInScreen=inScreen
     if inScreen then
@@ -782,10 +852,8 @@ end
 function Skin.Update(view)
     local m=view.machineSkin
     if not m then return end
+    TargetSwap.Sync(view)
     RelicView.Update(view)
-    if view.modal:IsVisible() or view.definitionModal:IsVisible() or view.physicsMenu:IsVisible() then
-        m.presentationMenu:Hide()
-    end
     if view.game.phase~="draft" then
         m.pageMotion:Clear("draft")
         clearDraftMotion(m)
@@ -793,7 +861,9 @@ function Skin.Update(view)
     if view.physicsButton.props.text~="物理" then view.physicsButton:SetText("物理") end
     -- 结算展示期间滚轮跟随逐件弹出的收益递增（board.displayScore）；
     -- 其余阶段直接显示真实余额。
-    m.reels:SetValue(view.board.displayScore or view.game.score)
+    local phase=view.game.phase
+    local showingIncome=phase=="running" or phase=="settle" or phase=="reveal"
+    m.reels:SetValue(showingIncome and view.board.displayScore or view.game.score)
     -- 转轮音：只有分数滚轮实际滚动时起循环，停稳后收尾；开始页不响。
     local reelsSpinning = m.reels:Spinning()
     if view.startScreen and view.startScreen:IsActive() then reelsSpinning = false end
@@ -810,7 +880,7 @@ function Skin.Update(view)
         end
         c.phase=view.game.phase
     end
-    c.centis=Clock.Centiseconds(view.game.phase,view.game.elapsed,view.game.settleElapsed)
+    c.centis=Clock.Centiseconds(view.game.phase,view.game.elapsed,view.game.settleElapsed,view.game:Duration())
     if view.game.phase=="draft" and view.currentPhase=="draft" and c.flashElapsed<0
         and not view.choiceHidden and not view.inventoryOpen
         and not view.draft:IsVisible() then view.draft:Show() end

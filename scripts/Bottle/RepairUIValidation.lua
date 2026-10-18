@@ -1,6 +1,7 @@
 -- 官方运行器真实main隔离验收入口；同时作为-validate-test脚本。
 -- 入口先替换Storage.Load/Save，再require main，绝不读取/写入玩家存档。
 -- 在/workspace/.repair-validation作cwd，360x780，建议14帧、截图第9帧。
+---@type any
 local Storage=require("Bottle.Storage")
 local V=_G["V"]
 if not V then

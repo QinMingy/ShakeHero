@@ -3,6 +3,7 @@ local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local RelicState = require("Bottle.RelicState")
 local PhysicalState = require("Bottle.PhysicalState")
+local Money = require("Bottle.Money")
 local GamePersistence = {}
 
 -- 与 Game 的规则常量保持一致；持久化校验不依赖可变运行状态。
@@ -30,6 +31,17 @@ function GamePersistence.Install(Game, helpers)
     local IsInteger = assert(helpers.IsInteger)
     local OwnedTypes = assert(helpers.OwnedTypes)
     local DraftEligible = assert(helpers.DraftEligible)
+
+    -- 旧结算摘要也可能包含小数金币，只迁移已知的金币金额短语。
+    ---@param prefix string
+    ---@param literal string
+    ---@param suffix string
+    ---@return string
+    local function RoundResultPhrase(prefix, literal, suffix)
+        local value = tonumber(literal)
+        if value and IsFinite(value) then return prefix .. Money.Format(value) .. suffix end
+        return prefix .. literal .. suffix
+    end
 
     -- 存档数组必须是无额外键的连续1-based数组；避免 ipairs 静默丢掉损坏数据。
     ---@param value any
@@ -110,6 +122,7 @@ function GamePersistence.Install(Game, helpers)
             lastRoundScore = self.lastRoundScore, lastResult = self.lastResult,
             drawn = Copy(self.drawn), options = Copy(self.options),
             rerollUsed = self.rerollUsed, refreshUsed = self.refreshUsed, refreshes = self.refreshes,
+            removals = self.removals,
             revision = self.revision, rngState = self._rngState, nextUid = self._nextUid,
             instances = Copy(self:AllInstances()), deck = deck, discard = discard,
             relics = Copy(self.relics), relicDraft = self.relicDraft,
@@ -148,6 +161,9 @@ function GamePersistence.Install(Game, helpers)
             refreshes = used and 0 or 1
         end
         assert(IsInteger(refreshes) and refreshes >= 0, "无效刷新次数")
+        local removals = snapshot.removals
+        if removals == nil then removals = 0 end
+        assert(IsInteger(removals) and removals >= 0, "无效移除次数")
         assert(type(snapshot.lastResult) == "string", "无效回合结果")
         local scalarNames = {
             "score", "totalScore", "roundScore", "elapsed", "target", "bestRound",
@@ -177,12 +193,19 @@ function GamePersistence.Install(Game, helpers)
         local self = setmetatable({}, Game)
         self:_Init(1) -- 只初始化字段，不抽取，不消耗随机状态。
         self.phase, self.round, self.stage = snapshot.phase, math.floor(snapshot.round), math.floor(snapshot.stage)
-        self.score, self.totalScore, self.roundScore = snapshot.score, snapshot.totalScore, snapshot.roundScore
+        -- 兼容旧档中的小数金币；仅迁移账户字段，不提前取整物品价值或倍率。
+        self.score, self.totalScore, self.roundScore = Money.Round(snapshot.score),
+            Money.Round(snapshot.totalScore), Money.Round(snapshot.roundScore)
         self.elapsed, self.target = snapshot.elapsed, snapshot.target
-        self.bestRound, self.bestRoundScore = snapshot.bestRound, snapshot.bestRoundScore
-        self.lastRoundScore, self.lastResult = snapshot.lastRoundScore, snapshot.lastResult
+        self.bestRound, self.bestRoundScore = snapshot.bestRound, Money.Round(snapshot.bestRoundScore)
+        self.lastRoundScore, self.lastResult = Money.Round(snapshot.lastRoundScore), snapshot.lastResult
+        for _, pattern in ipairs({"(获得)([%d%.eE%+%-]+)(金币)",
+            "(余额)([%d%.eE%+%-]+)(未达到)", "(扣除)([%d%.eE%+%-]+)(，)"}) do
+            self.lastResult = self.lastResult:gsub(pattern, RoundResultPhrase)
+        end
         self.rerollUsed, self.refreshUsed, self.revision = snapshot.rerollUsed, snapshot.refreshUsed, snapshot.revision
         self.refreshes = math.floor(refreshes)
+        self.removals = math.floor(removals)
         self.spawnQueue = {} -- 队列属运行态；永远不从存档导入。
         self._rngState, self._nextUid = math.floor(snapshot.rngState), math.floor(snapshot.nextUid)
         self.juicerValue, self.huntTargetUid = RelicState.ReadGame(snapshot)

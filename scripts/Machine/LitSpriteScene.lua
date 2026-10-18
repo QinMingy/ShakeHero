@@ -320,7 +320,7 @@ function SceneSkin:Quad(name,x,y,w,h,tileW,tileH,transform)
     end
     geometry:Commit();geometry:SetMaterial(material)
     geometry.castShadows=name~="screen-5" and name~="structure-noise" and name~="target-progress"
-        and not name:find("foliage",1,true)
+        and not name:find("foliage",1,true) and name:sub(1,5)~="felt-"
 end
 function SceneSkin:Finish(vg)
     local b=self.bounds

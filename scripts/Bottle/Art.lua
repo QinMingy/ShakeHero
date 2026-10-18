@@ -5,6 +5,7 @@ local Palette = require("Machine.Palette")
 local SoftBacon = require("Bottle.SoftBacon")
 local PixelCache = require("Bottle.PixelCache")
 local GainIcon = require("Bottle.GainIcon")
+local CoinIcon = require("Bottle.CoinIcon")
 local Shapes = require("Bottle.Shapes")
 -- Native NanoVG RTT has no usable compound-path stencil. Draw the identical
 -- cached sprite rectangles separately only in registered offscreen contexts.
@@ -18,6 +19,7 @@ end
 function Art.ReleaseContext(vg)
     PixelCache.Release(vg)
     GainIcon.Release(vg)
+    CoinIcon.Release(vg)
     offscreenContexts[vg]=nil
 end
 local INK = { 10, 10, 26, 255 }
@@ -31,6 +33,158 @@ local INK = { 10, 10, 26, 255 }
 ---@field height integer
 ---@field groups BottlePixelGroup[]
 ---@field mirror boolean
+
+-- 合并所有非透明颜色为逐行轮廓，首次选中时缓存；不改原图案或彩色图集。
+---@type table<BottlePixelSprite,number[]>
+local silhouettes = setmetatable({}, {__mode = "k"})
+---@param sprite BottlePixelSprite
+---@return number[]
+local function Silhouette(sprite)
+    if silhouettes[sprite] then return silhouettes[sprite] end
+    ---@type table<number,table<number,boolean>>
+    local rows = {}
+    for _, group in ipairs(sprite.groups) do
+        if (group.color[4] or 255) > 0 then
+            local rects = group.rects
+            for i = 1, #rects, 4 do
+                for y = rects[i + 1] + 1, rects[i + 1] + rects[i + 3] do
+                    rows[y] = rows[y] or {}
+                    for x = rects[i] + 1, rects[i] + rects[i + 2] do rows[y][x] = true end
+                end
+            end
+        end
+    end
+    local runs = {}
+    for y = 1, sprite.height do
+        local row = rows[y] or {}
+        local x = 1
+        while x <= sprite.width do
+            if row[x] then
+                local first = x
+                repeat x = x + 1 until x > sprite.width or not row[x]
+                runs[#runs + 1], runs[#runs + 2] = first - 1, y - 1
+                runs[#runs + 1], runs[#runs + 2] = x - first, 1
+            else x = x + 1 end
+        end
+    end
+    silhouettes[sprite] = runs
+    return runs
+end
+
+---@class BottleOutlineInterval
+---@field left number
+---@field right number
+
+---@param intervals BottleOutlineInterval[]
+---@return BottleOutlineInterval[]
+local function UnionIntervals(intervals)
+    table.sort(intervals, function(a, b) return a.left < b.left end)
+    ---@type BottleOutlineInterval[]
+    local merged = {}
+    for _, interval in ipairs(intervals) do
+        local last = merged[#merged]
+        if last and interval.left <= last.right then last.right = math.max(last.right, interval.right)
+        else merged[#merged + 1] = {left=interval.left, right=interval.right} end
+    end
+    return merged
+end
+
+---@type table<BottlePixelSprite,table<string,{sx:number,sy:number,tx:number,ty:number,rects:number[]}>>
+local outlineSlices = setmetatable({}, {__mode = "k"})
+
+-- 在局部坐标中把外扩区域减去原轮廓。只画外侧，半透明原图内部也不会被垫白。
+---@param sprite BottlePixelSprite
+---@param sx number
+---@param sy number
+---@param tx number
+---@param ty number
+---@param crop {left:number,top:number,right:number,bottom:number}?
+---@return number[]
+local function OutlineGeometry(sprite, sx, sy, tx, ty, crop)
+    local sliceKey = crop and table.concat({crop.left,crop.top,crop.right,crop.bottom}, ":") or "full"
+    local slices = outlineSlices[sprite]
+    if not slices then slices = {}; outlineSlices[sprite] = slices end
+    local cached = slices[sliceKey]
+    if cached and cached.sx == sx and cached.sy == sy and cached.tx == tx and cached.ty == ty then
+        return cached.rects
+    end
+    local runs = Silhouette(sprite)
+    ---@type {left:number,top:number,right:number,bottom:number}[]
+    local solids = {}
+    ---@type table<number,boolean>
+    local edgeSet = {}
+    for i = 1, #runs, 4 do
+        local sourceX, sourceY = runs[i] or 0, runs[i + 1] or 0
+        local sourceRight, sourceBottom = sourceX + (runs[i + 2] or 0), sourceY + (runs[i + 3] or 0)
+        local x0 = crop and math.max(crop.left, sourceX) or sourceX
+        local y0 = crop and math.max(crop.top, sourceY) or sourceY
+        local x1 = crop and math.min(crop.right, sourceRight) or sourceRight
+        local y1 = crop and math.min(crop.bottom, sourceBottom) or sourceBottom
+        if x1 > x0 and y1 > y0 then
+            local top, bottom = y0 * sy, y1 * sy
+            solids[#solids + 1] = {left=x0*sx, top=top, right=x1*sx, bottom=bottom}
+            edgeSet[top-ty], edgeSet[top], edgeSet[bottom], edgeSet[bottom+ty] = true,true,true,true
+        end
+    end
+    local edges = {}
+    for edge in pairs(edgeSet) do edges[#edges + 1] = edge end
+    table.sort(edges)
+    local rects = {}
+    for band = 1, #edges - 1 do
+        local top, bottom = edges[band], edges[band + 1]
+        local mid = (top + bottom) / 2
+        ---@type BottleOutlineInterval[], BottleOutlineInterval[]
+        local expanded, original = {}, {}
+        for _, solid in ipairs(solids) do
+            if mid >= solid.top - ty and mid < solid.bottom + ty then
+                expanded[#expanded + 1] = {left=solid.left-tx, right=solid.right+tx}
+            end
+            if mid >= solid.top and mid < solid.bottom then
+                original[#original + 1] = {left=solid.left, right=solid.right}
+            end
+        end
+        expanded, original = UnionIntervals(expanded), UnionIntervals(original)
+        local function Add(left, right)
+            if right <= left then return end
+            rects[#rects + 1], rects[#rects + 2] = left, top
+            rects[#rects + 1], rects[#rects + 2] = right-left, bottom-top
+        end
+        for _, interval in ipairs(expanded) do
+            local cursor = interval.left
+            for _, solid in ipairs(original) do
+                if solid.left >= interval.right then break end
+                if solid.right > cursor then
+                    Add(cursor, math.min(solid.left, interval.right))
+                    cursor = math.max(cursor, solid.right)
+                    if cursor >= interval.right then break end
+                end
+            end
+            Add(cursor, interval.right)
+        end
+    end
+    slices[sliceKey] = {sx=sx, sy=sy, tx=tx, ty=ty, rects=rects}
+    return rects
+end
+
+-- 逐条填充兼容无复合路径stencil的RTT；尺寸不变时复用缓存外描边几何。
+---@param vg NVGContextWrapper
+---@param sprite BottlePixelSprite
+---@param left number
+---@param top number
+---@param sx number
+---@param sy number
+---@param tx number
+---@param ty number
+---@param crop {left:number,top:number,right:number,bottom:number}? 软体段的源图裁剪范围
+local function OutlineSprite(vg, sprite, left, top, sx, sy, tx, ty, crop)
+    local rects = OutlineGeometry(sprite, sx, sy, tx, ty, crop)
+    Palette.FillItem(vg, nvgRGBA(255, 255, 255, 255))
+    for i = 1, #rects, 4 do
+        nvgBeginPath(vg)
+        nvgRect(vg, left + rects[i], top + rects[i + 1], rects[i + 2], rects[i + 3])
+        nvgFill(vg)
+    end
+end
 
 ---@param color number[]
 ---@param cooling? boolean
@@ -47,8 +201,9 @@ end
 ---@param color number[]
 ---@param cooling? boolean
 ---@param original? boolean 仅物品像素绕过UI调色
-local function Fill(vg, color, cooling, original)
-    local value = Color(color, cooling)
+---@param whiteFlash? boolean 仅本次绘制将非透明像素换成白色
+local function Fill(vg, color, cooling, original, whiteFlash)
+    local value = whiteFlash and nvgRGBA(255, 255, 255, color[4] or 255) or Color(color, cooling)
     if original then Palette.FillItem(vg, value) else nvgFillColor(vg, value) end
     nvgFill(vg)
 end
@@ -123,13 +278,15 @@ LoadExpansion(Sprite, INK, SPRITES)
 ---@param cooling? boolean
 ---@param original? boolean
 ---@param sizeY? number 可选纵向半高；省略时与 size 等比
-local function DrawSprite(vg, sprite, size, cooling, original, sizeY)
+---@param whiteFlash? boolean
+local function DrawSprite(vg, sprite, size, cooling, original, sizeY, whiteFlash)
     local pixel = size * 2 / sprite.width
     local pixelY = pixel
     if sizeY then pixelY = sizeY * 2 / sprite.height end
     local left, top = -sprite.width * pixel / 2, -sprite.height * pixelY / 2
     if sprite.mirror then nvgScale(vg, -1, 1) end
-    if original and PixelCache.Draw(vg,sprite,left,top,sprite.width*pixel,sprite.height*pixelY,cooling) then
+    -- 彩色图集不能通过乘白变成白色；白闪复用原像素轮廓，透明区域保持留空。
+    if original and not whiteFlash and PixelCache.Draw(vg,sprite,left,top,sprite.width*pixel,sprite.height*pixelY,cooling) then
         return
     end
     for _, group in ipairs(sprite.groups) do
@@ -140,7 +297,7 @@ local function DrawSprite(vg, sprite, size, cooling, original, sizeY)
                     nvgBeginPath(vg)
                     nvgRect(vg, left + rects[i] * pixel, top + rects[i + 1] * pixelY,
                         rects[i + 2] * pixel, rects[i + 3] * pixelY)
-                    Fill(vg, group.color, cooling, original)
+                    Fill(vg, group.color, cooling, original, whiteFlash)
                 end
             else
                 nvgBeginPath(vg)
@@ -148,7 +305,7 @@ local function DrawSprite(vg, sprite, size, cooling, original, sizeY)
                     nvgRect(vg, left + rects[i] * pixel, top + rects[i + 1] * pixelY,
                         rects[i + 2] * pixel, rects[i + 3] * pixelY)
                 end
-                Fill(vg, group.color, cooling, original)
+                Fill(vg, group.color, cooling, original, whiteFlash)
             end
         end
     end
@@ -213,7 +370,8 @@ end
 ---@param cooling? boolean
 ---@param rollValue? number 骰子实例点数；缺省显示1点，不使用加成后的有效价值
 ---@param woolCount? number 小羊永久羊毛库存，0/1..4/5以上三档
-function Art.Item(vg, id, x, y, r, angle, cooling, rollValue, woolCount)
+---@param whiteFlash? boolean 消耗白闪，仅影响这一次绘制
+function Art.Item(vg, id, x, y, r, angle, cooling, rollValue, woolCount, whiteFlash)
     nvgSave(vg)
     nvgShapeAntiAlias(vg, 0)
     nvgTranslate(vg, x, y)
@@ -221,7 +379,35 @@ function Art.Item(vg, id, x, y, r, angle, cooling, rollValue, woolCount)
     if id == "bacon" then nvgScale(vg, SoftBacon.LENGTH_SCALE, 1) end
     local diceValue = Art.DiceValue(id, rollValue)
     local spriteId = diceValue and (id .. "_" .. diceValue) or Shapes.Variant(id, woolCount)
-    DrawSprite(vg, SPRITES[spriteId] or SPRITES.coin_one, r, cooling, true)
+    DrawSprite(vg, SPRITES[spriteId] or SPRITES.coin_one, r, cooling, true, nil, whiteFlash)
+    nvgRestore(vg)
+end
+
+-- 选中外描边：与原图共用点数／羊毛变体、镜像和旋转，原图随后盖回轮廓内部。
+---@param vg NVGContextWrapper
+---@param id string
+---@param x number
+---@param y number
+---@param r number
+---@param angle number?
+---@param rollValue number?
+---@param woolCount number?
+---@param thickness number?
+function Art.ItemOutline(vg, id, x, y, r, angle, rollValue, woolCount, thickness)
+    local width = thickness or 4
+    if r <= 0 or width <= 0 then return end
+    local diceValue = Art.DiceValue(id, rollValue)
+    local spriteId = diceValue and (id .. "_" .. diceValue) or Shapes.Variant(id, woolCount)
+    local sprite = SPRITES[spriteId] or SPRITES.coin_one
+    local pixel = r * 2 / sprite.width
+    local stretch = id == "bacon" and SoftBacon.LENGTH_SCALE or 1
+    nvgSave(vg)
+    nvgShapeAntiAlias(vg, 0)
+    nvgTranslate(vg, x, y)
+    nvgRotate(vg, angle or 0)
+    nvgScale(vg, sprite.mirror and -stretch or stretch, 1)
+    OutlineSprite(vg, sprite, -sprite.width * pixel / 2, -sprite.height * pixel / 2,
+        pixel, pixel, width / stretch, width)
     nvgRestore(vg)
 end
 
@@ -244,7 +430,8 @@ end
 ---@param u0 number
 ---@param u1 number
 ---@param cooling? boolean
-function Art.BaconSegment(vg, x, y, angle, halfLengthPx, halfWidthPx, u0, u1, cooling)
+---@param whiteFlash? boolean
+function Art.BaconSegment(vg, x, y, angle, halfLengthPx, halfWidthPx, u0, u1, cooling, whiteFlash)
     local startU, endU = math.max(0, math.min(1, u0)), math.max(0, math.min(1, u1))
     if endU <= startU or halfLengthPx <= 0 or halfWidthPx <= 0 then return end
     local sourceLeft, sourceRight = startU * 16, endU * 16
@@ -269,11 +456,34 @@ function Art.BaconSegment(vg, x, y, angle, halfLengthPx, halfWidthPx, u0, u1, co
                     -halfWidthPx + (top - 5) * scaleY,
                     (right - left) * scaleX, (bottom - top) * scaleY)
                 hasPath = true
-                if offscreenContexts[vg] then Fill(vg, group.color, cooling, true) end
+                if offscreenContexts[vg] then Fill(vg, group.color, cooling, true, whiteFlash) end
             end
         end
-        if hasPath and not offscreenContexts[vg] then Fill(vg, group.color, cooling, true) end
+        if hasPath and not offscreenContexts[vg] then Fill(vg, group.color, cooling, true, whiteFlash) end
     end
+    nvgRestore(vg)
+end
+
+---@param vg NVGContextWrapper
+---@param x number
+---@param y number
+---@param angle number
+---@param halfLengthPx number
+---@param halfWidthPx number
+---@param u0 number
+---@param u1 number
+---@param thickness number
+function Art.BaconSegmentOutline(vg, x, y, angle, halfLengthPx, halfWidthPx, u0, u1, thickness)
+    local startU, endU = math.max(0, math.min(1, u0)), math.max(0, math.min(1, u1))
+    if endU <= startU or halfLengthPx <= 0 or halfWidthPx <= 0 or thickness <= 0 then return end
+    local sourceLeft, sourceRight = startU * 16, endU * 16
+    local sx, sy = halfLengthPx * 2 / (sourceRight - sourceLeft), halfWidthPx * 2 / 6
+    nvgSave(vg)
+    nvgShapeAntiAlias(vg, 0)
+    nvgTranslate(vg, x, y)
+    nvgRotate(vg, angle)
+    OutlineSprite(vg, SPRITES.bacon, -halfLengthPx - sourceLeft * sx, -halfWidthPx - 5 * sy,
+        sx, sy, thickness, thickness, {left=sourceLeft, top=5, right=sourceRight, bottom=11})
     nvgRestore(vg)
 end
 
@@ -312,20 +522,12 @@ function Art.Hoop(vg, x, y, halfWidth, pixel)
     nvgRestore(vg)
 end
 
--- 拾取与绘制复用同一像素图案及逆旋转；透明区域不属于物品，不改变物理碰撞体。
----@param id string
----@param dx number 相对物品中心的屏幕偏移
----@param dy number
----@param r number
----@param angle number 绘制角度（弧度）
----@return boolean
----@param woolCount? number
-function Art.HitItem(id, dx, dy, r, angle, woolCount)
+-- 拾取与绘制复用同一像素图案及逆旋转；透明区域不参与命中。
+local function HitSprite(sprite, dx, dy, r, angle, scaleX)
     if r <= 0 then return false end
-    local sprite = SPRITES[Shapes.Variant(id, woolCount)] or SPRITES.coin_one
     local cosine, sine = math.cos(angle), math.sin(angle)
     local localX, localY = dx * cosine + dy * sine, -dx * sine + dy * cosine
-    if id == "bacon" then localX = localX / SoftBacon.LENGTH_SCALE end
+    localX = localX / (scaleX or 1)
     if sprite.mirror then localX = -localX end
     local pixel = r * 2 / sprite.width
     local column = localX / pixel + sprite.width / 2
@@ -334,12 +536,21 @@ function Art.HitItem(id, dx, dy, r, angle, woolCount)
         local rects = group.rects
         for i = 1, #rects, 4 do
             if column >= rects[i] and column < rects[i] + rects[i + 2]
-                and row >= rects[i + 1] and row < rects[i + 1] + rects[i + 3] then
-                return true
-            end
+                and row >= rects[i + 1] and row < rects[i + 1] + rects[i + 3] then return true end
         end
     end
     return false
+end
+
+---@param id string
+---@param dx number 相对物品中心的屏幕偏移
+---@param dy number
+---@param r number
+---@param angle number 绘制角度（弧度）
+---@return boolean
+function Art.HitItem(id, dx, dy, r, angle, woolCount)
+    local sprite = SPRITES[Shapes.Variant(id, woolCount)] or SPRITES.coin_one
+    return HitSprite(sprite, dx, dy, r, angle, id == "bacon" and SoftBacon.LENGTH_SCALE or 1)
 end
 
 ---@param id string
@@ -595,14 +806,52 @@ RELIC_SPRITES = LoadRelics(Sprite, INK)
 ---@param y number
 ---@param size number 半宽
 ---@param cooling? boolean
-function Art.Relic(vg, id, x, y, size, cooling)
+---@param angle? number
+function Art.Relic(vg, id, x, y, size, cooling, angle)
     local sprite = RELIC_SPRITES[id]
     if not sprite then return end
     nvgSave(vg)
     nvgShapeAntiAlias(vg, 0)
     nvgTranslate(vg, x, y)
+    nvgRotate(vg, angle or 0)
     DrawSprite(vg, sprite, size, cooling, true)
     nvgRestore(vg)
+end
+
+-- 牌库遗物选中态与物品共用真实像素外扩，不画外接方框。
+---@param vg NVGContextWrapper
+---@param id string
+---@param x number
+---@param y number
+---@param size number
+---@param angle number?
+---@param thickness number?
+function Art.RelicOutline(vg, id, x, y, size, angle, thickness)
+    local sprite = RELIC_SPRITES[id]
+    local width = thickness or 4
+    if not sprite or size <= 0 or width <= 0 then return end
+    local pixel = size * 2 / sprite.width
+    nvgSave(vg)
+    nvgShapeAntiAlias(vg, 0)
+    nvgTranslate(vg, x, y)
+    nvgRotate(vg, angle or 0)
+    if sprite.mirror then nvgScale(vg, -1, 1) end
+    OutlineSprite(vg, sprite, -sprite.width * pixel / 2, -sprite.height * pixel / 2,
+        pixel, pixel, width, width)
+    nvgRestore(vg)
+end
+
+function Art.HitRelic(id, dx, dy, radius, angle)
+    local sprite = RELIC_SPRITES[id]
+    return sprite ~= nil and HitSprite(sprite, dx, dy, radius, angle)
+end
+
+function Art.RelicExtent(id, radius, angle)
+    local sprite = RELIC_SPRITES[id]
+    if not sprite then return radius end
+    local h = radius * sprite.height / sprite.width
+    local c, s = math.abs(math.cos(angle)), math.abs(math.sin(angle))
+    return math.max(radius * c + h * s, radius * s + h * c)
 end
 
 print("[Bottle.Art] 像素美术初始化完成：新表图案、像素眼睛、手托金币/冷却图标、33件遗物徽记及4.8x6.4米实验瓶。")

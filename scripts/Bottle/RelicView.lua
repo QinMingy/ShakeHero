@@ -3,12 +3,10 @@ local UI = require("urhox-libs/UI")
 local Relics = require("Bottle.Relics")
 local Items = require("Bottle.Items")
 local Art = require("Bottle.Art")
-local Description = require("Bottle.Description")
 local Audio = require("Bottle.Audio")
 local L = require("Machine.LayeredLayout")
 local RelicView = {}
 local ink = {226, 214, 174, 255}
-local muted = {133, 145, 122, 255}
 
 ---@param game BottleGame
 local function Busy(game)
@@ -43,7 +41,7 @@ local function Icon(id, size)
     local icon = UI.Widget {width = size, height = size, flexShrink = 0, pointerEvents = "none"}
     function icon:Render(vg)
         local b = self:GetAbsoluteLayout()
-        Art.Relic(vg, id, b.x + b.w / 2, b.y + b.h / 2, math.min(b.w, b.h) * .43)
+        Art.Relic(vg, id, b.x + b.w / 2, b.y + b.h / 2, math.min(b.w, b.h) * .38)
     end
     return icon
 end
@@ -60,6 +58,12 @@ function RelicView.ConfirmJuicer(view)
     if Busy(view.game) or not Relics.Has(view.game, "juicer") then return end
     local game = view.game
     local value = game.juicerValue or 0
+    local inDeck = view.inventoryOpen
+    local function Back()
+        view.modal:Hide()
+        if inDeck then view:OpenInventory("relics") end
+        RelicView.Detail(view, "juicer")
+    end
     local s = view.machineSkin.scale
     local panel = view:Modal("榨汁机 · 确认生成", true)
     panel:SetStyle({gap = 12 * s, padding = 16 * s})
@@ -82,96 +86,135 @@ function RelicView.ConfirmJuicer(view)
             local ok, message = view.actions.juicer()
             UI.Toast.Show(message or (ok and "果汁已加入牌库" or "暂时无法生成"),
                 {variant = ok and "success" or "info"})
-            if ok then RelicView.Open(view) end
+            if ok then Back() end
         end}
     confirm:SetDisabled(value <= 0)
     panel:AddChild(confirm)
     panel:AddChild(Audio.Button {id = "juicerCancel", text = "取消", height = 40 * s,
-        fontSize = 13 * s, onClick = function() RelicView.Open(view) end})
+        fontSize = 13 * s, onClick = Back})
 end
 
 ---@param view any
 ---@param id string
 function RelicView.Detail(view, id)
     if Busy(view.game) or not Relics.Has(view.game, id) then return end
-    if id == "juicer" then RelicView.ConfirmJuicer(view); return end
-    local def = assert(Relics.byId[id])
-    local s = view.machineSkin.scale
-    local panel = view:Modal(def.name, true)
-    panel:SetStyle({padding = 16 * s, gap = 12 * s})
-    panel:AddChild(Icon(id, 72 * s))
-    panel:AddChild(Label(view, Status(view.game, id)))
-    panel:AddChild(UI.ScrollView {width = "100%", flexGrow = 1, flexBasis = 0, minHeight = 0,
-        children = {Description {text = def.effect, fontSize = 13 * s,
-            onInspect = function(itemId) view:InspectDefinition(itemId) end}}})
-    panel:AddChild(Audio.Button {id = "relicBack", text = "返回遗物", height = 44 * s,
-        fontSize = 13 * s, onClick = function() RelicView.Open(view) end})
+    view:InspectRelic(id)
 end
 
----@param view any
-function RelicView.Open(view)
-    if Busy(view.game) then return end
-    view.board:ResetShake()
-    view.physicsMenu:Hide()
-    local s = view.machineSkin.scale
-    local panel = view:Modal("已拥有遗物", true)
-    panel:SetStyle({padding = 16 * s, gap = 10 * s})
-    local list = UI.ScrollView {id = "ownedRelics", width = "100%", flexGrow = 1,
-        flexBasis = 0, minHeight = 0, bounces = false, gap = 8 * s}
-    local count = 0
+function RelicView.Entries(game)
+    local entries = {}
     for _, def in ipairs(Relics.list) do
-        if Relics.Has(view.game, def.id) then
-            count = count + 1
-            local id = def.id
-            local row = UI.Panel {width = "100%", height = 70 * s, flexShrink = 0,
-                flexDirection = "row", alignItems = "center", gap = 8 * s,
-                backgroundColor = {24, 30, 27, 245}, padding = 8 * s,
-                borderWidth = 1, borderColor = {94, 96, 97, 255}}
-            row:AddChild(Icon(id, 42 * s))
-            row:AddChild(Audio.Button {id = "ownedRelic_" .. id,
-                text = def.name .. "\n" .. Status(view.game, id),
-                flexGrow = 1, flexBasis = 0, height = 54 * s, fontSize = 11 * s,
-                padding = 2 * s, textColor = ink, textAlign = "left",
-                onClick = function() RelicView.Detail(view, id) end})
-            list:AddChild(row)
+        if Relics.Has(game, def.id) then
+            entries[#entries + 1] = {uid = def.numberId, id = def.id, scale = 1}
         end
     end
-    if count == 0 then list:AddChild(Label(view, "尚未拥有遗物。每5回合考核达标后，可额外挑选一件遗物。")) end
-    panel:AddChild(list)
-    panel:AddChild(Label(view, "已拥有 " .. count .. "/" .. #Relics.list .. " 件 · 点击查看详情或使用榨汁机"))
-    panel:AddChild(Audio.Button {id = "relicsClose", text = "返回游戏", height = 44 * s,
-        fontSize = 13 * s, onClick = function() view.modal:Hide() end})
+    return entries
 end
+
+-- 牌库与遗物共用中央屏、详情版式和屏外返回键。
+function RelicView.Open(view)
+    view:OpenInventory("relics")
+end
+
+RelicView.Status = Status
 
 ---@param view any
 function RelicView.Attach(view)
-    local button = Audio.Button {id = "relicsButton", text = "遗物 0", zIndex = 25,
-        textMotionDisabled = true, onClick = function() RelicView.Open(view) end}
-    view.machineSkin.relicsButton = button
-    view.container:AddChild(button)
+    local grid = UI.Panel {id = "relicGrid", flexDirection = "row", flexWrap = "wrap",
+        alignContent = "flex-start", flexShrink = 0, pointerEvents = "box-none",
+        backgroundColor = {0, 0, 0, 0}, boxShadow = false}
+    local scroll = UI.ScrollView {id = "relicGridScroll", zIndex = 8, padding = 0,
+        scrollX = false, scrollY = true, showScrollbar = true, bounces = false,
+        borderRadius = 0, backgroundColor = {0, 0, 0, 0}, boxShadow = false,
+        children = {grid}}
+    view.machineSkin.relicGrid = grid
+    view.machineSkin.relicGridScroll = scroll
+    view.machineSkin.relicSlots = {}
+    view.machineSkin.relicButtons = {}
+    view.container:AddChild(scroll)
+end
+
+-- 仅持有集合变化时重建，不因每帧数值/阶段更新丢失滚动和指针状态。
+---@param view any
+---@param owned string[]
+local function BuildGrid(view, owned)
+    local m = view.machineSkin
+    local children = m.relicGrid:GetChildren()
+    for i = #children, 1, -1 do children[i]:Destroy() end
+    m.relicGrid:ClearChildren()
+    m.relicSlots, m.relicButtons = {}, {}
+    -- 最少两行空槽，已有遗物从左至右排列；后续每次补齐一整行。
+    local count = math.max(L.relicColumns * 2, math.ceil(#owned / L.relicColumns) * L.relicColumns)
+    for i = 1, count do
+        local id = owned[i]
+        ---@type Widget
+        local slot
+        if id then
+            local button = Audio.Button {id = "relicSlot_" .. id, text = "",
+                alignItems = "center", justifyContent = "center",
+                onClick = function(_, event)
+                    if event then event:StopPropagation() end
+                    RelicView.Detail(view, id)
+                end}
+            slot = button
+            local icon = Icon(id, L.relicSlot * m.scale)
+            icon.id = "relicGridIcon"
+            -- 悬停层会重挂子控件，使用满槽绝对布局保持图案居中及统一比例。
+            icon:SetStyle({position = "absolute", left = 0, top = 0, width = "100%", height = "100%"})
+            button:AddChild(icon)
+            m.relicButtons[#m.relicButtons + 1] = button
+        else
+            slot = UI.Panel {id = "relicEmpty_" .. i, pointerEvents = "none"}
+        end
+        m.relicSlots[#m.relicSlots + 1] = slot
+        m.relicGrid:AddChild(slot)
+    end
+    m.relicGridScroll:ScrollToTop()
+    RelicView.Layout(view)
 end
 
 ---@param view any
 function RelicView.Layout(view)
-    local button = view.machineSkin.relicsButton
-    local s = view.machineSkin.scale
-    button:SetStyle(L.Style({184, 64, 116, 30}, s))
-    button:SetStyle({fontSize = 11 * s, padding = 0, borderWidth = 1,
-        boxShadow = false, backgroundColor = {24, 30, 27, 235},
-        textColor = ink, disabledTextColor = muted, borderColor = {94, 96, 97, 255}})
+    local m = view.machineSkin
+    local s = m.scale
+    m.relicGridScroll:SetStyle(L.Style(L.relicGrid, s))
+    m.relicGrid:SetStyle({width = (L.relicColumns * L.relicSlot
+        + (L.relicColumns - 1) * L.relicColumnGap) * s,
+        columnGap = L.relicColumnGap * s, rowGap = L.relicRowGap * s})
+    for _, slot in ipairs(m.relicSlots) do
+        slot:SetStyle({width = L.relicSlot * s, height = L.relicSlot * s,
+            flexGrow = 0, flexShrink = 0, padding = 0, borderRadius = 0,
+            borderWidth = 0, hoverBorderWidth = 0, pressedBorderWidth = 0,
+            backgroundColor = {0, 0, 0, 0}, hoverBackgroundColor = {0, 0, 0, 0},
+            pressedBackgroundColor = {0, 0, 0, 0}, disabledBackgroundColor = {0, 0, 0, 0},
+            boxShadow = false, hoverBoxShadow = false, pressedBoxShadow = false,
+            disabledBoxShadow = false})
+    end
+end
+
+---@param view any
+---@param visible boolean
+function RelicView.SetVisible(view, visible)
+    view.machineSkin.relicGridScroll:SetVisible(visible)
 end
 
 ---@param view any
 function RelicView.Update(view)
-    local count = 0
+    ---@type string[]
+    local owned = {}
     for _, def in ipairs(Relics.list) do
-        if Relics.Has(view.game, def.id) then count = count + 1 end
+        if Relics.Has(view.game, def.id) then owned[#owned + 1] = def.id end
     end
-    local button = view.machineSkin.relicsButton
-    local text = "遗物 " .. count
-    if Relics.Has(view.game, "juicer") then text = text .. " · " .. Number(view.game.juicerValue or 0) end
-    if button.props.text ~= text then button:SetText(text) end
-    button:SetDisabled(Busy(view.game))
+    local m = view.machineSkin
+    local key = table.concat(owned, "|")
+    if m.relicGridKey ~= key then
+        m.relicGridKey = key
+        BuildGrid(view, owned)
+    end
+    local busy = Busy(view.game)
+    for _, relicButton in ipairs(m.relicButtons) do
+        if relicButton.props.disabled ~= busy then relicButton:SetDisabled(busy) end
+    end
 end
 
 return RelicView
