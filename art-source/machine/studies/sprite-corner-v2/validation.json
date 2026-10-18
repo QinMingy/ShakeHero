@@ -1,0 +1,170 @@
+{
+  "date": "2026-10-14",
+  "kind": "static_layered_sprite_study",
+  "source_pixel_size": [
+    104,
+    84
+  ],
+  "patch_bounds": [
+    20,
+    226,
+    208,
+    168
+  ],
+  "phone_size": [
+    402,
+    874
+  ],
+  "runtime_changed": false,
+  "preview_state": "stopped",
+  "assets": [
+    {
+      "name": "button",
+      "size": [
+        24,
+        10
+      ],
+      "nontransparent_colors": 3,
+      "alpha_values": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "frame",
+      "size": [
+        20,
+        21
+      ],
+      "nontransparent_colors": 5,
+      "alpha_values": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "glass",
+      "size": [
+        19,
+        19
+      ],
+      "nontransparent_colors": 4,
+      "alpha_values": [
+        0,
+        40
+      ]
+    },
+    {
+      "name": "lamp-off",
+      "size": [
+        8,
+        8
+      ],
+      "nontransparent_colors": 2,
+      "alpha_values": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "lamp-on",
+      "size": [
+        8,
+        8
+      ],
+      "nontransparent_colors": 2,
+      "alpha_values": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "ornament",
+      "size": [
+        19,
+        19
+      ],
+      "nontransparent_colors": 2,
+      "alpha_values": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "plate",
+      "size": [
+        20,
+        21
+      ],
+      "nontransparent_colors": 3,
+      "alpha_values": [
+        0,
+        255
+      ]
+    },
+    {
+      "name": "screw",
+      "size": [
+        4,
+        4
+      ],
+      "nontransparent_colors": 5,
+      "alpha_values": [
+        0,
+        255
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "name": "A-low",
+      "lighting": "flat",
+      "changed_pixels": 14984,
+      "outside_patch": 0,
+      "protected_label_changed": 0,
+      "protected_gameplay_changed": 0
+    },
+    {
+      "name": "A-low",
+      "lighting": "lit",
+      "changed_pixels": 15208,
+      "outside_patch": 0,
+      "protected_label_changed": 0,
+      "protected_gameplay_changed": 0
+    },
+    {
+      "name": "B-medium",
+      "lighting": "flat",
+      "changed_pixels": 14984,
+      "outside_patch": 0,
+      "protected_label_changed": 0,
+      "protected_gameplay_changed": 0
+    },
+    {
+      "name": "B-medium",
+      "lighting": "lit",
+      "changed_pixels": 15208,
+      "outside_patch": 0,
+      "protected_label_changed": 0,
+      "protected_gameplay_changed": 0
+    },
+    {
+      "name": "C-high",
+      "lighting": "flat",
+      "changed_pixels": 14984,
+      "outside_patch": 0,
+      "protected_label_changed": 0,
+      "protected_gameplay_changed": 0
+    },
+    {
+      "name": "C-high",
+      "lighting": "lit",
+      "changed_pixels": 15208,
+      "outside_patch": 0,
+      "protected_label_changed": 0,
+      "protected_gameplay_changed": 0
+    }
+  ],
+  "same_hardware_alpha_across_densities": true,
+  "checks": "passed; static assets only; no live game visual verification"
+}

@@ -1,0 +1,4274 @@
+{
+  "version": "1.0.20",
+  "unity": "6000.2.6f2",
+  "date": "2026-10-14",
+  "method": "Read-only installed asset/scene/assembly analysis; serialized defaults, not live frame capture. Counts include inactive objects. Research only, not runtime assets.",
+  "files": {
+    "level0": {
+      "bytes": 2724628,
+      "sha256": "c2c8855b6bc33415ea70229ec2e0ad784fa1f4fde2fbfbcdffff527061d9d4b8"
+    },
+    "sharedassets0.assets": {
+      "bytes": 21314336,
+      "sha256": "47164b7ac0da43744605ef6d64d17204d6ca2fcf42b0875a7f3ea27f4b248344"
+    },
+    "globalgamemanagers.assets": {
+      "bytes": 1260960,
+      "sha256": "3f6e4d48d634e6b5d8323eb4fb7232d61e8fb81c4b309295706b2740e2a0ee57"
+    },
+    "Managed/Assembly-CSharp.dll": {
+      "bytes": 538112,
+      "sha256": "0d8a160384a81af5bb1fd2d21e6e808c829525dbd1ea9cb3499974f5b9df2d32"
+    }
+  },
+  "scene_counts": {
+    "GameObject": 2842,
+    "Transform": 2043,
+    "Camera": 1,
+    "MeshRenderer": 156,
+    "MeshFilter": 156,
+    "Rigidbody": 5,
+    "BoxCollider": 39,
+    "Animator": 73,
+    "RenderSettings": 1,
+    "Light": 2,
+    "Animation": 11,
+    "CapsuleCollider": 1,
+    "LightmapSettings": 1,
+    "NavMeshSettings": 1,
+    "ParticleSystem": 156,
+    "ParticleSystemRenderer": 156,
+    "SpriteRenderer": 1341,
+    "CanvasRenderer": 547,
+    "Canvas": 56,
+    "RectTransform": 799,
+    "CanvasGroup": 60,
+    "ParticleSystemForceField": 1,
+    "SpriteMask": 1,
+    "MonoBehaviour": 2414
+  },
+  "machine_renderers": {
+    "MeshRenderer": 77,
+    "SpriteRenderer": 961
+  },
+  "sprites": [
+    {
+      "key": "sharedassets0.assets:363",
+      "name": "Wood Border A",
+      "dimensions": [
+        47,
+        6
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            213,
+            213,
+            213,
+            255
+          ],
+          "pixels": 115
+        },
+        {
+          "rgba": [
+            190,
+            187,
+            187,
+            255
+          ],
+          "pixels": 70
+        },
+        {
+          "rgba": [
+            156,
+            156,
+            156,
+            255
+          ],
+          "pixels": 51
+        },
+        {
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "pixels": 46
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:380",
+      "name": "Frame C",
+      "dimensions": [
+        28,
+        28
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 12.0,
+        "y": 12.0,
+        "z": 12.0,
+        "w": 12.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "pixels": 115
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:398",
+      "name": "Frame A",
+      "dimensions": [
+        32,
+        36
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 11.0,
+        "y": 17.0,
+        "z": 8.0,
+        "w": 16.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            22,
+            23,
+            21,
+            255
+          ],
+          "pixels": 219
+        },
+        {
+          "rgba": [
+            93,
+            101,
+            85,
+            255
+          ],
+          "pixels": 77
+        },
+        {
+          "rgba": [
+            107,
+            117,
+            97,
+            255
+          ],
+          "pixels": 48
+        },
+        {
+          "rgba": [
+            67,
+            77,
+            58,
+            255
+          ],
+          "pixels": 35
+        },
+        {
+          "rgba": [
+            155,
+            165,
+            145,
+            255
+          ],
+          "pixels": 10
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:421",
+      "name": "Screw A",
+      "dimensions": [
+        4,
+        4
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            22,
+            23,
+            21,
+            255
+          ],
+          "pixels": 8
+        },
+        {
+          "rgba": [
+            67,
+            77,
+            58,
+            255
+          ],
+          "pixels": 2
+        },
+        {
+          "rgba": [
+            155,
+            165,
+            145,
+            255
+          ],
+          "pixels": 1
+        },
+        {
+          "rgba": [
+            107,
+            117,
+            97,
+            255
+          ],
+          "pixels": 1
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:454",
+      "name": "Play Button A",
+      "dimensions": [
+        17,
+        18
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            107,
+            117,
+            97,
+            255
+          ],
+          "pixels": 93
+        },
+        {
+          "rgba": [
+            22,
+            23,
+            21,
+            255
+          ],
+          "pixels": 60
+        },
+        {
+          "rgba": [
+            67,
+            77,
+            58,
+            255
+          ],
+          "pixels": 21
+        },
+        {
+          "rgba": [
+            155,
+            165,
+            145,
+            255
+          ],
+          "pixels": 5
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:594",
+      "name": "Single Pixel Frame A",
+      "dimensions": [
+        8,
+        8
+      ],
+      "ppu": 28.0,
+      "border": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 1.0,
+        "w": 1.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "pixels": 28
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:599",
+      "name": "Surface A",
+      "dimensions": [
+        28,
+        28
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 12.0,
+        "y": 12.0,
+        "z": 12.0,
+        "w": 12.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            92,
+            97,
+            84,
+            255
+          ],
+          "pixels": 664
+        },
+        {
+          "rgba": [
+            84,
+            89,
+            76,
+            255
+          ],
+          "pixels": 115
+        },
+        {
+          "rgba": [
+            98,
+            104,
+            86,
+            255
+          ],
+          "pixels": 5
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:640",
+      "name": "Frame Border Straight A",
+      "dimensions": [
+        13,
+        4
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            22,
+            23,
+            21,
+            255
+          ],
+          "pixels": 26
+        },
+        {
+          "rgba": [
+            67,
+            77,
+            58,
+            255
+          ],
+          "pixels": 13
+        },
+        {
+          "rgba": [
+            93,
+            101,
+            85,
+            255
+          ],
+          "pixels": 11
+        },
+        {
+          "rgba": [
+            107,
+            117,
+            97,
+            255
+          ],
+          "pixels": 2
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:665",
+      "name": "Surface C",
+      "dimensions": [
+        28,
+        28
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 12.0,
+        "y": 13.0,
+        "z": 12.0,
+        "w": 12.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "pixels": 658
+        },
+        {
+          "rgba": [
+            240,
+            240,
+            240,
+            255
+          ],
+          "pixels": 113
+        },
+        {
+          "rgba": [
+            247,
+            247,
+            247,
+            255
+          ],
+          "pixels": 13
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:718",
+      "name": "Table Surface Scratch A",
+      "dimensions": [
+        36,
+        6
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            241,
+            241,
+            241,
+            255
+          ],
+          "pixels": 51
+        },
+        {
+          "rgba": [
+            223,
+            221,
+            221,
+            255
+          ],
+          "pixels": 30
+        },
+        {
+          "rgba": [
+            214,
+            212,
+            212,
+            255
+          ],
+          "pixels": 24
+        },
+        {
+          "rgba": [
+            253,
+            253,
+            253,
+            255
+          ],
+          "pixels": 15
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:720",
+      "name": "Frame B",
+      "dimensions": [
+        29,
+        37
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 5.0,
+        "y": 7.0,
+        "z": 5.0,
+        "w": 5.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            22,
+            23,
+            21,
+            255
+          ],
+          "pixels": 205
+        },
+        {
+          "rgba": [
+            93,
+            101,
+            85,
+            255
+          ],
+          "pixels": 99
+        },
+        {
+          "rgba": [
+            107,
+            117,
+            97,
+            255
+          ],
+          "pixels": 41
+        },
+        {
+          "rgba": [
+            67,
+            77,
+            58,
+            255
+          ],
+          "pixels": 19
+        },
+        {
+          "rgba": [
+            155,
+            165,
+            145,
+            255
+          ],
+          "pixels": 7
+        }
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:792",
+      "name": "Flower Ornaments Frame Single White A",
+      "dimensions": [
+        8,
+        8
+      ],
+      "ppu": 30.0,
+      "border": {
+        "x": 3.0,
+        "y": 3.0,
+        "z": 3.0,
+        "w": 3.0
+      },
+      "opaque_colors": [
+        {
+          "rgba": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "pixels": 28
+        }
+      ]
+    }
+  ],
+  "sample_layers": [
+    {
+      "key": "level0:5678",
+      "type": "SpriteRenderer",
+      "path": "LEVEL/MACHINE PARTS/HEALTH DISPLAY/Frame A",
+      "go": "level0:73",
+      "active": true,
+      "enabled": true,
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 73
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.19840000569820404,
+          "y": 1.3428000211715698,
+          "z": -0.019999999552965164
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 3019
+        }
+      },
+      "materials": [
+        "Sprite With Depth"
+      ],
+      "castShadows": 1,
+      "receiveShadows": 1,
+      "sortOrder": 0,
+      "sprite": {
+        "key": "sharedassets0.assets:398",
+        "type": "Sprite",
+        "name": "Frame A"
+      },
+      "rect": {
+        "x": 73.0,
+        "y": 4.0,
+        "width": 32.0,
+        "height": 36.0
+      },
+      "ppu": 30.0,
+      "color": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0,
+        "a": 1.0
+      },
+      "drawMode": 1,
+      "size": {
+        "x": 1.0942740440368652,
+        "y": 4.483569145202637
+      }
+    },
+    {
+      "key": "level0:5761",
+      "type": "SpriteRenderer",
+      "path": "LEVEL/MACHINE PARTS/HEALTH DISPLAY/Ornate Frame",
+      "go": "level0:261",
+      "active": true,
+      "enabled": true,
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 261
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": -0.23319999873638153,
+          "y": 3.4828999042510986,
+          "z": 0.024000000208616257
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 3019
+        }
+      },
+      "materials": [
+        "Sprite With Depth"
+      ],
+      "castShadows": 0,
+      "receiveShadows": 0,
+      "sortOrder": 0,
+      "sprite": {
+        "key": "sharedassets0.assets:380",
+        "type": "Sprite",
+        "name": "Frame C"
+      },
+      "rect": {
+        "x": 28.0,
+        "y": 18.0,
+        "width": 28.0,
+        "height": 28.0
+      },
+      "ppu": 30.0,
+      "color": {
+        "r": 0.3504805862903595,
+        "g": 0.4150943160057068,
+        "b": 0.3516841530799866,
+        "a": 1.0
+      },
+      "drawMode": 2,
+      "size": {
+        "x": 0.8992845416069031,
+        "y": 4.268089771270752
+      }
+    },
+    {
+      "key": "level0:5959",
+      "type": "SpriteRenderer",
+      "path": "LEVEL/MACHINE PARTS/HEALTH DISPLAY/Surface A",
+      "go": "level0:678",
+      "active": true,
+      "enabled": true,
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 678
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": -0.23000000417232513,
+          "y": 3.4814000129699707,
+          "z": 0.029999999329447746
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 3019
+        }
+      },
+      "materials": [
+        "Sprite With Depth"
+      ],
+      "castShadows": 1,
+      "receiveShadows": 1,
+      "sortOrder": 0,
+      "sprite": {
+        "key": "sharedassets0.assets:523",
+        "type": "Sprite",
+        "name": "Surface A No Detail Colored"
+      },
+      "rect": {
+        "x": 10.0,
+        "y": 81.0,
+        "width": 3.0,
+        "height": 3.0
+      },
+      "ppu": 30.0,
+      "color": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0,
+        "a": 1.0
+      },
+      "drawMode": 2,
+      "size": {
+        "x": 0.8892269134521484,
+        "y": 4.289340019226074
+      }
+    },
+    {
+      "key": "level0:5974",
+      "type": "SpriteRenderer",
+      "path": "LEVEL/MACHINE PARTS/HEALTH DISPLAY/Screw",
+      "go": "level0:713",
+      "active": true,
+      "enabled": true,
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 713
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": 0.5550000071525574,
+          "y": 3.380000114440918,
+          "z": 0.017799999564886093
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 3019
+        }
+      },
+      "materials": [
+        "Sprite With Depth"
+      ],
+      "castShadows": 1,
+      "receiveShadows": 1,
+      "sortOrder": 0,
+      "sprite": {
+        "key": "sharedassets0.assets:570",
+        "type": "Sprite",
+        "name": "Screw D"
+      },
+      "rect": {
+        "x": 139.0,
+        "y": 21.0,
+        "width": 5.0,
+        "height": 5.0
+      },
+      "ppu": 30.0,
+      "color": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0,
+        "a": 1.0
+      },
+      "drawMode": 0,
+      "size": {
+        "x": 8.170000076293945,
+        "y": 2.049999952316284
+      }
+    },
+    {
+      "key": "level0:6127",
+      "type": "SpriteRenderer",
+      "path": "LEVEL/MACHINE PARTS/HEALTH DISPLAY/Screw (2)",
+      "go": "level0:1060",
+      "active": true,
+      "enabled": true,
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 1060
+        },
+        "m_LocalRotation": {
+          "x": -0.0,
+          "y": -0.0,
+          "z": -0.0,
+          "w": 1.0
+        },
+        "m_LocalPosition": {
+          "x": -0.13600000739097595,
+          "y": 3.3489999771118164,
+          "z": 0.017799999564886093
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 3019
+        }
+      },
+      "materials": [
+        "Sprite With Depth"
+      ],
+      "castShadows": 1,
+      "receiveShadows": 1,
+      "sortOrder": 0,
+      "sprite": {
+        "key": "sharedassets0.assets:570",
+        "type": "Sprite",
+        "name": "Screw D"
+      },
+      "rect": {
+        "x": 139.0,
+        "y": 21.0,
+        "width": 5.0,
+        "height": 5.0
+      },
+      "ppu": 30.0,
+      "color": {
+        "r": 1.0,
+        "g": 1.0,
+        "b": 1.0,
+        "a": 1.0
+      },
+      "drawMode": 0,
+      "size": {
+        "x": 8.170000076293945,
+        "y": 2.049999952316284
+      }
+    }
+  ],
+  "camera": [
+    {
+      "key": "level0:4886",
+      "path": "VISUALS/CAMERAS/Main Camera",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 171
+        },
+        "m_Enabled": 1,
+        "m_ClearFlags": 2,
+        "m_BackGroundColor": {
+          "r": 0.6235294342041016,
+          "g": 0.6901960968971252,
+          "b": 0.6196078658103943,
+          "a": 0.0
+        },
+        "m_projectionMatrixMode": 1,
+        "m_GateFitMode": 2,
+        "m_Iso": 200,
+        "m_ShutterSpeed": 0.004999999888241291,
+        "m_Aperture": 16.0,
+        "m_FocusDistance": 10.0,
+        "m_FocalLength": 50.0,
+        "m_BladeCount": 5,
+        "m_Curvature": {
+          "x": 2.0,
+          "y": 11.0
+        },
+        "m_BarrelClipping": 0.25,
+        "m_Anamorphism": 0.0,
+        "m_SensorSize": {
+          "x": 36.0,
+          "y": 24.0
+        },
+        "m_LensShift": {
+          "x": 0.0,
+          "y": 0.0
+        },
+        "m_NormalizedViewPortRect": {
+          "x": 0.0,
+          "y": 0.0,
+          "width": 1.0,
+          "height": 1.0
+        },
+        "near clip plane": 0.10000000149011612,
+        "far clip plane": 5000.0,
+        "field of view": 38.0,
+        "orthographic": false,
+        "orthographic size": 10.0,
+        "m_Depth": 1.0,
+        "m_CullingMask": {
+          "m_Bits": 515703287
+        },
+        "m_RenderingPath": -1,
+        "m_TargetTexture": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_TargetDisplay": 0,
+        "m_TargetEye": 3,
+        "m_HDR": true,
+        "m_AllowMSAA": true,
+        "m_AllowDynamicResolution": false,
+        "m_ForceIntoRT": false,
+        "m_OcclusionCulling": true,
+        "m_StereoConvergence": 10.0,
+        "m_StereoSeparation": 0.02199999988079071
+      },
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 171
+        },
+        "m_LocalRotation": {
+          "x": -0.017452450469136238,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.9998477697372437
+        },
+        "m_LocalPosition": {
+          "x": -29.739999771118164,
+          "y": -0.5536946654319763,
+          "z": -18.09208106994629
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [
+          {
+            "m_FileID": 0,
+            "m_PathID": 3573
+          }
+        ],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 2946
+        }
+      }
+    }
+  ],
+  "lights": [
+    {
+      "key": "level0:5317",
+      "path": "VISUALS/LIGHTS/Direction Light Follow Player/Directional Light Orbit Parent/Directional Light Sun Encounter Scene",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 216
+        },
+        "m_Enabled": 1,
+        "m_Type": 1,
+        "m_Color": {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 1.0
+        },
+        "m_Intensity": 2.0,
+        "m_Range": 10.0,
+        "m_SpotAngle": 30.0,
+        "m_InnerSpotAngle": 21.802080154418945,
+        "m_CookieSize": 10.0,
+        "m_Shadows": {
+          "m_Type": 0,
+          "m_Resolution": -1,
+          "m_CustomResolution": -1,
+          "m_Strength": 1.0,
+          "m_Bias": 0.0,
+          "m_NormalBias": 0.0,
+          "m_NearPlane": 1.0,
+          "m_CullingMatrixOverride": {
+            "e00": 1.0,
+            "e01": 0.0,
+            "e02": 0.0,
+            "e03": 0.0,
+            "e10": 0.0,
+            "e11": 1.0,
+            "e12": 0.0,
+            "e13": 0.0,
+            "e20": 0.0,
+            "e21": 0.0,
+            "e22": 1.0,
+            "e23": 0.0,
+            "e30": 0.0,
+            "e31": 0.0,
+            "e32": 0.0,
+            "e33": 1.0
+          },
+          "m_UseCullingMatrixOverride": false
+        },
+        "m_Cookie": {
+          "m_FileID": 3,
+          "m_PathID": 144
+        },
+        "m_DrawHalo": false,
+        "m_BakingOutput": {
+          "probeOcclusionLightIndex": -1,
+          "occlusionMaskChannel": -1,
+          "lightmapBakeMode": {
+            "lightmapBakeType": 4,
+            "mixedLightingMode": 2
+          },
+          "isBaked": false
+        },
+        "m_Flare": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_RenderMode": 1,
+        "m_CullingMask": {
+          "m_Bits": 4294967295
+        },
+        "m_RenderingLayerMask": 2,
+        "m_Lightmapping": 4,
+        "m_LightShadowCasterMode": 0,
+        "m_AreaSize": {
+          "x": 1.0,
+          "y": 1.0
+        },
+        "m_BounceIntensity": 1.0,
+        "m_ColorTemperature": 5000.0,
+        "m_UseColorTemperature": false,
+        "m_BoundingSphereOverride": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.0
+        },
+        "m_UseBoundingSphereOverride": false,
+        "m_UseViewFrustumForShadowCasterCull": true,
+        "m_ForceVisible": false,
+        "m_LightUnit": 1,
+        "m_LuxAtDistance": 1.0,
+        "m_EnableSpotReflector": true
+      },
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 216
+        },
+        "m_LocalRotation": {
+          "x": 0.268722802400589,
+          "y": 0.26334577798843384,
+          "z": -0.648493766784668,
+          "w": 0.6617347598075867
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 3265
+        }
+      }
+    },
+    {
+      "key": "level0:5318",
+      "path": "VISUALS/LIGHTS/Direction Light Follow Player/Directional Light Orbit Parent/Directional Light Sun Machine",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 583
+        },
+        "m_Enabled": 1,
+        "m_Type": 1,
+        "m_Color": {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 1.0
+        },
+        "m_Intensity": 2.200000047683716,
+        "m_Range": 10.0,
+        "m_SpotAngle": 30.0,
+        "m_InnerSpotAngle": 21.802080154418945,
+        "m_CookieSize": 10.0,
+        "m_Shadows": {
+          "m_Type": 1,
+          "m_Resolution": -1,
+          "m_CustomResolution": -1,
+          "m_Strength": 1.0,
+          "m_Bias": 0.0,
+          "m_NormalBias": 0.0,
+          "m_NearPlane": 1.0,
+          "m_CullingMatrixOverride": {
+            "e00": 1.0,
+            "e01": 0.0,
+            "e02": 0.0,
+            "e03": 0.0,
+            "e10": 0.0,
+            "e11": 1.0,
+            "e12": 0.0,
+            "e13": 0.0,
+            "e20": 0.0,
+            "e21": 0.0,
+            "e22": 1.0,
+            "e23": 0.0,
+            "e30": 0.0,
+            "e31": 0.0,
+            "e32": 0.0,
+            "e33": 1.0
+          },
+          "m_UseCullingMatrixOverride": false
+        },
+        "m_Cookie": {
+          "m_FileID": 3,
+          "m_PathID": 144
+        },
+        "m_DrawHalo": false,
+        "m_BakingOutput": {
+          "probeOcclusionLightIndex": -1,
+          "occlusionMaskChannel": -1,
+          "lightmapBakeMode": {
+            "lightmapBakeType": 4,
+            "mixedLightingMode": 2
+          },
+          "isBaked": false
+        },
+        "m_Flare": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_RenderMode": 1,
+        "m_CullingMask": {
+          "m_Bits": 4294967295
+        },
+        "m_RenderingLayerMask": 253,
+        "m_Lightmapping": 4,
+        "m_LightShadowCasterMode": 0,
+        "m_AreaSize": {
+          "x": 1.0,
+          "y": 1.0
+        },
+        "m_BounceIntensity": 1.0,
+        "m_ColorTemperature": 5000.0,
+        "m_UseColorTemperature": false,
+        "m_BoundingSphereOverride": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.0
+        },
+        "m_UseBoundingSphereOverride": false,
+        "m_UseViewFrustumForShadowCasterCull": true,
+        "m_ForceVisible": false,
+        "m_LightUnit": 1,
+        "m_LuxAtDistance": 1.0,
+        "m_EnableSpotReflector": true
+      },
+      "transform": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 583
+        },
+        "m_LocalRotation": {
+          "x": 0.18717733025550842,
+          "y": 0.18343180418014526,
+          "z": -0.6754610538482666,
+          "w": 0.6892530918121338
+        },
+        "m_LocalPosition": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "m_LocalScale": {
+          "x": 1.0,
+          "y": 1.0,
+          "z": 1.0
+        },
+        "m_Children": [],
+        "m_Father": {
+          "m_FileID": 0,
+          "m_PathID": 3265
+        }
+      }
+    }
+  ],
+  "materials": [
+    {
+      "key": "sharedassets0.assets:44",
+      "name": "Sprite With Depth Smooth Less",
+      "shader": "sharedassets0.assets:210",
+      "shaderName": "Shader Graphs/Sprite With Depth",
+      "properties": {
+        "m_TexEnvs": [
+          [
+            "_MainTex",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            "unity_Lightmaps",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            "unity_LightmapsInd",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            "unity_ShadowMasks",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ]
+        ],
+        "m_Ints": [],
+        "m_Floats": [
+          [
+            "_AddPrecomputedVelocity",
+            0.0
+          ],
+          [
+            "_Alpha",
+            1.0
+          ],
+          [
+            "_AlphaClip",
+            1.0
+          ],
+          [
+            "_AlphaClipThreshold",
+            0.5
+          ],
+          [
+            "_AlphaToMask",
+            1.0
+          ],
+          [
+            "_Blend",
+            0.0
+          ],
+          [
+            "_BlendModePreserveSpecular",
+            1.0
+          ],
+          [
+            "_BumpScale",
+            1.0
+          ],
+          [
+            "_CastShadows",
+            1.0
+          ],
+          [
+            "_ClearCoatMask",
+            0.0
+          ],
+          [
+            "_ClearCoatSmoothness",
+            0.0
+          ],
+          [
+            "_Cull",
+            0.0
+          ],
+          [
+            "_Cutoff",
+            0.5
+          ],
+          [
+            "_DesaturationAmount",
+            0.0
+          ],
+          [
+            "_DesaturationRangerLowerEdge",
+            0.0
+          ],
+          [
+            "_DesaturationRangerUpperEdge",
+            1.0
+          ],
+          [
+            "_DetailAlbedoMapScale",
+            1.0
+          ],
+          [
+            "_DetailNormalMapScale",
+            1.0
+          ],
+          [
+            "_DstBlend",
+            0.0
+          ],
+          [
+            "_DstBlendAlpha",
+            0.0
+          ],
+          [
+            "_EnvironmentReflections",
+            1.0
+          ],
+          [
+            "_GlossMapScale",
+            0.0
+          ],
+          [
+            "_Glossiness",
+            0.0
+          ],
+          [
+            "_GlossyReflections",
+            0.0
+          ],
+          [
+            "_Metallic",
+            0.13899999856948853
+          ],
+          [
+            "_OcclusionStrength",
+            1.0
+          ],
+          [
+            "_Parallax",
+            0.004999999888241291
+          ],
+          [
+            "_QueueControl",
+            0.0
+          ],
+          [
+            "_QueueOffset",
+            0.0
+          ],
+          [
+            "_ReceiveShadows",
+            1.0
+          ],
+          [
+            "_Smoothness",
+            0.4000000059604645
+          ],
+          [
+            "_SmoothnessTextureChannel",
+            0.0
+          ],
+          [
+            "_SpecularHighlights",
+            1.0
+          ],
+          [
+            "_SrcBlend",
+            1.0
+          ],
+          [
+            "_SrcBlendAlpha",
+            1.0
+          ],
+          [
+            "_Surface",
+            0.0
+          ],
+          [
+            "_UseMask",
+            0.0
+          ],
+          [
+            "_UseMask_1",
+            0.0
+          ],
+          [
+            "_WorkflowMode",
+            1.0
+          ],
+          [
+            "_ZTest",
+            4.0
+          ],
+          [
+            "_ZWrite",
+            1.0
+          ],
+          [
+            "_ZWriteControl",
+            0.0
+          ]
+        ],
+        "m_Colors": [
+          [
+            "_AddColor",
+            {
+              "r": 0.0,
+              "g": 0.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_BaseColor",
+            {
+              "r": 1.0,
+              "g": 1.0,
+              "b": 1.0,
+              "a": 1.0
+            }
+          ],
+          [
+            "_Color",
+            {
+              "r": 0.7735849022865295,
+              "g": 0.7735849022865295,
+              "b": 0.7735849022865295,
+              "a": 1.0
+            }
+          ],
+          [
+            "_EmissionColor",
+            {
+              "r": 0.0,
+              "g": 0.0,
+              "b": 0.0,
+              "a": 1.0
+            }
+          ],
+          [
+            "_Flip",
+            {
+              "r": 0.0,
+              "g": 0.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_Mask",
+            {
+              "r": 0.5,
+              "g": 0.6000000238418579,
+              "b": 0.5,
+              "a": 0.6000000238418579
+            }
+          ],
+          [
+            "_RecolorRangeB",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeG",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeH",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeR",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeS",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeV",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_SpecColor",
+            {
+              "r": 0.19999995827674866,
+              "g": 0.19999995827674866,
+              "b": 0.19999995827674866,
+              "a": 1.0
+            }
+          ]
+        ]
+      },
+      "keywords": [
+        "_ALPHATEST_ON"
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:45",
+      "name": "Sprite With Depth Smooth",
+      "shader": "sharedassets0.assets:210",
+      "shaderName": "Shader Graphs/Sprite With Depth",
+      "properties": {
+        "m_TexEnvs": [
+          [
+            "_MainTex",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            "unity_Lightmaps",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            "unity_LightmapsInd",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            "unity_ShadowMasks",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ]
+        ],
+        "m_Ints": [],
+        "m_Floats": [
+          [
+            "_AddPrecomputedVelocity",
+            0.0
+          ],
+          [
+            "_Alpha",
+            1.0
+          ],
+          [
+            "_AlphaClip",
+            1.0
+          ],
+          [
+            "_AlphaClipThreshold",
+            0.6000000238418579
+          ],
+          [
+            "_AlphaToMask",
+            1.0
+          ],
+          [
+            "_Blend",
+            0.0
+          ],
+          [
+            "_BlendModePreserveSpecular",
+            1.0
+          ],
+          [
+            "_BumpScale",
+            1.0
+          ],
+          [
+            "_CastShadows",
+            1.0
+          ],
+          [
+            "_ClearCoatMask",
+            0.0
+          ],
+          [
+            "_ClearCoatSmoothness",
+            0.0
+          ],
+          [
+            "_Cull",
+            0.0
+          ],
+          [
+            "_Cutoff",
+            0.5
+          ],
+          [
+            "_DesaturationAmount",
+            0.0
+          ],
+          [
+            "_DesaturationRangerLowerEdge",
+            0.0
+          ],
+          [
+            "_DesaturationRangerUpperEdge",
+            1.0
+          ],
+          [
+            "_DetailAlbedoMapScale",
+            1.0
+          ],
+          [
+            "_DetailNormalMapScale",
+            1.0
+          ],
+          [
+            "_DstBlend",
+            0.0
+          ],
+          [
+            "_DstBlendAlpha",
+            0.0
+          ],
+          [
+            "_EnvironmentReflections",
+            1.0
+          ],
+          [
+            "_GlossMapScale",
+            0.0
+          ],
+          [
+            "_Glossiness",
+            0.0
+          ],
+          [
+            "_GlossyReflections",
+            0.0
+          ],
+          [
+            "_Metallic",
+            0.4909999966621399
+          ],
+          [
+            "_OcclusionStrength",
+            1.0
+          ],
+          [
+            "_Parallax",
+            0.004999999888241291
+          ],
+          [
+            "_QueueControl",
+            0.0
+          ],
+          [
+            "_QueueOffset",
+            0.0
+          ],
+          [
+            "_ReceiveShadows",
+            1.0
+          ],
+          [
+            "_Smoothness",
+            0.5
+          ],
+          [
+            "_SmoothnessTextureChannel",
+            0.0
+          ],
+          [
+            "_SpecularHighlights",
+            1.0
+          ],
+          [
+            "_SrcBlend",
+            1.0
+          ],
+          [
+            "_SrcBlendAlpha",
+            1.0
+          ],
+          [
+            "_Surface",
+            0.0
+          ],
+          [
+            "_UseMask",
+            0.0
+          ],
+          [
+            "_UseMask_1",
+            0.0
+          ],
+          [
+            "_WorkflowMode",
+            1.0
+          ],
+          [
+            "_ZTest",
+            4.0
+          ],
+          [
+            "_ZWrite",
+            1.0
+          ],
+          [
+            "_ZWriteControl",
+            0.0
+          ]
+        ],
+        "m_Colors": [
+          [
+            "_AddColor",
+            {
+              "r": 0.0,
+              "g": 0.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_BaseColor",
+            {
+              "r": 1.0,
+              "g": 1.0,
+              "b": 1.0,
+              "a": 1.0
+            }
+          ],
+          [
+            "_Color",
+            {
+              "r": 0.7735849022865295,
+              "g": 0.7735849022865295,
+              "b": 0.7735849022865295,
+              "a": 1.0
+            }
+          ],
+          [
+            "_EmissionColor",
+            {
+              "r": 0.0,
+              "g": 0.0,
+              "b": 0.0,
+              "a": 1.0
+            }
+          ],
+          [
+            "_Flip",
+            {
+              "r": 0.0,
+              "g": 0.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_Mask",
+            {
+              "r": 0.5,
+              "g": 0.6000000238418579,
+              "b": 0.5,
+              "a": 0.6000000238418579
+            }
+          ],
+          [
+            "_RecolorRangeB",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeG",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeH",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeR",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeS",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeV",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_SpecColor",
+            {
+              "r": 0.19999995827674866,
+              "g": 0.19999995827674866,
+              "b": 0.19999995827674866,
+              "a": 1.0
+            }
+          ]
+        ]
+      },
+      "keywords": [
+        "_ALPHATEST_ON"
+      ]
+    },
+    {
+      "key": "sharedassets0.assets:50",
+      "name": "Sprite With Depth",
+      "shader": "sharedassets0.assets:210",
+      "shaderName": "Shader Graphs/Sprite With Depth",
+      "properties": {
+        "m_TexEnvs": [
+          [
+            "_MainTex",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            "unity_Lightmaps",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            "unity_LightmapsInd",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ],
+          [
+            "unity_ShadowMasks",
+            {
+              "m_Texture": {
+                "m_FileID": 0,
+                "m_PathID": 0
+              },
+              "m_Scale": {
+                "x": 1.0,
+                "y": 1.0
+              },
+              "m_Offset": {
+                "x": 0.0,
+                "y": 0.0
+              }
+            }
+          ]
+        ],
+        "m_Ints": [],
+        "m_Floats": [
+          [
+            "_AddPrecomputedVelocity",
+            0.0
+          ],
+          [
+            "_Alpha",
+            1.0
+          ],
+          [
+            "_AlphaClip",
+            1.0
+          ],
+          [
+            "_AlphaClipThreshold",
+            0.5
+          ],
+          [
+            "_AlphaToMask",
+            1.0
+          ],
+          [
+            "_Blend",
+            0.0
+          ],
+          [
+            "_BlendModePreserveSpecular",
+            1.0
+          ],
+          [
+            "_BumpScale",
+            1.0
+          ],
+          [
+            "_CastShadows",
+            1.0
+          ],
+          [
+            "_ClearCoatMask",
+            0.0
+          ],
+          [
+            "_ClearCoatSmoothness",
+            0.0
+          ],
+          [
+            "_Cull",
+            0.0
+          ],
+          [
+            "_Cutoff",
+            0.5
+          ],
+          [
+            "_DesaturationAmount",
+            0.0
+          ],
+          [
+            "_DesaturationRangerLowerEdge",
+            0.0
+          ],
+          [
+            "_DesaturationRangerUpperEdge",
+            1.0
+          ],
+          [
+            "_DetailAlbedoMapScale",
+            1.0
+          ],
+          [
+            "_DetailNormalMapScale",
+            1.0
+          ],
+          [
+            "_DstBlend",
+            0.0
+          ],
+          [
+            "_DstBlendAlpha",
+            0.0
+          ],
+          [
+            "_EnvironmentReflections",
+            1.0
+          ],
+          [
+            "_GlossMapScale",
+            0.0
+          ],
+          [
+            "_Glossiness",
+            0.0
+          ],
+          [
+            "_GlossyReflections",
+            0.0
+          ],
+          [
+            "_Metallic",
+            0.0
+          ],
+          [
+            "_OcclusionStrength",
+            1.0
+          ],
+          [
+            "_Parallax",
+            0.004999999888241291
+          ],
+          [
+            "_QueueControl",
+            0.0
+          ],
+          [
+            "_QueueOffset",
+            0.0
+          ],
+          [
+            "_ReceiveShadows",
+            1.0
+          ],
+          [
+            "_Smoothness",
+            0.0
+          ],
+          [
+            "_SmoothnessTextureChannel",
+            0.0
+          ],
+          [
+            "_SpecularHighlights",
+            1.0
+          ],
+          [
+            "_SrcBlend",
+            1.0
+          ],
+          [
+            "_SrcBlendAlpha",
+            1.0
+          ],
+          [
+            "_Surface",
+            0.0
+          ],
+          [
+            "_UseMask",
+            0.0
+          ],
+          [
+            "_UseMask_1",
+            0.0
+          ],
+          [
+            "_WorkflowMode",
+            1.0
+          ],
+          [
+            "_ZTest",
+            4.0
+          ],
+          [
+            "_ZWrite",
+            1.0
+          ],
+          [
+            "_ZWriteControl",
+            0.0
+          ]
+        ],
+        "m_Colors": [
+          [
+            "_AddColor",
+            {
+              "r": 0.0,
+              "g": 0.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_BaseColor",
+            {
+              "r": 1.0,
+              "g": 1.0,
+              "b": 1.0,
+              "a": 1.0
+            }
+          ],
+          [
+            "_Color",
+            {
+              "r": 1.0,
+              "g": 1.0,
+              "b": 1.0,
+              "a": 1.0
+            }
+          ],
+          [
+            "_EmissionColor",
+            {
+              "r": 0.0,
+              "g": 0.0,
+              "b": 0.0,
+              "a": 1.0
+            }
+          ],
+          [
+            "_Flip",
+            {
+              "r": 0.0,
+              "g": 0.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_Mask",
+            {
+              "r": 0.5,
+              "g": 0.6000000238418579,
+              "b": 0.5,
+              "a": 0.6000000238418579
+            }
+          ],
+          [
+            "_RecolorRangeB",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeG",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeH",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeR",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeS",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_RecolorRangeV",
+            {
+              "r": 0.0,
+              "g": 1.0,
+              "b": 0.0,
+              "a": 0.0
+            }
+          ],
+          [
+            "_SpecColor",
+            {
+              "r": 0.19999995827674866,
+              "g": 0.19999995827674866,
+              "b": 0.19999995827674866,
+              "a": 1.0
+            }
+          ]
+        ]
+      },
+      "keywords": [
+        "_ALPHATEST_ON"
+      ]
+    }
+  ],
+  "selected_behaviours": [
+    {
+      "key": "level0:8703",
+      "class": "Volume",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 37
+        },
+        "m_Enabled": 1,
+        "m_Name": "",
+        "m_IsGlobal": 1,
+        "priority": 15.0,
+        "blendDistance": 5.0,
+        "weight": 0.0,
+        "sharedProfile": {
+          "m_FileID": 3,
+          "m_PathID": 4169
+        }
+      }
+    },
+    {
+      "key": "level0:8769",
+      "class": "UniversalAdditionalCameraData",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 171
+        },
+        "m_Enabled": 1,
+        "m_Name": "",
+        "m_RenderShadows": 1,
+        "m_RequiresDepthTextureOption": 1,
+        "m_RequiresOpaqueTextureOption": 2,
+        "m_CameraType": 0,
+        "m_Cameras": [],
+        "m_RendererIndex": 0,
+        "m_VolumeLayerMask": {
+          "m_Bits": 1
+        },
+        "m_VolumeTrigger": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_VolumeFrameworkUpdateModeOption": 2,
+        "m_RenderPostProcessing": 1,
+        "m_Antialiasing": 0,
+        "m_AntialiasingQuality": 2,
+        "m_StopNaN": 0,
+        "m_Dithering": 0,
+        "m_ClearDepth": 1,
+        "m_AllowXRRendering": 1,
+        "m_AllowHDROutput": 1,
+        "m_UseScreenCoordOverride": 0,
+        "m_ScreenSizeOverride": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.0
+        },
+        "m_ScreenCoordScaleBias": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0,
+          "w": 0.0
+        },
+        "m_RequiresDepthTexture": 0,
+        "m_RequiresColorTexture": 0,
+        "m_TaaSettings": {
+          "m_Quality": 3,
+          "m_FrameInfluence": 0.10000002384185791,
+          "m_JitterScale": 1.0,
+          "m_MipBias": 0.0,
+          "m_VarianceClampScale": 0.8999999761581421,
+          "m_ContrastAdaptiveSharpening": 0.0
+        },
+        "m_Version": 2
+      }
+    },
+    {
+      "key": "level0:8800",
+      "class": "Volume",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 225
+        },
+        "m_Enabled": 1,
+        "m_Name": "",
+        "m_IsGlobal": 1,
+        "priority": 10.0,
+        "blendDistance": 5.0,
+        "weight": 1.0,
+        "sharedProfile": {
+          "m_FileID": 1,
+          "m_PathID": 2237
+        }
+      }
+    },
+    {
+      "key": "level0:8928",
+      "class": "Volume",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 459
+        },
+        "m_Enabled": 1,
+        "m_Name": "",
+        "m_IsGlobal": 1,
+        "priority": 15.0,
+        "blendDistance": 5.0,
+        "weight": 0.0,
+        "sharedProfile": {
+          "m_FileID": 3,
+          "m_PathID": 4168
+        }
+      }
+    },
+    {
+      "key": "level0:9032",
+      "class": "CinemachineCamera",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 593
+        },
+        "m_Enabled": 1,
+        "m_Name": "",
+        "Priority": {
+          "Enabled": 1,
+          "m_Value": 2
+        },
+        "OutputChannel": 1,
+        "StandbyUpdate": 2,
+        "m_StreamingVersion": 20230301,
+        "m_LegacyPriority": 0,
+        "Target": {
+          "TrackingTarget": {
+            "m_FileID": 0,
+            "m_PathID": 3502
+          },
+          "LookAtTarget": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          },
+          "CustomLookAtTarget": 0
+        },
+        "Lens": {
+          "FieldOfView": 38.0,
+          "OrthographicSize": 10.0,
+          "NearClipPlane": 0.10000000149011612,
+          "FarClipPlane": 5000.0,
+          "Dutch": 0.0,
+          "ModeOverride": 0,
+          "PhysicalProperties": {
+            "GateFit": 2,
+            "SensorSize": {
+              "x": 21.945999145507812,
+              "y": 16.00200080871582
+            },
+            "LensShift": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "FocusDistance": 10.0,
+            "Iso": 200,
+            "ShutterSpeed": 0.004999999888241291,
+            "Aperture": 16.0,
+            "BladeCount": 5,
+            "Curvature": {
+              "x": 2.0,
+              "y": 11.0
+            },
+            "BarrelClipping": 0.25,
+            "Anamorphism": 0.0
+          }
+        },
+        "BlendHint": 0
+      }
+    },
+    {
+      "key": "level0:9033",
+      "class": "CinemachineBasicMultiChannelPerlin",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 593
+        },
+        "m_Enabled": 1,
+        "m_Name": "",
+        "NoiseProfile": {
+          "m_FileID": 3,
+          "m_PathID": 4183
+        },
+        "PivotOffset": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        },
+        "AmplitudeGain": 0.4000000059604645,
+        "FrequencyGain": 0.30000001192092896,
+        "mNoiseOffsets": {
+          "x": 0.0,
+          "y": 0.0,
+          "z": 0.0
+        }
+      }
+    },
+    {
+      "key": "level0:9059",
+      "class": "Volume",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 630
+        },
+        "m_Enabled": 1,
+        "m_Name": "",
+        "m_IsGlobal": 1,
+        "priority": 15.0,
+        "blendDistance": 5.0,
+        "weight": 0.0,
+        "sharedProfile": {
+          "m_FileID": 3,
+          "m_PathID": 4170
+        }
+      }
+    },
+    {
+      "key": "level0:9319",
+      "class": "SettingsManager",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 1061
+        },
+        "m_Enabled": 1,
+        "m_Name": "",
+        "postFXVolume": {
+          "m_FileID": 0,
+          "m_PathID": 8800
+        },
+        "minMaxBloom": {
+          "x": 0.699999988079071,
+          "y": 1.2999999523162842
+        },
+        "bloomMultiplier": 1.0,
+        "minMaxLenseFlare": {
+          "x": 0.699999988079071,
+          "y": 1.2999999523162842
+        },
+        "camMotionComponent": {
+          "m_FileID": 0,
+          "m_PathID": 9033
+        },
+        "resolutionDropdown": {
+          "m_FileID": 0,
+          "m_PathID": 10557
+        },
+        "settingsMenuUGUI": {
+          "m_FileID": 0,
+          "m_PathID": 8966
+        },
+        "debugPrints": 0
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4122",
+      "class": "Vignette",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Vignette",
+        "active": 1,
+        "color": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.18039216101169586,
+            "g": 0.03921568766236305,
+            "b": 0.048157092183828354,
+            "a": 1.0
+          }
+        },
+        "center": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "intensity": {
+          "m_OverrideState": 1,
+          "m_Value": 0.492000013589859
+        },
+        "smoothness": {
+          "m_OverrideState": 1,
+          "m_Value": 0.1289999932050705
+        },
+        "rounded": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4123",
+      "class": "Vignette",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Vignette",
+        "active": 1,
+        "color": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.18039216101169586,
+            "g": 0.03921568766236305,
+            "b": 0.048157092183828354,
+            "a": 1.0
+          }
+        },
+        "center": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "intensity": {
+          "m_OverrideState": 1,
+          "m_Value": 0.492000013589859
+        },
+        "smoothness": {
+          "m_OverrideState": 1,
+          "m_Value": 0.1289999932050705
+        },
+        "rounded": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4124",
+      "class": "Vignette",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Vignette",
+        "active": 1,
+        "color": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.18039216101169586,
+            "g": 0.03921568766236305,
+            "b": 0.048157092183828354,
+            "a": 1.0
+          }
+        },
+        "center": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "intensity": {
+          "m_OverrideState": 1,
+          "m_Value": 0.492000013589859
+        },
+        "smoothness": {
+          "m_OverrideState": 1,
+          "m_Value": 0.1289999932050705
+        },
+        "rounded": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4125",
+      "class": "Bloom",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Bloom",
+        "active": 1,
+        "skipIterations": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "threshold": {
+          "m_OverrideState": 1,
+          "m_Value": 0.6499999761581421
+        },
+        "intensity": {
+          "m_OverrideState": 1,
+          "m_Value": 3.0
+        },
+        "scatter": {
+          "m_OverrideState": 1,
+          "m_Value": 0.9909999966621399
+        },
+        "clamp": {
+          "m_OverrideState": 1,
+          "m_Value": 65472.0
+        },
+        "tint": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.8253135681152344,
+            "g": 1.0,
+            "b": 0.37264150381088257,
+            "a": 1.0
+          }
+        },
+        "highQualityFiltering": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "downscale": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "maxIterations": {
+          "m_OverrideState": 1,
+          "m_Value": 6
+        },
+        "dirtTexture": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          },
+          "dimension": 1
+        },
+        "dirtIntensity": {
+          "m_OverrideState": 1,
+          "m_Value": 0.0
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4126",
+      "class": "Bloom",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Bloom",
+        "active": 1,
+        "skipIterations": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "threshold": {
+          "m_OverrideState": 1,
+          "m_Value": 0.6499999761581421
+        },
+        "intensity": {
+          "m_OverrideState": 1,
+          "m_Value": 3.0
+        },
+        "scatter": {
+          "m_OverrideState": 1,
+          "m_Value": 0.9909999966621399
+        },
+        "clamp": {
+          "m_OverrideState": 1,
+          "m_Value": 65472.0
+        },
+        "tint": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.8253135681152344,
+            "g": 1.0,
+            "b": 0.37264150381088257,
+            "a": 1.0
+          }
+        },
+        "highQualityFiltering": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "downscale": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "maxIterations": {
+          "m_OverrideState": 1,
+          "m_Value": 6
+        },
+        "dirtTexture": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          },
+          "dimension": 1
+        },
+        "dirtIntensity": {
+          "m_OverrideState": 1,
+          "m_Value": 0.0
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4127",
+      "class": "Bloom",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Bloom",
+        "active": 1,
+        "skipIterations": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "threshold": {
+          "m_OverrideState": 1,
+          "m_Value": 0.6499999761581421
+        },
+        "intensity": {
+          "m_OverrideState": 1,
+          "m_Value": 3.0
+        },
+        "scatter": {
+          "m_OverrideState": 1,
+          "m_Value": 0.9909999966621399
+        },
+        "clamp": {
+          "m_OverrideState": 1,
+          "m_Value": 65472.0
+        },
+        "tint": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.8253135681152344,
+            "g": 1.0,
+            "b": 0.37264150381088257,
+            "a": 1.0
+          }
+        },
+        "highQualityFiltering": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "downscale": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "maxIterations": {
+          "m_OverrideState": 1,
+          "m_Value": 6
+        },
+        "dirtTexture": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          },
+          "dimension": 1
+        },
+        "dirtIntensity": {
+          "m_OverrideState": 1,
+          "m_Value": 0.0
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4168",
+      "class": "VolumeProfile",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "In Game Post FX Override Blue",
+        "components": [
+          {
+            "m_FileID": 0,
+            "m_PathID": 4271
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4125
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4137
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4134
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4268
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4276
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4122
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4279
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4131
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4128
+          }
+        ]
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4169",
+      "class": "VolumeProfile",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "In Game Post FX Override Green",
+        "components": [
+          {
+            "m_FileID": 0,
+            "m_PathID": 4272
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4126
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4138
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4135
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4269
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4277
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4123
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4280
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4132
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4129
+          }
+        ]
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4170",
+      "class": "VolumeProfile",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "In Game Post FX Override Red",
+        "components": [
+          {
+            "m_FileID": 0,
+            "m_PathID": 4273
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4127
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4139
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4136
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4270
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4278
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4124
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4281
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4133
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 4130
+          }
+        ]
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4268",
+      "class": "ColorAdjustments",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "ColorAdjustments",
+        "active": 1,
+        "postExposure": {
+          "m_OverrideState": 1,
+          "m_Value": -1.600000023841858
+        },
+        "contrast": {
+          "m_OverrideState": 1,
+          "m_Value": 27.0
+        },
+        "colorFilter": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.8589800596237183,
+            "g": 0.8826727271080017,
+            "b": 0.9150943160057068,
+            "a": 1.0
+          }
+        },
+        "hueShift": {
+          "m_OverrideState": 1,
+          "m_Value": -78.0
+        },
+        "saturation": {
+          "m_OverrideState": 1,
+          "m_Value": -22.799999237060547
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4269",
+      "class": "ColorAdjustments",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "ColorAdjustments",
+        "active": 1,
+        "postExposure": {
+          "m_OverrideState": 1,
+          "m_Value": -1.649999976158142
+        },
+        "contrast": {
+          "m_OverrideState": 1,
+          "m_Value": 25.0
+        },
+        "colorFilter": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.8589800596237183,
+            "g": 0.8826727271080017,
+            "b": 0.9150943160057068,
+            "a": 1.0
+          }
+        },
+        "hueShift": {
+          "m_OverrideState": 1,
+          "m_Value": -78.0
+        },
+        "saturation": {
+          "m_OverrideState": 1,
+          "m_Value": -13.899999618530273
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4270",
+      "class": "ColorAdjustments",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "ColorAdjustments",
+        "active": 1,
+        "postExposure": {
+          "m_OverrideState": 1,
+          "m_Value": -1.649999976158142
+        },
+        "contrast": {
+          "m_OverrideState": 1,
+          "m_Value": 20.0
+        },
+        "colorFilter": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.8589800596237183,
+            "g": 0.8826727271080017,
+            "b": 0.9150943160057068,
+            "a": 1.0
+          }
+        },
+        "hueShift": {
+          "m_OverrideState": 1,
+          "m_Value": -75.0
+        },
+        "saturation": {
+          "m_OverrideState": 1,
+          "m_Value": -15.0
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4271",
+      "class": "Tonemapping",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Tonemapping",
+        "active": 1,
+        "mode": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "neutralHDRRangeReductionMode": {
+          "m_OverrideState": 1,
+          "m_Value": 2
+        },
+        "acesPreset": {
+          "m_OverrideState": 1,
+          "m_Value": 3
+        },
+        "hueShiftAmount": {
+          "m_OverrideState": 1,
+          "m_Value": 0.0
+        },
+        "detectPaperWhite": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "paperWhite": {
+          "m_OverrideState": 1,
+          "m_Value": 300.0
+        },
+        "detectBrightnessLimits": {
+          "m_OverrideState": 1,
+          "m_Value": 1
+        },
+        "minNits": {
+          "m_OverrideState": 1,
+          "m_Value": 0.004999999888241291
+        },
+        "maxNits": {
+          "m_OverrideState": 1,
+          "m_Value": 1000.0
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4272",
+      "class": "Tonemapping",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Tonemapping",
+        "active": 1,
+        "mode": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "neutralHDRRangeReductionMode": {
+          "m_OverrideState": 1,
+          "m_Value": 2
+        },
+        "acesPreset": {
+          "m_OverrideState": 1,
+          "m_Value": 3
+        },
+        "hueShiftAmount": {
+          "m_OverrideState": 1,
+          "m_Value": 0.0
+        },
+        "detectPaperWhite": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "paperWhite": {
+          "m_OverrideState": 1,
+          "m_Value": 300.0
+        },
+        "detectBrightnessLimits": {
+          "m_OverrideState": 1,
+          "m_Value": 1
+        },
+        "minNits": {
+          "m_OverrideState": 1,
+          "m_Value": 0.004999999888241291
+        },
+        "maxNits": {
+          "m_OverrideState": 1,
+          "m_Value": 1000.0
+        }
+      }
+    },
+    {
+      "key": "sharedassets0.assets:4273",
+      "class": "Tonemapping",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Tonemapping",
+        "active": 1,
+        "mode": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "neutralHDRRangeReductionMode": {
+          "m_OverrideState": 1,
+          "m_Value": 2
+        },
+        "acesPreset": {
+          "m_OverrideState": 1,
+          "m_Value": 3
+        },
+        "hueShiftAmount": {
+          "m_OverrideState": 1,
+          "m_Value": 0.0
+        },
+        "detectPaperWhite": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "paperWhite": {
+          "m_OverrideState": 1,
+          "m_Value": 300.0
+        },
+        "detectBrightnessLimits": {
+          "m_OverrideState": 1,
+          "m_Value": 1
+        },
+        "minNits": {
+          "m_OverrideState": 1,
+          "m_Value": 0.004999999888241291
+        },
+        "maxNits": {
+          "m_OverrideState": 1,
+          "m_Value": 1000.0
+        }
+      }
+    },
+    {
+      "key": "globalgamemanagers.assets:2218",
+      "class": "Vignette",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Vignette",
+        "active": 1,
+        "color": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.18039216101169586,
+            "g": 0.03921568766236305,
+            "b": 0.048157092183828354,
+            "a": 1.0
+          }
+        },
+        "center": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        "intensity": {
+          "m_OverrideState": 1,
+          "m_Value": 0.492000013589859
+        },
+        "smoothness": {
+          "m_OverrideState": 1,
+          "m_Value": 0.1289999932050705
+        },
+        "rounded": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        }
+      }
+    },
+    {
+      "key": "globalgamemanagers.assets:2219",
+      "class": "Bloom",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Bloom",
+        "active": 1,
+        "skipIterations": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "threshold": {
+          "m_OverrideState": 1,
+          "m_Value": 0.6499999761581421
+        },
+        "intensity": {
+          "m_OverrideState": 1,
+          "m_Value": 3.0
+        },
+        "scatter": {
+          "m_OverrideState": 1,
+          "m_Value": 0.9909999966621399
+        },
+        "clamp": {
+          "m_OverrideState": 1,
+          "m_Value": 65472.0
+        },
+        "tint": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.8253135681152344,
+            "g": 1.0,
+            "b": 0.37264150381088257,
+            "a": 1.0
+          }
+        },
+        "highQualityFiltering": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "downscale": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "maxIterations": {
+          "m_OverrideState": 1,
+          "m_Value": 6
+        },
+        "dirtTexture": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          },
+          "dimension": 1
+        },
+        "dirtIntensity": {
+          "m_OverrideState": 1,
+          "m_Value": 0.0
+        }
+      }
+    },
+    {
+      "key": "globalgamemanagers.assets:2220",
+      "class": "DepthOfField",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "DepthOfField",
+        "active": 1,
+        "mode": {
+          "m_OverrideState": 1,
+          "m_Value": 1
+        },
+        "gaussianStart": {
+          "m_OverrideState": 1,
+          "m_Value": 50.0
+        },
+        "gaussianEnd": {
+          "m_OverrideState": 1,
+          "m_Value": 2.0
+        },
+        "gaussianMaxRadius": {
+          "m_OverrideState": 1,
+          "m_Value": 1.5
+        },
+        "highQualitySampling": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "focusDistance": {
+          "m_OverrideState": 1,
+          "m_Value": 10.0
+        },
+        "aperture": {
+          "m_OverrideState": 1,
+          "m_Value": 5.599999904632568
+        },
+        "focalLength": {
+          "m_OverrideState": 1,
+          "m_Value": 50.0
+        },
+        "bladeCount": {
+          "m_OverrideState": 1,
+          "m_Value": 5
+        },
+        "bladeCurvature": {
+          "m_OverrideState": 1,
+          "m_Value": 1.0
+        },
+        "bladeRotation": {
+          "m_OverrideState": 1,
+          "m_Value": 0.0
+        }
+      }
+    },
+    {
+      "key": "globalgamemanagers.assets:2224",
+      "class": "FilmGrain",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "FilmGrain",
+        "active": 1,
+        "type": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "intensity": {
+          "m_OverrideState": 1,
+          "m_Value": 0.0
+        },
+        "response": {
+          "m_OverrideState": 1,
+          "m_Value": 0.800000011920929
+        },
+        "texture": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          }
+        }
+      }
+    },
+    {
+      "key": "globalgamemanagers.assets:2234",
+      "class": "UniversalRenderPipelineAsset",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "High_Quality_RPAsset",
+        "k_AssetVersion": 12,
+        "k_AssetPreviousVersion": 12,
+        "m_RendererType": 1,
+        "m_RendererData": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_RendererDataList": [
+          {
+            "m_FileID": 0,
+            "m_PathID": 2239
+          }
+        ],
+        "m_DefaultRendererIndex": 0,
+        "m_RequireDepthTexture": 0,
+        "m_RequireOpaqueTexture": 0,
+        "m_OpaqueDownsampling": 0,
+        "m_SupportsTerrainHoles": 0,
+        "m_SupportsHDR": 1,
+        "m_HDRColorBufferPrecision": 0,
+        "m_MSAA": 1,
+        "m_RenderScale": 1.0,
+        "m_UpscalingFilter": 1,
+        "m_FsrOverrideSharpness": 1,
+        "m_FsrSharpness": 0.699999988079071,
+        "m_EnableLODCrossFade": 0,
+        "m_LODCrossFadeDitheringType": 1,
+        "m_ShEvalMode": 0,
+        "m_LightProbeSystem": 0,
+        "m_ProbeVolumeMemoryBudget": 1024,
+        "m_ProbeVolumeBlendingMemoryBudget": 256,
+        "m_SupportProbeVolumeGPUStreaming": 0,
+        "m_SupportProbeVolumeDiskStreaming": 0,
+        "m_SupportProbeVolumeScenarios": 0,
+        "m_SupportProbeVolumeScenarioBlending": 0,
+        "m_ProbeVolumeSHBands": 1,
+        "m_MainLightRenderingMode": 1,
+        "m_MainLightShadowsSupported": 1,
+        "m_MainLightShadowmapResolution": 2048,
+        "m_AdditionalLightsRenderingMode": 1,
+        "m_AdditionalLightsPerObjectLimit": 1,
+        "m_AdditionalLightShadowsSupported": 0,
+        "m_AdditionalLightsShadowmapResolution": 2048,
+        "m_AdditionalLightsShadowResolutionTierLow": 256,
+        "m_AdditionalLightsShadowResolutionTierMedium": 512,
+        "m_AdditionalLightsShadowResolutionTierHigh": 1024,
+        "m_ReflectionProbeBlending": 0,
+        "m_ReflectionProbeBoxProjection": 0,
+        "m_ReflectionProbeAtlas": 0,
+        "m_ShadowDistance": 18.0,
+        "m_ShadowCascadeCount": 4,
+        "m_Cascade2Split": 0.25,
+        "m_Cascade3Split": {
+          "x": 0.10000000149011612,
+          "y": 0.30000001192092896
+        },
+        "m_Cascade4Split": {
+          "x": 0.3198975622653961,
+          "y": 0.5603164434432983,
+          "z": 0.7525352239608765
+        },
+        "m_CascadeBorder": 0.2262948751449585,
+        "m_ShadowDepthBias": 0.0,
+        "m_ShadowNormalBias": 0.0,
+        "m_SoftShadowsSupported": 0,
+        "m_ConservativeEnclosingSphere": 0,
+        "m_NumIterationsEnclosingSphere": 64,
+        "m_SoftShadowQuality": 3,
+        "m_AdditionalLightsCookieResolution": 1024,
+        "m_AdditionalLightsCookieFormat": 2,
+        "m_UseSRPBatcher": 1,
+        "m_SupportsDynamicBatching": 1,
+        "m_MixedLightingSupported": 0,
+        "m_SupportsLightCookies": 1,
+        "m_SupportsLightLayers": 1,
+        "m_DebugLevel": 0,
+        "m_StoreActionsOptimization": 0,
+        "m_UseAdaptivePerformance": 1,
+        "m_ColorGradingMode": 0,
+        "m_ColorGradingLutSize": 32,
+        "m_AllowPostProcessAlphaOutput": 0,
+        "m_UseFastSRGBLinearConversion": 1,
+        "m_SupportDataDrivenLensFlare": 1,
+        "m_SupportScreenSpaceLensFlare": 1,
+        "m_GPUResidentDrawerMode": 0,
+        "m_SmallMeshScreenPercentage": 0.0,
+        "m_GPUResidentDrawerEnableOcclusionCullingInCameras": 0,
+        "m_ShadowType": 1,
+        "m_LocalShadowsSupported": 0,
+        "m_LocalShadowsAtlasResolution": 256,
+        "m_MaxPixelLights": 0,
+        "m_ShadowAtlasResolution": 256,
+        "m_VolumeFrameworkUpdateMode": 0,
+        "m_VolumeProfile": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "apvScenesData": {
+          "obsoleteSceneBounds": {
+            "m_Keys": "",
+            "m_Values": []
+          },
+          "obsoleteHasProbeVolumes": {
+            "m_Keys": "",
+            "m_Values": []
+          }
+        },
+        "m_ShaderVariantLogLevel": 0,
+        "m_ShadowCascades": 0,
+        "m_Textures": {
+          "blueNoise64LTex": {
+            "m_FileID": 0,
+            "m_PathID": 41
+          },
+          "bayerMatrixTex": {
+            "m_FileID": 0,
+            "m_PathID": 46
+          }
+        }
+      }
+    },
+    {
+      "key": "globalgamemanagers.assets:2235",
+      "class": "UniversalRenderPipelineAsset",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Low_Quality_RPAsset",
+        "k_AssetVersion": 12,
+        "k_AssetPreviousVersion": 12,
+        "m_RendererType": 1,
+        "m_RendererData": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_RendererDataList": [
+          {
+            "m_FileID": 0,
+            "m_PathID": 2239
+          }
+        ],
+        "m_DefaultRendererIndex": 0,
+        "m_RequireDepthTexture": 0,
+        "m_RequireOpaqueTexture": 0,
+        "m_OpaqueDownsampling": 0,
+        "m_SupportsTerrainHoles": 0,
+        "m_SupportsHDR": 1,
+        "m_HDRColorBufferPrecision": 0,
+        "m_MSAA": 1,
+        "m_RenderScale": 0.699999988079071,
+        "m_UpscalingFilter": 4,
+        "m_FsrOverrideSharpness": 1,
+        "m_FsrSharpness": 1.0,
+        "m_EnableLODCrossFade": 0,
+        "m_LODCrossFadeDitheringType": 1,
+        "m_ShEvalMode": 0,
+        "m_LightProbeSystem": 0,
+        "m_ProbeVolumeMemoryBudget": 1024,
+        "m_ProbeVolumeBlendingMemoryBudget": 256,
+        "m_SupportProbeVolumeGPUStreaming": 0,
+        "m_SupportProbeVolumeDiskStreaming": 0,
+        "m_SupportProbeVolumeScenarios": 0,
+        "m_SupportProbeVolumeScenarioBlending": 0,
+        "m_ProbeVolumeSHBands": 1,
+        "m_MainLightRenderingMode": 1,
+        "m_MainLightShadowsSupported": 1,
+        "m_MainLightShadowmapResolution": 512,
+        "m_AdditionalLightsRenderingMode": 1,
+        "m_AdditionalLightsPerObjectLimit": 1,
+        "m_AdditionalLightShadowsSupported": 0,
+        "m_AdditionalLightsShadowmapResolution": 512,
+        "m_AdditionalLightsShadowResolutionTierLow": 256,
+        "m_AdditionalLightsShadowResolutionTierMedium": 512,
+        "m_AdditionalLightsShadowResolutionTierHigh": 1024,
+        "m_ReflectionProbeBlending": 0,
+        "m_ReflectionProbeBoxProjection": 0,
+        "m_ReflectionProbeAtlas": 0,
+        "m_ShadowDistance": 18.0,
+        "m_ShadowCascadeCount": 4,
+        "m_Cascade2Split": 0.25,
+        "m_Cascade3Split": {
+          "x": 0.10000000149011612,
+          "y": 0.30000001192092896
+        },
+        "m_Cascade4Split": {
+          "x": 0.3198975622653961,
+          "y": 0.5603164434432983,
+          "z": 0.7525352239608765
+        },
+        "m_CascadeBorder": 0.09055555611848831,
+        "m_ShadowDepthBias": 0.0,
+        "m_ShadowNormalBias": 0.0,
+        "m_SoftShadowsSupported": 0,
+        "m_ConservativeEnclosingSphere": 0,
+        "m_NumIterationsEnclosingSphere": 64,
+        "m_SoftShadowQuality": 2,
+        "m_AdditionalLightsCookieResolution": 256,
+        "m_AdditionalLightsCookieFormat": 2,
+        "m_UseSRPBatcher": 1,
+        "m_SupportsDynamicBatching": 1,
+        "m_MixedLightingSupported": 0,
+        "m_SupportsLightCookies": 1,
+        "m_SupportsLightLayers": 1,
+        "m_DebugLevel": 0,
+        "m_StoreActionsOptimization": 0,
+        "m_UseAdaptivePerformance": 1,
+        "m_ColorGradingMode": 0,
+        "m_ColorGradingLutSize": 32,
+        "m_AllowPostProcessAlphaOutput": 0,
+        "m_UseFastSRGBLinearConversion": 1,
+        "m_SupportDataDrivenLensFlare": 1,
+        "m_SupportScreenSpaceLensFlare": 1,
+        "m_GPUResidentDrawerMode": 0,
+        "m_SmallMeshScreenPercentage": 0.0,
+        "m_GPUResidentDrawerEnableOcclusionCullingInCameras": 0,
+        "m_ShadowType": 1,
+        "m_LocalShadowsSupported": 0,
+        "m_LocalShadowsAtlasResolution": 256,
+        "m_MaxPixelLights": 0,
+        "m_ShadowAtlasResolution": 256,
+        "m_VolumeFrameworkUpdateMode": 0,
+        "m_VolumeProfile": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "apvScenesData": {
+          "obsoleteSceneBounds": {
+            "m_Keys": "",
+            "m_Values": []
+          },
+          "obsoleteHasProbeVolumes": {
+            "m_Keys": "",
+            "m_Values": []
+          }
+        },
+        "m_ShaderVariantLogLevel": 0,
+        "m_ShadowCascades": 0,
+        "m_Textures": {
+          "blueNoise64LTex": {
+            "m_FileID": 0,
+            "m_PathID": 41
+          },
+          "bayerMatrixTex": {
+            "m_FileID": 0,
+            "m_PathID": 46
+          }
+        }
+      }
+    },
+    {
+      "key": "globalgamemanagers.assets:2236",
+      "class": "UniversalRenderPipelineAsset",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Medium_Quality_RPAsset",
+        "k_AssetVersion": 12,
+        "k_AssetPreviousVersion": 12,
+        "m_RendererType": 1,
+        "m_RendererData": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_RendererDataList": [
+          {
+            "m_FileID": 0,
+            "m_PathID": 2238
+          }
+        ],
+        "m_DefaultRendererIndex": 0,
+        "m_RequireDepthTexture": 0,
+        "m_RequireOpaqueTexture": 0,
+        "m_OpaqueDownsampling": 0,
+        "m_SupportsTerrainHoles": 0,
+        "m_SupportsHDR": 1,
+        "m_HDRColorBufferPrecision": 0,
+        "m_MSAA": 1,
+        "m_RenderScale": 0.699999988079071,
+        "m_UpscalingFilter": 4,
+        "m_FsrOverrideSharpness": 1,
+        "m_FsrSharpness": 0.699999988079071,
+        "m_EnableLODCrossFade": 0,
+        "m_LODCrossFadeDitheringType": 1,
+        "m_ShEvalMode": 0,
+        "m_LightProbeSystem": 0,
+        "m_ProbeVolumeMemoryBudget": 1024,
+        "m_ProbeVolumeBlendingMemoryBudget": 256,
+        "m_SupportProbeVolumeGPUStreaming": 0,
+        "m_SupportProbeVolumeDiskStreaming": 0,
+        "m_SupportProbeVolumeScenarios": 0,
+        "m_SupportProbeVolumeScenarioBlending": 0,
+        "m_ProbeVolumeSHBands": 1,
+        "m_MainLightRenderingMode": 1,
+        "m_MainLightShadowsSupported": 1,
+        "m_MainLightShadowmapResolution": 1024,
+        "m_AdditionalLightsRenderingMode": 1,
+        "m_AdditionalLightsPerObjectLimit": 1,
+        "m_AdditionalLightShadowsSupported": 0,
+        "m_AdditionalLightsShadowmapResolution": 1024,
+        "m_AdditionalLightsShadowResolutionTierLow": 256,
+        "m_AdditionalLightsShadowResolutionTierMedium": 512,
+        "m_AdditionalLightsShadowResolutionTierHigh": 1024,
+        "m_ReflectionProbeBlending": 0,
+        "m_ReflectionProbeBoxProjection": 0,
+        "m_ReflectionProbeAtlas": 0,
+        "m_ShadowDistance": 18.0,
+        "m_ShadowCascadeCount": 4,
+        "m_Cascade2Split": 0.8150397539138794,
+        "m_Cascade3Split": {
+          "x": 0.11277777701616287,
+          "y": 0.13555556535720825
+        },
+        "m_Cascade4Split": {
+          "x": 0.3198975622653961,
+          "y": 0.5603164434432983,
+          "z": 0.7525352239608765
+        },
+        "m_CascadeBorder": 0.09055555611848831,
+        "m_ShadowDepthBias": 0.0,
+        "m_ShadowNormalBias": 0.0,
+        "m_SoftShadowsSupported": 0,
+        "m_ConservativeEnclosingSphere": 0,
+        "m_NumIterationsEnclosingSphere": 64,
+        "m_SoftShadowQuality": 3,
+        "m_AdditionalLightsCookieResolution": 256,
+        "m_AdditionalLightsCookieFormat": 2,
+        "m_UseSRPBatcher": 1,
+        "m_SupportsDynamicBatching": 1,
+        "m_MixedLightingSupported": 0,
+        "m_SupportsLightCookies": 1,
+        "m_SupportsLightLayers": 1,
+        "m_DebugLevel": 0,
+        "m_StoreActionsOptimization": 0,
+        "m_UseAdaptivePerformance": 1,
+        "m_ColorGradingMode": 0,
+        "m_ColorGradingLutSize": 32,
+        "m_AllowPostProcessAlphaOutput": 0,
+        "m_UseFastSRGBLinearConversion": 1,
+        "m_SupportDataDrivenLensFlare": 1,
+        "m_SupportScreenSpaceLensFlare": 1,
+        "m_GPUResidentDrawerMode": 0,
+        "m_SmallMeshScreenPercentage": 0.0,
+        "m_GPUResidentDrawerEnableOcclusionCullingInCameras": 0,
+        "m_ShadowType": 1,
+        "m_LocalShadowsSupported": 0,
+        "m_LocalShadowsAtlasResolution": 256,
+        "m_MaxPixelLights": 0,
+        "m_ShadowAtlasResolution": 256,
+        "m_VolumeFrameworkUpdateMode": 0,
+        "m_VolumeProfile": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "apvScenesData": {
+          "obsoleteSceneBounds": {
+            "m_Keys": "",
+            "m_Values": []
+          },
+          "obsoleteHasProbeVolumes": {
+            "m_Keys": "",
+            "m_Values": []
+          }
+        },
+        "m_ShaderVariantLogLevel": 0,
+        "m_ShadowCascades": 0,
+        "m_Textures": {
+          "blueNoise64LTex": {
+            "m_FileID": 0,
+            "m_PathID": 41
+          },
+          "bayerMatrixTex": {
+            "m_FileID": 0,
+            "m_PathID": 46
+          }
+        }
+      }
+    },
+    {
+      "key": "globalgamemanagers.assets:2237",
+      "class": "VolumeProfile",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "In Game Post FX Global A High",
+        "components": [
+          {
+            "m_FileID": 0,
+            "m_PathID": 2243
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2219
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2220
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2228
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2226
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2242
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2245
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2227
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2218
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2247
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2223
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2230
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2229
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2221
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2217
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2222
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2216
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2225
+          },
+          {
+            "m_FileID": 0,
+            "m_PathID": 2224
+          }
+        ]
+      }
+    },
+    {
+      "key": "globalgamemanagers.assets:2242",
+      "class": "ColorAdjustments",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "ColorAdjustments",
+        "active": 1,
+        "postExposure": {
+          "m_OverrideState": 1,
+          "m_Value": -1.649999976158142
+        },
+        "contrast": {
+          "m_OverrideState": 1,
+          "m_Value": 18.299999237060547
+        },
+        "colorFilter": {
+          "m_OverrideState": 1,
+          "m_Value": {
+            "r": 0.8589800596237183,
+            "g": 0.8826727271080017,
+            "b": 0.9150943160057068,
+            "a": 1.0
+          }
+        },
+        "hueShift": {
+          "m_OverrideState": 1,
+          "m_Value": -78.0
+        },
+        "saturation": {
+          "m_OverrideState": 1,
+          "m_Value": -13.899999618530273
+        }
+      }
+    },
+    {
+      "key": "globalgamemanagers.assets:2243",
+      "class": "Tonemapping",
+      "data": {
+        "m_GameObject": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "m_Enabled": 1,
+        "m_Name": "Tonemapping",
+        "active": 1,
+        "mode": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "neutralHDRRangeReductionMode": {
+          "m_OverrideState": 1,
+          "m_Value": 2
+        },
+        "acesPreset": {
+          "m_OverrideState": 1,
+          "m_Value": 3
+        },
+        "hueShiftAmount": {
+          "m_OverrideState": 1,
+          "m_Value": 0.0
+        },
+        "detectPaperWhite": {
+          "m_OverrideState": 1,
+          "m_Value": 0
+        },
+        "paperWhite": {
+          "m_OverrideState": 1,
+          "m_Value": 300.0
+        },
+        "detectBrightnessLimits": {
+          "m_OverrideState": 1,
+          "m_Value": 1
+        },
+        "minNits": {
+          "m_OverrideState": 1,
+          "m_Value": 0.004999999888241291
+        },
+        "maxNits": {
+          "m_OverrideState": 1,
+          "m_Value": 1000.0
+        }
+      }
+    }
+  ],
+  "textures": [
+    {
+      "key": "sharedassets0.assets:134",
+      "type": "Texture2D",
+      "name": "sactx-0-1024x1024-Uncompressed-Fantasy  Assets 01-fa47eb4c",
+      "width": 1024,
+      "height": 1024,
+      "format": 4,
+      "filter": 0
+    },
+    {
+      "key": "sharedassets0.assets:144",
+      "type": "Texture2D",
+      "name": "Light Cookie 01",
+      "width": 1024,
+      "height": 1024,
+      "format": 1,
+      "filter": 1
+    },
+    {
+      "key": "sharedassets0.assets:148",
+      "type": "Texture2D",
+      "name": "Foreground Branch B",
+      "width": 256,
+      "height": 256,
+      "format": 12,
+      "filter": 1
+    }
+  ],
+  "meshes": [
+    {
+      "key": "sharedassets0.assets:201",
+      "type": "Mesh",
+      "name": "Quad Bottom Pivot",
+      "vertices": 4
+    },
+    {
+      "key": "sharedassets0.assets:202",
+      "type": "Mesh",
+      "name": "Slot Wheel 01",
+      "vertices": 48
+    },
+    {
+      "key": "sharedassets0.assets:203",
+      "type": "Mesh",
+      "name": "Coin A",
+      "vertices": 138
+    },
+    {
+      "key": "sharedassets0.assets:204",
+      "type": "Mesh",
+      "name": "Mod Dongle A",
+      "vertices": 846
+    },
+    {
+      "key": "sharedassets0.assets:205",
+      "type": "Mesh",
+      "name": "Medal B",
+      "vertices": 9
+    },
+    {
+      "key": "sharedassets0.assets:206",
+      "type": "Mesh",
+      "name": "Ashtray A",
+      "vertices": 233
+    },
+    {
+      "key": "sharedassets0.assets:207",
+      "type": "Mesh",
+      "name": "Chip A",
+      "vertices": 126
+    },
+    {
+      "key": "sharedassets0.assets:208",
+      "type": "Mesh",
+      "name": "Glass A",
+      "vertices": 52
+    },
+    {
+      "key": "sharedassets0.assets:209",
+      "type": "Mesh",
+      "name": "Dice A",
+      "vertices": 24
+    }
+  ],
+  "shader_metadata": {
+    "key": "sharedassets0.assets:210",
+    "name": "Shader Graphs/Sprite With Depth",
+    "target": "UniversalLitSubTarget",
+    "passes": [
+      "Universal Forward",
+      "ShadowCaster",
+      "MotionVectors",
+      "DepthOnly",
+      "DepthNormals",
+      "Universal 2D"
+    ],
+    "limitation": "Original graph not recovered; exported ShaderLab is metadata, not compilable source."
+  }
+}

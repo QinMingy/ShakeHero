@@ -1,0 +1,34 @@
+	private void DoGaussianDepthOfField(CommandBuffer cmd, RTHandle source, RTHandle destination, Rect pixelRect, bool enableAlphaOutput)
+	{
+		int num = 2;
+		Material gaussianDepthOfField = m_Materials.gaussianDepthOfField;
+		int num2 = m_Descriptor.width / num;
+		int height = m_Descriptor.height / num;
+		float value = m_DepthOfField.gaussianStart.value;
+		float y = Mathf.Max(value, m_DepthOfField.gaussianEnd.value);
+		float a = m_DepthOfField.gaussianMaxRadius.value * ((float)num2 / 1080f);
+		a = Mathf.Min(a, 2f);
+		CoreUtils.SetKeyword(gaussianDepthOfField, "_ENABLE_ALPHA_OUTPUT", enableAlphaOutput);
+		CoreUtils.SetKeyword(gaussianDepthOfField, "_HIGH_QUALITY_SAMPLING", m_DepthOfField.highQualitySampling.value);
+		gaussianDepthOfField.SetVector(ShaderConstants._CoCParams, new Vector3(value, y, a));
+		RenderingUtils.ReAllocateHandleIfNeeded(ref m_FullCoCTexture, GetCompatibleDescriptor(m_Descriptor.width, m_Descriptor.height, m_GaussianCoCFormat), FilterMode.Bilinear, TextureWrapMode.Clamp, 1, 0f, "_FullCoCTexture");
+		RenderingUtils.ReAllocateHandleIfNeeded(ref m_HalfCoCTexture, GetCompatibleDescriptor(num2, height, m_GaussianCoCFormat), FilterMode.Bilinear, TextureWrapMode.Clamp, 1, 0f, "_HalfCoCTexture");
+		RenderingUtils.ReAllocateHandleIfNeeded(ref m_PingTexture, GetCompatibleDescriptor(num2, height, GraphicsFormat.R16G16B16A16_SFloat), FilterMode.Bilinear, TextureWrapMode.Clamp, 1, 0f, "_PingTexture");
+		RenderingUtils.ReAllocateHandleIfNeeded(ref m_PongTexture, GetCompatibleDescriptor(num2, height, GraphicsFormat.R16G16B16A16_SFloat), FilterMode.Bilinear, TextureWrapMode.Clamp, 1, 0f, "_PongTexture");
+		PostProcessUtils.SetSourceSize(cmd, m_FullCoCTexture);
+		cmd.SetGlobalVector(ShaderConstants._DownSampleScaleFactor, new Vector4(1f / (float)num, 1f / (float)num, num, num));
+		Blitter.BlitCameraTexture(cmd, source, m_FullCoCTexture, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, gaussianDepthOfField, 0);
+		m_MRT2[0] = m_HalfCoCTexture.nameID;
+		m_MRT2[1] = m_PingTexture.nameID;
+		cmd.SetGlobalTexture(ShaderConstants._FullCoCTexture, m_FullCoCTexture.nameID);
+		CoreUtils.SetRenderTarget(cmd, m_MRT2, m_HalfCoCTexture);
+		Vector2 vector = (source.useScaling ? new Vector2(source.rtHandleProperties.rtHandleScale.x, source.rtHandleProperties.rtHandleScale.y) : Vector2.one);
+		Blitter.BlitTexture(cmd, source, vector, gaussianDepthOfField, 1);
+		cmd.SetGlobalTexture(ShaderConstants._HalfCoCTexture, m_HalfCoCTexture.nameID);
+		cmd.SetGlobalTexture(ShaderConstants._ColorTexture, source);
+		Blitter.BlitCameraTexture(cmd, m_PingTexture, m_PongTexture, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, gaussianDepthOfField, 2);
+		Blitter.BlitCameraTexture(cmd, m_PongTexture, m_PingTexture, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, gaussianDepthOfField, 3);
+		cmd.SetGlobalTexture(ShaderConstants._ColorTexture, m_PingTexture.nameID);
+		cmd.SetGlobalTexture(ShaderConstants._FullCoCTexture, m_FullCoCTexture.nameID);
+		Blitter.BlitCameraTexture(cmd, source, destination, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, gaussianDepthOfField, 4);
+	}

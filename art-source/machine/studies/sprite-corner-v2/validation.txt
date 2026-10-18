@@ -1,0 +1,12 @@
+plate 20x21 opaque/tinted colors=3
+frame 20x21 opaque/tinted colors=5
+ornament 19x19 opaque/tinted colors=2
+screw 4x4 opaque/tinted colors=5
+lamp-off 8x8 opaque/tinted colors=2
+lamp-on 8x8 opaque/tinted colors=2
+button 24x10 opaque/tinted colors=3
+glass 19x19 opaque/tinted colors=4
+A-low decoration=30/3869 quiet=99.22%
+B-medium decoration=126/3869 quiet=96.74%
+C-high decoration=256/3869 quiet=93.38%
+A-C changed=848 outside patch=0

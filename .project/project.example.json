@@ -1,0 +1,19 @@
+{
+  "$schema": "../schemas/project.schema.json",
+  "entry": "main.lua",
+  "version": "1.0.21",
+  "taptap_publish": {
+    "title": "摇摇牌库",
+    "description": "摇晃瓶子，让水果、硬币和特殊物品碰撞合成，通过三选一构筑牌库，每五回合挑战递增目标。",
+    "category": "casual",
+    "screen_orientation": "portrait",
+    "collection_type": "casual",
+    "trial_note": "",
+    "app_platforms": "1,2"
+  },
+  "assets": {
+    "icon": "",
+    "screenshots": [],
+    "promotional_image": ""
+  }
+}

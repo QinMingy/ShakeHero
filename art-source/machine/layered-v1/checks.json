@@ -1,0 +1,8 @@
+{
+  "lua_syntax_files": 45,
+  "game_rule_checks": 109,
+  "layered_checks": 34,
+  "widget_contract_checks": 40,
+  "independent_pngs": 51,
+  "runtime_visual_verification": "NOT_VERIFIED_BY_OFFLINE_CHECKS"
+}

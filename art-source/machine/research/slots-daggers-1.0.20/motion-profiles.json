@@ -1,0 +1,108 @@
+[
+  {
+    "file": "sharedassets0.assets",
+    "id": 4183,
+    "class": "NoiseSettings",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_Enabled": 1,
+      "m_Script": {
+        "m_FileID": 16777216,
+        "m_PathID": 27363639296
+      },
+      "m_Name": "Handheld Noise A",
+      "PositionNoise": [
+        {
+          "X": {
+            "Frequency": 1.0,
+            "Amplitude": 0.699999988079071,
+            "Constant": 0
+          },
+          "Y": {
+            "Frequency": 0.699999988079071,
+            "Amplitude": 1.100000023841858,
+            "Constant": 0
+          },
+          "Z": {
+            "Frequency": 0.0,
+            "Amplitude": 0.0,
+            "Constant": 0
+          }
+        },
+        {
+          "X": {
+            "Frequency": 0.800000011920929,
+            "Amplitude": 0.800000011920929,
+            "Constant": 0
+          },
+          "Y": {
+            "Frequency": 0.8999999761581421,
+            "Amplitude": 0.8999999761581421,
+            "Constant": 0
+          },
+          "Z": {
+            "Frequency": 0.0,
+            "Amplitude": 0.0,
+            "Constant": 0
+          }
+        }
+      ],
+      "OrientationNoise": [
+        {
+          "X": {
+            "Frequency": 0.5,
+            "Amplitude": 2.0,
+            "Constant": 0
+          },
+          "Y": {
+            "Frequency": 0.0,
+            "Amplitude": 0.0,
+            "Constant": 0
+          },
+          "Z": {
+            "Frequency": 0.0,
+            "Amplitude": 0.0,
+            "Constant": 0
+          }
+        },
+        {
+          "X": {
+            "Frequency": 0.10000000149011612,
+            "Amplitude": 1.0,
+            "Constant": 0
+          },
+          "Y": {
+            "Frequency": 0.0,
+            "Amplitude": 0.0,
+            "Constant": 0
+          },
+          "Z": {
+            "Frequency": 0.0,
+            "Amplitude": 0.0,
+            "Constant": 0
+          }
+        },
+        {
+          "X": {
+            "Frequency": 1.0,
+            "Amplitude": 0.20000000298023224,
+            "Constant": 0
+          },
+          "Y": {
+            "Frequency": 0.0,
+            "Amplitude": 0.0,
+            "Constant": 0
+          },
+          "Z": {
+            "Frequency": 0.0,
+            "Amplitude": 0.0,
+            "Constant": 0
+          }
+        }
+      ]
+    }
+  }
+]

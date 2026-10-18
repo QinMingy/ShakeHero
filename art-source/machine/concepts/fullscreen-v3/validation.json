@@ -1,0 +1,32 @@
+{
+  "exports": [
+    {
+      "source_crop": [
+        0.0,
+        0.99502486,
+        850.0,
+        1848.01
+      ],
+      "file": "fullscreen-402x874.png",
+      "width": 402,
+      "height": 874
+    },
+    {
+      "source_crop": [
+        0.0,
+        0.99502486,
+        850.0,
+        1848.01
+      ],
+      "file": "fullscreen-804x1748.png",
+      "width": 804,
+      "height": 1748
+    }
+  ],
+  "source_size": [
+    850,
+    1850
+  ],
+  "kind": "full_screen_generated_concept",
+  "runtime_changed": false
+}

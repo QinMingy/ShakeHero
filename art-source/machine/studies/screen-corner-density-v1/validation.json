@@ -1,0 +1,62 @@
+{
+  "created": "2026-10-14",
+  "type": "static_local_material_study",
+  "canvas": [
+    402,
+    874
+  ],
+  "variants": [
+    "A-low",
+    "B-medium",
+    "C-high"
+  ],
+  "source": ".tmp/art-consistency-preview-v2.jpg",
+  "source_crop": [
+    26,
+    31,
+    406,
+    811
+  ],
+  "placement": [
+    0,
+    35,
+    402,
+    803
+  ],
+  "patch_source_bounds": [
+    48,
+    224,
+    210,
+    170
+  ],
+  "dimensions_verified": true,
+  "comparisons": [
+    {
+      "pair": "A-B",
+      "changed_pixels": 14016,
+      "outside_study_region": 0,
+      "bounds": [
+        22,
+        226,
+        229,
+        393
+      ]
+    },
+    {
+      "pair": "A-C",
+      "changed_pixels": 13987,
+      "outside_study_region": 0,
+      "bounds": [
+        22,
+        226,
+        229,
+        393
+      ]
+    }
+  ],
+  "runtime_changed": false,
+  "preview_state": "stopped",
+  "recommendation": "B medium: readable shallow panels, wear concentrated at joints; A is the quiet alternative; C is an upper-density comparison.",
+  "reference_url": "https://store.steampowered.com/app/3631290/",
+  "reference_usage": "visual study only; do not package reference image as a game asset"
+}

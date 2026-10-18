@@ -1,0 +1,15 @@
+	private void GetLightUVScaleOffset(ref UniversalAdditionalLightData additionalLightData, ref Matrix4x4 uvTransform)
+	{
+		Vector2 vector = Vector2.one / additionalLightData.lightCookieSize;
+		Vector2 lightCookieOffset = additionalLightData.lightCookieOffset;
+		if (Mathf.Abs(vector.x) < half.MinValue)
+		{
+			vector.x = Mathf.Sign(vector.x) * half.MinValue;
+		}
+		if (Mathf.Abs(vector.y) < half.MinValue)
+		{
+			vector.y = Mathf.Sign(vector.y) * half.MinValue;
+		}
+		uvTransform = Matrix4x4.Scale(new Vector3(vector.x, vector.y, 1f));
+		uvTransform.SetColumn(3, new Vector4((0f - lightCookieOffset.x) * vector.x, (0f - lightCookieOffset.y) * vector.y, 0f, 1f));
+	}

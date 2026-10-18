@@ -1,0 +1,273 @@
+[
+  {
+    "key": "globalgamemanagers.assets:2218",
+    "class": "Vignette",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_Enabled": 1,
+      "m_Script": {
+        "m_FileID": 0,
+        "m_PathID": 21139292160
+      },
+      "m_Name": "Vignette",
+      "active": 1,
+      "color": {
+        "m_OverrideState": 1,
+        "m_Value": {
+          "r": 0.18039216101169586,
+          "g": 0.03921568766236305,
+          "b": 0.048157092183828354,
+          "a": 1.0
+        }
+      },
+      "center": {
+        "m_OverrideState": 1,
+        "m_Value": {
+          "x": 0.5,
+          "y": 0.5
+        }
+      },
+      "intensity": {
+        "m_OverrideState": 1,
+        "m_Value": 0.492000013589859
+      },
+      "smoothness": {
+        "m_OverrideState": 1,
+        "m_Value": 0.1289999932050705
+      },
+      "rounded": {
+        "m_OverrideState": 1,
+        "m_Value": 0
+      }
+    }
+  },
+  {
+    "key": "globalgamemanagers.assets:2219",
+    "class": "Bloom",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_Enabled": 1,
+      "m_Script": {
+        "m_FileID": 0,
+        "m_PathID": 3892314112
+      },
+      "m_Name": "Bloom",
+      "active": 1,
+      "skipIterations": {
+        "m_OverrideState": 1,
+        "m_Value": 0
+      },
+      "threshold": {
+        "m_OverrideState": 1,
+        "m_Value": 0.6499999761581421
+      },
+      "intensity": {
+        "m_OverrideState": 1,
+        "m_Value": 3.0
+      },
+      "scatter": {
+        "m_OverrideState": 1,
+        "m_Value": 0.9909999966621399
+      },
+      "clamp": {
+        "m_OverrideState": 1,
+        "m_Value": 65472.0
+      },
+      "tint": {
+        "m_OverrideState": 1,
+        "m_Value": {
+          "r": 0.8253135681152344,
+          "g": 1.0,
+          "b": 0.37264150381088257,
+          "a": 1.0
+        }
+      },
+      "highQualityFiltering": {
+        "m_OverrideState": 1,
+        "m_Value": 0
+      },
+      "downscale": {
+        "m_OverrideState": 1,
+        "m_Value": 0
+      },
+      "maxIterations": {
+        "m_OverrideState": 1,
+        "m_Value": 6
+      },
+      "dirtTexture": {
+        "m_OverrideState": 1,
+        "m_Value": {
+          "m_FileID": 0,
+          "m_PathID": 0
+        },
+        "dimension": 1
+      },
+      "dirtIntensity": {
+        "m_OverrideState": 1,
+        "m_Value": 0.0
+      }
+    }
+  },
+  {
+    "key": "globalgamemanagers.assets:2220",
+    "class": "DepthOfField",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_Enabled": 1,
+      "m_Script": {
+        "m_FileID": 0,
+        "m_PathID": 28655484928
+      },
+      "m_Name": "DepthOfField",
+      "active": 1,
+      "mode": {
+        "m_OverrideState": 1,
+        "m_Value": 1
+      },
+      "gaussianStart": {
+        "m_OverrideState": 1,
+        "m_Value": 50.0
+      },
+      "gaussianEnd": {
+        "m_OverrideState": 1,
+        "m_Value": 2.0
+      },
+      "gaussianMaxRadius": {
+        "m_OverrideState": 1,
+        "m_Value": 1.5
+      },
+      "highQualitySampling": {
+        "m_OverrideState": 1,
+        "m_Value": 0
+      },
+      "focusDistance": {
+        "m_OverrideState": 1,
+        "m_Value": 10.0
+      },
+      "aperture": {
+        "m_OverrideState": 1,
+        "m_Value": 5.599999904632568
+      },
+      "focalLength": {
+        "m_OverrideState": 1,
+        "m_Value": 50.0
+      },
+      "bladeCount": {
+        "m_OverrideState": 1,
+        "m_Value": 5
+      },
+      "bladeCurvature": {
+        "m_OverrideState": 1,
+        "m_Value": 1.0
+      },
+      "bladeRotation": {
+        "m_OverrideState": 1,
+        "m_Value": 0.0
+      }
+    }
+  },
+  {
+    "key": "globalgamemanagers.assets:2242",
+    "class": "ColorAdjustments",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_Enabled": 1,
+      "m_Script": {
+        "m_FileID": 0,
+        "m_PathID": 15837691904
+      },
+      "m_Name": "ColorAdjustments",
+      "active": 1,
+      "postExposure": {
+        "m_OverrideState": 1,
+        "m_Value": -1.649999976158142
+      },
+      "contrast": {
+        "m_OverrideState": 1,
+        "m_Value": 18.299999237060547
+      },
+      "colorFilter": {
+        "m_OverrideState": 1,
+        "m_Value": {
+          "r": 0.8589800596237183,
+          "g": 0.8826727271080017,
+          "b": 0.9150943160057068,
+          "a": 1.0
+        }
+      },
+      "hueShift": {
+        "m_OverrideState": 1,
+        "m_Value": -78.0
+      },
+      "saturation": {
+        "m_OverrideState": 1,
+        "m_Value": -13.899999618530273
+      }
+    }
+  },
+  {
+    "key": "globalgamemanagers.assets:2243",
+    "class": "Tonemapping",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_Enabled": 1,
+      "m_Script": {
+        "m_FileID": 0,
+        "m_PathID": 22968008704
+      },
+      "m_Name": "Tonemapping",
+      "active": 1,
+      "mode": {
+        "m_OverrideState": 1,
+        "m_Value": 0
+      },
+      "neutralHDRRangeReductionMode": {
+        "m_OverrideState": 1,
+        "m_Value": 2
+      },
+      "acesPreset": {
+        "m_OverrideState": 1,
+        "m_Value": 3
+      },
+      "hueShiftAmount": {
+        "m_OverrideState": 1,
+        "m_Value": 0.0
+      },
+      "detectPaperWhite": {
+        "m_OverrideState": 1,
+        "m_Value": 0
+      },
+      "paperWhite": {
+        "m_OverrideState": 1,
+        "m_Value": 300.0
+      },
+      "detectBrightnessLimits": {
+        "m_OverrideState": 1,
+        "m_Value": 1
+      },
+      "minNits": {
+        "m_OverrideState": 1,
+        "m_Value": 0.004999999888241291
+      },
+      "maxNits": {
+        "m_OverrideState": 1,
+        "m_Value": 1000.0
+      }
+    }
+  }
+]

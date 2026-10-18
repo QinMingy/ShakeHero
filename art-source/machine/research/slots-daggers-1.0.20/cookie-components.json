@@ -1,0 +1,50 @@
+[
+  {
+    "id": 8796,
+    "class": "AnimateLightCookie",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 216
+      },
+      "m_Enabled": 1,
+      "m_Script": {
+        "m_FileID": 16777216,
+        "m_PathID": 35618029568
+      },
+      "m_Name": "",
+      "speed": {
+        "x": 0.0,
+        "y": -3.5
+      },
+      "originalOffset": {
+        "x": 4.0,
+        "y": 2.0
+      }
+    }
+  },
+  {
+    "id": 9022,
+    "class": "AnimateLightCookie",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 583
+      },
+      "m_Enabled": 1,
+      "m_Script": {
+        "m_FileID": 16777216,
+        "m_PathID": 35618029568
+      },
+      "m_Name": "",
+      "speed": {
+        "x": 0.0,
+        "y": -3.5
+      },
+      "originalOffset": {
+        "x": 4.0,
+        "y": 2.0
+      }
+    }
+  }
+]

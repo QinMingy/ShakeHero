@@ -1,0 +1,1253 @@
+[
+  {
+    "id": 27,
+    "type": "GameObject",
+    "data": {
+      "m_Component": [
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 2859
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 5045
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 4889
+          }
+        }
+      ],
+      "m_Layer": 0,
+      "m_Name": "Shadow Caster",
+      "m_Tag": 0,
+      "m_IsActive": true
+    }
+  },
+  {
+    "id": 80,
+    "type": "GameObject",
+    "data": {
+      "m_Component": [
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 2898
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 5047
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 4891
+          }
+        }
+      ],
+      "m_Layer": 0,
+      "m_Name": "Shadow Caster (1)",
+      "m_Tag": 0,
+      "m_IsActive": true
+    }
+  },
+  {
+    "id": 291,
+    "type": "GameObject",
+    "data": {
+      "m_Component": [
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 3045
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 5063
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 4907
+          }
+        }
+      ],
+      "m_Layer": 0,
+      "m_Name": "Shadow Caster",
+      "m_Tag": 0,
+      "m_IsActive": true
+    }
+  },
+  {
+    "id": 294,
+    "type": "GameObject",
+    "data": {
+      "m_Component": [
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 3047
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 5064
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 4908
+          }
+        }
+      ],
+      "m_Layer": 0,
+      "m_Name": "Shadow Caster",
+      "m_Tag": 0,
+      "m_IsActive": true
+    }
+  },
+  {
+    "id": 356,
+    "type": "GameObject",
+    "data": {
+      "m_Component": [
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 3094
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 5069
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 4913
+          }
+        }
+      ],
+      "m_Layer": 0,
+      "m_Name": "Shadow Caster",
+      "m_Tag": 0,
+      "m_IsActive": true
+    }
+  },
+  {
+    "id": 401,
+    "type": "GameObject",
+    "data": {
+      "m_Component": [
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 7707
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 7052
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 8884
+          }
+        }
+      ],
+      "m_Layer": 0,
+      "m_Name": "Film Noise Vignette ",
+      "m_Tag": 0,
+      "m_IsActive": true
+    }
+  },
+  {
+    "id": 479,
+    "type": "GameObject",
+    "data": {
+      "m_Component": [
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 3178
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 5073
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 4917
+          }
+        }
+      ],
+      "m_Layer": 0,
+      "m_Name": "Shadow Caster",
+      "m_Tag": 0,
+      "m_IsActive": true
+    }
+  },
+  {
+    "id": 954,
+    "type": "GameObject",
+    "data": {
+      "m_Component": [
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 3497
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 5105
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 4949
+          }
+        }
+      ],
+      "m_Layer": 0,
+      "m_Name": "Shadow Caster",
+      "m_Tag": 0,
+      "m_IsActive": true
+    }
+  },
+  {
+    "id": 956,
+    "type": "GameObject",
+    "data": {
+      "m_Component": [
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 3499
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 5106
+          }
+        },
+        {
+          "component": {
+            "m_FileID": 0,
+            "m_PathID": 4950
+          }
+        }
+      ],
+      "m_Layer": 0,
+      "m_Name": "Shadow Caster",
+      "m_Tag": 0,
+      "m_IsActive": true
+    }
+  },
+  {
+    "id": 2859,
+    "type": "Transform",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 27
+      },
+      "m_LocalRotation": {
+        "x": -0.0,
+        "y": -0.0,
+        "z": -0.0,
+        "w": 1.0
+      },
+      "m_LocalPosition": {
+        "x": -2.864000082015991,
+        "y": 2.5399999618530273,
+        "z": -0.4300000071525574
+      },
+      "m_LocalScale": {
+        "x": 1.303749680519104,
+        "y": 3.5704476833343506,
+        "z": 20.0
+      },
+      "m_Children": [],
+      "m_Father": {
+        "m_FileID": 0,
+        "m_PathID": 2870
+      }
+    }
+  },
+  {
+    "id": 2898,
+    "type": "Transform",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 80
+      },
+      "m_LocalRotation": {
+        "x": -0.0,
+        "y": -0.0,
+        "z": -0.0,
+        "w": 1.0
+      },
+      "m_LocalPosition": {
+        "x": 0.03319999948143959,
+        "y": 0.26739999651908875,
+        "z": 0.10999999940395355
+      },
+      "m_LocalScale": {
+        "x": 0.32479190826416016,
+        "y": 2.0880231857299805,
+        "z": 20.0
+      },
+      "m_Children": [],
+      "m_Father": {
+        "m_FileID": 0,
+        "m_PathID": 3300
+      }
+    }
+  },
+  {
+    "id": 3045,
+    "type": "Transform",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 291
+      },
+      "m_LocalRotation": {
+        "x": -0.0,
+        "y": -0.0,
+        "z": -0.0,
+        "w": 1.0
+      },
+      "m_LocalPosition": {
+        "x": 0.02370000071823597,
+        "y": -0.028699999675154686,
+        "z": 0.05000000074505806
+      },
+      "m_LocalScale": {
+        "x": 1.2572410106658936,
+        "y": 1.235144853591919,
+        "z": 25.0
+      },
+      "m_Children": [],
+      "m_Father": {
+        "m_FileID": 0,
+        "m_PathID": 3296
+      }
+    }
+  },
+  {
+    "id": 3047,
+    "type": "Transform",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 294
+      },
+      "m_LocalRotation": {
+        "x": -0.0,
+        "y": -0.0,
+        "z": -0.0,
+        "w": 1.0
+      },
+      "m_LocalPosition": {
+        "x": 2.990000009536743,
+        "y": 2.5399999618530273,
+        "z": -0.4300000071525574
+      },
+      "m_LocalScale": {
+        "x": 1.303749680519104,
+        "y": 3.5704476833343506,
+        "z": 20.0
+      },
+      "m_Children": [],
+      "m_Father": {
+        "m_FileID": 0,
+        "m_PathID": 2870
+      }
+    }
+  },
+  {
+    "id": 3094,
+    "type": "Transform",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 356
+      },
+      "m_LocalRotation": {
+        "x": -0.0,
+        "y": -0.0,
+        "z": -0.0,
+        "w": 1.0
+      },
+      "m_LocalPosition": {
+        "x": -0.04390000179409981,
+        "y": -0.06150013208389282,
+        "z": -0.06400012969970703
+      },
+      "m_LocalScale": {
+        "x": 1.8662681579589844,
+        "y": 0.4696015417575836,
+        "z": 20.0
+      },
+      "m_Children": [],
+      "m_Father": {
+        "m_FileID": 0,
+        "m_PathID": 3099
+      }
+    }
+  },
+  {
+    "id": 3178,
+    "type": "Transform",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 479
+      },
+      "m_LocalRotation": {
+        "x": -0.0,
+        "y": -0.0,
+        "z": -0.0,
+        "w": 1.0
+      },
+      "m_LocalPosition": {
+        "x": 0.5490999817848206,
+        "y": -0.03200000151991844,
+        "z": 0.01799985021352768
+      },
+      "m_LocalScale": {
+        "x": 3.4989030361175537,
+        "y": 0.5465896129608154,
+        "z": 20.0
+      },
+      "m_Children": [],
+      "m_Father": {
+        "m_FileID": 0,
+        "m_PathID": 3583
+      }
+    }
+  },
+  {
+    "id": 3497,
+    "type": "Transform",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 954
+      },
+      "m_LocalRotation": {
+        "x": -0.0,
+        "y": -0.0,
+        "z": -0.0,
+        "w": 1.0
+      },
+      "m_LocalPosition": {
+        "x": 0.11289999634027481,
+        "y": -0.19339999556541443,
+        "z": 0.07199999690055847
+      },
+      "m_LocalScale": {
+        "x": 2.455383777618408,
+        "y": 0.5697007179260254,
+        "z": 20.0
+      },
+      "m_Children": [],
+      "m_Father": {
+        "m_FileID": 0,
+        "m_PathID": 3247
+      }
+    }
+  },
+  {
+    "id": 3499,
+    "type": "Transform",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 956
+      },
+      "m_LocalRotation": {
+        "x": -0.0,
+        "y": -0.0,
+        "z": -0.0,
+        "w": 1.0
+      },
+      "m_LocalPosition": {
+        "x": -0.006300000008195639,
+        "y": -1.1187000274658203,
+        "z": 0.10999999940395355
+      },
+      "m_LocalScale": {
+        "x": 0.623701274394989,
+        "y": 0.5510740876197815,
+        "z": 20.0
+      },
+      "m_Children": [],
+      "m_Father": {
+        "m_FileID": 0,
+        "m_PathID": 3300
+      }
+    }
+  },
+  {
+    "id": 4889,
+    "type": "MeshRenderer",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 27
+      },
+      "m_Enabled": true,
+      "m_CastShadows": 3,
+      "m_ReceiveShadows": 1,
+      "m_DynamicOccludee": 1,
+      "m_StaticShadowCaster": 0,
+      "m_MotionVectors": 1,
+      "m_LightProbeUsage": 1,
+      "m_ReflectionProbeUsage": 1,
+      "m_RayTracingMode": 2,
+      "m_RayTraceProcedural": 0,
+      "m_RayTracingAccelStructBuildFlagsOverride": 0,
+      "m_RayTracingAccelStructBuildFlags": 1,
+      "m_SmallMeshCulling": 1,
+      "m_ForceMeshLod": -1,
+      "m_MeshLodSelectionBias": 0.0,
+      "m_RenderingLayerMask": 1,
+      "m_RendererPriority": 0,
+      "m_LightmapIndex": 65535,
+      "m_LightmapIndexDynamic": 65535,
+      "m_LightmapTilingOffset": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_LightmapTilingOffsetDynamic": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_Materials": [
+        {
+          "m_FileID": 3,
+          "m_PathID": 25
+        }
+      ],
+      "m_StaticBatchInfo": {
+        "firstSubMesh": 0,
+        "subMeshCount": 0
+      },
+      "m_StaticBatchRoot": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_ProbeAnchor": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_LightProbeVolumeOverride": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_SortingLayerID": 0,
+      "m_SortingLayer": 0,
+      "m_SortingOrder": 0,
+      "m_AdditionalVertexStreams": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_EnlightenVertexStream": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    }
+  },
+  {
+    "id": 4891,
+    "type": "MeshRenderer",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 80
+      },
+      "m_Enabled": true,
+      "m_CastShadows": 3,
+      "m_ReceiveShadows": 1,
+      "m_DynamicOccludee": 1,
+      "m_StaticShadowCaster": 0,
+      "m_MotionVectors": 1,
+      "m_LightProbeUsage": 1,
+      "m_ReflectionProbeUsage": 1,
+      "m_RayTracingMode": 2,
+      "m_RayTraceProcedural": 0,
+      "m_RayTracingAccelStructBuildFlagsOverride": 0,
+      "m_RayTracingAccelStructBuildFlags": 1,
+      "m_SmallMeshCulling": 1,
+      "m_ForceMeshLod": -1,
+      "m_MeshLodSelectionBias": 0.0,
+      "m_RenderingLayerMask": 1,
+      "m_RendererPriority": 0,
+      "m_LightmapIndex": 65535,
+      "m_LightmapIndexDynamic": 65535,
+      "m_LightmapTilingOffset": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_LightmapTilingOffsetDynamic": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_Materials": [
+        {
+          "m_FileID": 3,
+          "m_PathID": 25
+        }
+      ],
+      "m_StaticBatchInfo": {
+        "firstSubMesh": 0,
+        "subMeshCount": 0
+      },
+      "m_StaticBatchRoot": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_ProbeAnchor": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_LightProbeVolumeOverride": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_SortingLayerID": 0,
+      "m_SortingLayer": 0,
+      "m_SortingOrder": 0,
+      "m_AdditionalVertexStreams": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_EnlightenVertexStream": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    }
+  },
+  {
+    "id": 4907,
+    "type": "MeshRenderer",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 291
+      },
+      "m_Enabled": true,
+      "m_CastShadows": 3,
+      "m_ReceiveShadows": 1,
+      "m_DynamicOccludee": 1,
+      "m_StaticShadowCaster": 0,
+      "m_MotionVectors": 1,
+      "m_LightProbeUsage": 1,
+      "m_ReflectionProbeUsage": 1,
+      "m_RayTracingMode": 2,
+      "m_RayTraceProcedural": 0,
+      "m_RayTracingAccelStructBuildFlagsOverride": 0,
+      "m_RayTracingAccelStructBuildFlags": 1,
+      "m_SmallMeshCulling": 1,
+      "m_ForceMeshLod": -1,
+      "m_MeshLodSelectionBias": 0.0,
+      "m_RenderingLayerMask": 1,
+      "m_RendererPriority": 0,
+      "m_LightmapIndex": 65535,
+      "m_LightmapIndexDynamic": 65535,
+      "m_LightmapTilingOffset": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_LightmapTilingOffsetDynamic": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_Materials": [
+        {
+          "m_FileID": 3,
+          "m_PathID": 25
+        }
+      ],
+      "m_StaticBatchInfo": {
+        "firstSubMesh": 0,
+        "subMeshCount": 0
+      },
+      "m_StaticBatchRoot": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_ProbeAnchor": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_LightProbeVolumeOverride": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_SortingLayerID": 0,
+      "m_SortingLayer": 0,
+      "m_SortingOrder": 0,
+      "m_AdditionalVertexStreams": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_EnlightenVertexStream": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    }
+  },
+  {
+    "id": 4908,
+    "type": "MeshRenderer",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 294
+      },
+      "m_Enabled": true,
+      "m_CastShadows": 3,
+      "m_ReceiveShadows": 1,
+      "m_DynamicOccludee": 1,
+      "m_StaticShadowCaster": 0,
+      "m_MotionVectors": 1,
+      "m_LightProbeUsage": 1,
+      "m_ReflectionProbeUsage": 1,
+      "m_RayTracingMode": 2,
+      "m_RayTraceProcedural": 0,
+      "m_RayTracingAccelStructBuildFlagsOverride": 0,
+      "m_RayTracingAccelStructBuildFlags": 1,
+      "m_SmallMeshCulling": 1,
+      "m_ForceMeshLod": -1,
+      "m_MeshLodSelectionBias": 0.0,
+      "m_RenderingLayerMask": 1,
+      "m_RendererPriority": 0,
+      "m_LightmapIndex": 65535,
+      "m_LightmapIndexDynamic": 65535,
+      "m_LightmapTilingOffset": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_LightmapTilingOffsetDynamic": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_Materials": [
+        {
+          "m_FileID": 3,
+          "m_PathID": 25
+        }
+      ],
+      "m_StaticBatchInfo": {
+        "firstSubMesh": 0,
+        "subMeshCount": 0
+      },
+      "m_StaticBatchRoot": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_ProbeAnchor": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_LightProbeVolumeOverride": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_SortingLayerID": 0,
+      "m_SortingLayer": 0,
+      "m_SortingOrder": 0,
+      "m_AdditionalVertexStreams": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_EnlightenVertexStream": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    }
+  },
+  {
+    "id": 4913,
+    "type": "MeshRenderer",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 356
+      },
+      "m_Enabled": true,
+      "m_CastShadows": 3,
+      "m_ReceiveShadows": 1,
+      "m_DynamicOccludee": 1,
+      "m_StaticShadowCaster": 0,
+      "m_MotionVectors": 1,
+      "m_LightProbeUsage": 1,
+      "m_ReflectionProbeUsage": 1,
+      "m_RayTracingMode": 2,
+      "m_RayTraceProcedural": 0,
+      "m_RayTracingAccelStructBuildFlagsOverride": 0,
+      "m_RayTracingAccelStructBuildFlags": 1,
+      "m_SmallMeshCulling": 1,
+      "m_ForceMeshLod": -1,
+      "m_MeshLodSelectionBias": 0.0,
+      "m_RenderingLayerMask": 1,
+      "m_RendererPriority": 0,
+      "m_LightmapIndex": 65535,
+      "m_LightmapIndexDynamic": 65535,
+      "m_LightmapTilingOffset": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_LightmapTilingOffsetDynamic": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_Materials": [
+        {
+          "m_FileID": 3,
+          "m_PathID": 25
+        }
+      ],
+      "m_StaticBatchInfo": {
+        "firstSubMesh": 0,
+        "subMeshCount": 0
+      },
+      "m_StaticBatchRoot": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_ProbeAnchor": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_LightProbeVolumeOverride": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_SortingLayerID": 0,
+      "m_SortingLayer": 0,
+      "m_SortingOrder": 0,
+      "m_AdditionalVertexStreams": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_EnlightenVertexStream": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    }
+  },
+  {
+    "id": 4917,
+    "type": "MeshRenderer",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 479
+      },
+      "m_Enabled": true,
+      "m_CastShadows": 3,
+      "m_ReceiveShadows": 1,
+      "m_DynamicOccludee": 1,
+      "m_StaticShadowCaster": 0,
+      "m_MotionVectors": 1,
+      "m_LightProbeUsage": 1,
+      "m_ReflectionProbeUsage": 1,
+      "m_RayTracingMode": 2,
+      "m_RayTraceProcedural": 0,
+      "m_RayTracingAccelStructBuildFlagsOverride": 0,
+      "m_RayTracingAccelStructBuildFlags": 1,
+      "m_SmallMeshCulling": 1,
+      "m_ForceMeshLod": -1,
+      "m_MeshLodSelectionBias": 0.0,
+      "m_RenderingLayerMask": 1,
+      "m_RendererPriority": 0,
+      "m_LightmapIndex": 65535,
+      "m_LightmapIndexDynamic": 65535,
+      "m_LightmapTilingOffset": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_LightmapTilingOffsetDynamic": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_Materials": [
+        {
+          "m_FileID": 3,
+          "m_PathID": 25
+        }
+      ],
+      "m_StaticBatchInfo": {
+        "firstSubMesh": 0,
+        "subMeshCount": 0
+      },
+      "m_StaticBatchRoot": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_ProbeAnchor": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_LightProbeVolumeOverride": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_SortingLayerID": 0,
+      "m_SortingLayer": 0,
+      "m_SortingOrder": 0,
+      "m_AdditionalVertexStreams": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_EnlightenVertexStream": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    }
+  },
+  {
+    "id": 4949,
+    "type": "MeshRenderer",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 954
+      },
+      "m_Enabled": true,
+      "m_CastShadows": 3,
+      "m_ReceiveShadows": 1,
+      "m_DynamicOccludee": 1,
+      "m_StaticShadowCaster": 0,
+      "m_MotionVectors": 1,
+      "m_LightProbeUsage": 1,
+      "m_ReflectionProbeUsage": 1,
+      "m_RayTracingMode": 2,
+      "m_RayTraceProcedural": 0,
+      "m_RayTracingAccelStructBuildFlagsOverride": 0,
+      "m_RayTracingAccelStructBuildFlags": 1,
+      "m_SmallMeshCulling": 1,
+      "m_ForceMeshLod": -1,
+      "m_MeshLodSelectionBias": 0.0,
+      "m_RenderingLayerMask": 1,
+      "m_RendererPriority": 0,
+      "m_LightmapIndex": 65535,
+      "m_LightmapIndexDynamic": 65535,
+      "m_LightmapTilingOffset": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_LightmapTilingOffsetDynamic": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_Materials": [
+        {
+          "m_FileID": 3,
+          "m_PathID": 25
+        }
+      ],
+      "m_StaticBatchInfo": {
+        "firstSubMesh": 0,
+        "subMeshCount": 0
+      },
+      "m_StaticBatchRoot": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_ProbeAnchor": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_LightProbeVolumeOverride": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_SortingLayerID": 0,
+      "m_SortingLayer": 0,
+      "m_SortingOrder": 0,
+      "m_AdditionalVertexStreams": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_EnlightenVertexStream": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    }
+  },
+  {
+    "id": 4950,
+    "type": "MeshRenderer",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 956
+      },
+      "m_Enabled": true,
+      "m_CastShadows": 3,
+      "m_ReceiveShadows": 1,
+      "m_DynamicOccludee": 1,
+      "m_StaticShadowCaster": 0,
+      "m_MotionVectors": 1,
+      "m_LightProbeUsage": 1,
+      "m_ReflectionProbeUsage": 1,
+      "m_RayTracingMode": 2,
+      "m_RayTraceProcedural": 0,
+      "m_RayTracingAccelStructBuildFlagsOverride": 0,
+      "m_RayTracingAccelStructBuildFlags": 1,
+      "m_SmallMeshCulling": 1,
+      "m_ForceMeshLod": -1,
+      "m_MeshLodSelectionBias": 0.0,
+      "m_RenderingLayerMask": 1,
+      "m_RendererPriority": 0,
+      "m_LightmapIndex": 65535,
+      "m_LightmapIndexDynamic": 65535,
+      "m_LightmapTilingOffset": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_LightmapTilingOffsetDynamic": {
+        "x": 1.0,
+        "y": 1.0,
+        "z": 0.0,
+        "w": 0.0
+      },
+      "m_Materials": [
+        {
+          "m_FileID": 3,
+          "m_PathID": 25
+        }
+      ],
+      "m_StaticBatchInfo": {
+        "firstSubMesh": 0,
+        "subMeshCount": 0
+      },
+      "m_StaticBatchRoot": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_ProbeAnchor": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_LightProbeVolumeOverride": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_SortingLayerID": 0,
+      "m_SortingLayer": 0,
+      "m_SortingOrder": 0,
+      "m_AdditionalVertexStreams": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      },
+      "m_EnlightenVertexStream": {
+        "m_FileID": 0,
+        "m_PathID": 0
+      }
+    }
+  },
+  {
+    "id": 5045,
+    "type": "MeshFilter",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 27
+      },
+      "m_Mesh": {
+        "m_FileID": 2,
+        "m_PathID": 10210
+      }
+    }
+  },
+  {
+    "id": 5047,
+    "type": "MeshFilter",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 80
+      },
+      "m_Mesh": {
+        "m_FileID": 2,
+        "m_PathID": 10210
+      }
+    }
+  },
+  {
+    "id": 5063,
+    "type": "MeshFilter",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 291
+      },
+      "m_Mesh": {
+        "m_FileID": 2,
+        "m_PathID": 10210
+      }
+    }
+  },
+  {
+    "id": 5064,
+    "type": "MeshFilter",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 294
+      },
+      "m_Mesh": {
+        "m_FileID": 2,
+        "m_PathID": 10210
+      }
+    }
+  },
+  {
+    "id": 5069,
+    "type": "MeshFilter",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 356
+      },
+      "m_Mesh": {
+        "m_FileID": 2,
+        "m_PathID": 10210
+      }
+    }
+  },
+  {
+    "id": 5073,
+    "type": "MeshFilter",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 479
+      },
+      "m_Mesh": {
+        "m_FileID": 2,
+        "m_PathID": 10210
+      }
+    }
+  },
+  {
+    "id": 5105,
+    "type": "MeshFilter",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 954
+      },
+      "m_Mesh": {
+        "m_FileID": 2,
+        "m_PathID": 10210
+      }
+    }
+  },
+  {
+    "id": 5106,
+    "type": "MeshFilter",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 956
+      },
+      "m_Mesh": {
+        "m_FileID": 2,
+        "m_PathID": 10210
+      }
+    }
+  },
+  {
+    "id": 9022,
+    "class": "AnimateLightCookie",
+    "data": {
+      "m_GameObject": {
+        "m_FileID": 0,
+        "m_PathID": 583
+      },
+      "m_Enabled": 1,
+      "m_Script": {
+        "m_FileID": 16777216,
+        "m_PathID": 35618029568
+      },
+      "m_Name": "",
+      "speed": {
+        "x": 0.0,
+        "y": -3.5
+      },
+      "originalOffset": {
+        "x": 4.0,
+        "y": 2.0
+      }
+    }
+  },
+  {
+    "id": 9023,
+    "class": "UniversalAdditionalLightData",
+    "data": "Expected to read 92 bytes, but only read 84 bytes"
+  }
+]

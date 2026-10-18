@@ -1,0 +1,16 @@
+{
+  "$schema": "../schemas/resources.schema.json",
+
+  "preload_groups": [
+    "audio"
+  ],
+
+  "groups": {
+    "default": [
+      "**"
+    ],
+    "audio": [
+      "audio/**"
+    ]
+  }
+}

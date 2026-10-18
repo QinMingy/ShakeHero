@@ -1,0 +1,26 @@
+{
+  "source": "level0:9023 UniversalAdditionalLightData, Unity 6000.2.6f2 / Slots and Daggers 1.0.20",
+  "method": "92 byte raw MonoBehaviour; serialized field order verified against installed URP assembly. Generated typetree omitted 8 bytes in RenderingLayerMask, so use raw offsets for early fields.",
+  "raw_float_offsets": {
+    "44": 22,
+    "48": 30,
+    "52": 4,
+    "56": 2
+  },
+  "lightCookieSize": [
+    22,
+    30
+  ],
+  "lightCookieOffset": [
+    4,
+    2
+  ],
+  "AnimateLightCookie_speed": [
+    0,
+    -3.5
+  ],
+  "UV_formula": "(lightSpace.xy - (offset + time * speed)) / cookieSize + 0.5",
+  "previous_error": "legacy Light.m_CookieSize=10 is not the URP size; previous plus offset sign also wrong",
+  "local_time_scale": 0.25,
+  "local_loop_seconds": 34.285714285714285
+}

@@ -1,0 +1,690 @@
+{
+  "m_Name": "Sprite Vegetation Foreground",
+  "m_Shader": {
+    "m_FileID": 0,
+    "m_PathID": 214
+  },
+  "m_ValidKeywords": [
+    "_RECEIVE_SHADOWS_OFF",
+    "_SURFACE_TYPE_TRANSPARENT"
+  ],
+  "m_InvalidKeywords": [],
+  "m_LightmapFlags": 4,
+  "m_EnableInstancingVariants": false,
+  "m_DoubleSidedGI": false,
+  "m_CustomRenderQueue": 3000,
+  "stringTagMap": [
+    [
+      "RenderType",
+      "Transparent"
+    ]
+  ],
+  "disabledShaderPasses": [
+    "MOTIONVECTORS",
+    "DepthOnly",
+    "SHADOWCASTER"
+  ],
+  "m_SavedProperties": {
+    "m_TexEnvs": [
+      [
+        "_MainTex",
+        {
+          "m_Texture": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          },
+          "m_Scale": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "m_Offset": {
+            "x": 0.0,
+            "y": 0.0
+          }
+        }
+      ],
+      [
+        "unity_Lightmaps",
+        {
+          "m_Texture": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          },
+          "m_Scale": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "m_Offset": {
+            "x": 0.0,
+            "y": 0.0
+          }
+        }
+      ],
+      [
+        "unity_LightmapsInd",
+        {
+          "m_Texture": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          },
+          "m_Scale": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "m_Offset": {
+            "x": 0.0,
+            "y": 0.0
+          }
+        }
+      ],
+      [
+        "unity_ShadowMasks",
+        {
+          "m_Texture": {
+            "m_FileID": 0,
+            "m_PathID": 0
+          },
+          "m_Scale": {
+            "x": 1.0,
+            "y": 1.0
+          },
+          "m_Offset": {
+            "x": 0.0,
+            "y": 0.0
+          }
+        }
+      ]
+    ],
+    "m_Ints": [],
+    "m_Floats": [
+      [
+        "_AddPrecomputedVelocity",
+        0.0
+      ],
+      [
+        "_AdditionalBendDown",
+        0.0
+      ],
+      [
+        "_Alpha",
+        1.0
+      ],
+      [
+        "_AlphaClip",
+        0.0
+      ],
+      [
+        "_AlphaClipThreshold",
+        0.5
+      ],
+      [
+        "_AlphaCutoff",
+        1.0
+      ],
+      [
+        "_AlphaToMask",
+        0.0
+      ],
+      [
+        "_AnimateBottomVertices",
+        0.5
+      ],
+      [
+        "_AnimationNoiseScale",
+        1.0
+      ],
+      [
+        "_AnimationOffsetXYZ",
+        0.30000001192092896
+      ],
+      [
+        "_AnimationSpeed",
+        0.5
+      ],
+      [
+        "_AnimationYFalloffPower",
+        1.0
+      ],
+      [
+        "_BendBottomVertices",
+        0.0
+      ],
+      [
+        "_BendYFalloffPower",
+        1.0
+      ],
+      [
+        "_Blend",
+        0.0
+      ],
+      [
+        "_BlendModePreserveSpecular",
+        0.0
+      ],
+      [
+        "_BlendTerrainColor",
+        0.0
+      ],
+      [
+        "_BlendTerrainNornal",
+        0.0
+      ],
+      [
+        "_BumpScale",
+        1.0
+      ],
+      [
+        "_CastShadows",
+        0.0
+      ],
+      [
+        "_ClearCoatMask",
+        0.0
+      ],
+      [
+        "_ClearCoatSmoothness",
+        0.0
+      ],
+      [
+        "_Cull",
+        0.0
+      ],
+      [
+        "_Cutoff",
+        0.5
+      ],
+      [
+        "_DesaturationAmount",
+        0.0
+      ],
+      [
+        "_DesaturationRangerLowerEdge",
+        0.0
+      ],
+      [
+        "_DesaturationRangerUpperEdge",
+        1.0
+      ],
+      [
+        "_DetailAlbedoMapScale",
+        1.0
+      ],
+      [
+        "_DetailNormalMapScale",
+        1.0
+      ],
+      [
+        "_DstBlend",
+        10.0
+      ],
+      [
+        "_DstBlendAlpha",
+        10.0
+      ],
+      [
+        "_EnvironmentReflections",
+        1.0
+      ],
+      [
+        "_FullyGrownAt",
+        1.0
+      ],
+      [
+        "_GlossMapScale",
+        0.0
+      ],
+      [
+        "_Glossiness",
+        0.0
+      ],
+      [
+        "_GlossyReflections",
+        0.0
+      ],
+      [
+        "_GradientOverlayAmount",
+        0.0
+      ],
+      [
+        "_GrowthMapYPosInfluence",
+        0.0
+      ],
+      [
+        "_HarvestAnimationMaxRotation",
+        150.0
+      ],
+      [
+        "_HarvestAnimationSineMultiplier",
+        10.0
+      ],
+      [
+        "_HeightNoiseAmount",
+        0.0
+      ],
+      [
+        "_HeightNoiseScale",
+        0.0
+      ],
+      [
+        "_HideAmount",
+        1.0
+      ],
+      [
+        "_Metallic",
+        0.0
+      ],
+      [
+        "_MoveYPosBottomVertices",
+        0.0
+      ],
+      [
+        "_Noise02Amount",
+        0.0
+      ],
+      [
+        "_NoiseScale",
+        0.0
+      ],
+      [
+        "_ObjectPosVsVertexPos",
+        1.0
+      ],
+      [
+        "_OcclusionStrength",
+        1.0
+      ],
+      [
+        "_OverrideGrowthValue",
+        0.0
+      ],
+      [
+        "_PackedSprites",
+        0.0
+      ],
+      [
+        "_Parallax",
+        0.004999999888241291
+      ],
+      [
+        "_PointNormalUpwards",
+        0.0
+      ],
+      [
+        "_PowRotation",
+        1.5
+      ],
+      [
+        "_PowYOffset",
+        3.0
+      ],
+      [
+        "_PowerScale",
+        5.0
+      ],
+      [
+        "_QueueControl",
+        0.0
+      ],
+      [
+        "_QueueOffset",
+        0.0
+      ],
+      [
+        "_ReceiveShadows",
+        0.0
+      ],
+      [
+        "_ScaleBottomVertices",
+        0.0
+      ],
+      [
+        "_Smoothness",
+        0.0
+      ],
+      [
+        "_SmoothnessTextureChannel",
+        0.0
+      ],
+      [
+        "_SpecularHighlights",
+        1.0
+      ],
+      [
+        "_SpriteNoiseScale",
+        500.0
+      ],
+      [
+        "_SrcBlend",
+        5.0
+      ],
+      [
+        "_SrcBlendAlpha",
+        1.0
+      ],
+      [
+        "_StartGrowingAt",
+        0.0
+      ],
+      [
+        "_Surface",
+        1.0
+      ],
+      [
+        "_UVPosVsWorldSpaceYPos",
+        0.0
+      ],
+      [
+        "_WiggleBottomVertices",
+        0.0
+      ],
+      [
+        "_WiggleFalloff",
+        1.0
+      ],
+      [
+        "_WiggleFalloffPower",
+        0.5
+      ],
+      [
+        "_WiggleFalloffSpeed",
+        1.0
+      ],
+      [
+        "_WiggleNoiseAmount",
+        1.0
+      ],
+      [
+        "_WiggleNoiseScale",
+        0.10000000149011612
+      ],
+      [
+        "_WiggleSpeed",
+        15.0
+      ],
+      [
+        "_WiggleYFalloffPower",
+        1.0
+      ],
+      [
+        "_WorkflowMode",
+        1.0
+      ],
+      [
+        "_ZTest",
+        4.0
+      ],
+      [
+        "_ZWrite",
+        0.0
+      ],
+      [
+        "_ZWriteControl",
+        0.0
+      ]
+    ],
+    "m_Colors": [
+      [
+        "_AddColor",
+        {
+          "r": 0.0,
+          "g": 0.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_AnimationAmplitude",
+        {
+          "r": 0.05000000074505806,
+          "g": 0.07000000029802322,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_BaseColor",
+        {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 1.0
+        }
+      ],
+      [
+        "_BendStrength",
+        {
+          "r": 0.0,
+          "g": 1.5,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_Color",
+        {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 1.0
+        }
+      ],
+      [
+        "_EmissionColor",
+        {
+          "r": 0.0,
+          "g": 0.0,
+          "b": 0.0,
+          "a": 1.0
+        }
+      ],
+      [
+        "_Flip",
+        {
+          "r": 0.0,
+          "g": 0.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_GradientColor",
+        {
+          "r": 0.0,
+          "g": 0.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_GradientStartEnd",
+        {
+          "r": 0.0,
+          "g": 1.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_GrowthMapScaleInfluence",
+        {
+          "r": 0.0,
+          "g": 0.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_HarvestAnimationMinMaxYOffset",
+        {
+          "r": 0.5,
+          "g": 2.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_HarvestAnimationSpeedMinMax",
+        {
+          "r": 0.5,
+          "g": 1.5,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_HeightNoiseRange",
+        {
+          "r": 0.0,
+          "g": 1.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_NoiseColor",
+        {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_NoiseFalloff",
+        {
+          "r": 0.0,
+          "g": 1.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_OrthographicCameraSize",
+        {
+          "r": 50.0,
+          "g": 50.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_RecolorRangeB",
+        {
+          "r": 0.0,
+          "g": 1.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_RecolorRangeG",
+        {
+          "r": 0.0,
+          "g": 1.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_RecolorRangeH",
+        {
+          "r": 0.0,
+          "g": 1.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_RecolorRangeR",
+        {
+          "r": 0.0,
+          "g": 1.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_RecolorRangeS",
+        {
+          "r": 0.0,
+          "g": 0.05000000074505806,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_RecolorRangeV",
+        {
+          "r": 0.0,
+          "g": 1.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_RotationPivot",
+        {
+          "r": 0.0,
+          "g": 0.5,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_Scale",
+        {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_SpecColor",
+        {
+          "r": 0.19999995827674866,
+          "g": 0.19999995827674866,
+          "b": 0.19999995827674866,
+          "a": 1.0
+        }
+      ],
+      [
+        "_SpriteThresholds",
+        {
+          "r": 0.25,
+          "g": 0.5,
+          "b": 0.75,
+          "a": 0.0
+        }
+      ],
+      [
+        "_VegetationColor",
+        {
+          "r": 1.0,
+          "g": 1.0,
+          "b": 1.0,
+          "a": 1.0
+        }
+      ],
+      [
+        "_WiggleMapOffset",
+        {
+          "r": 0.0,
+          "g": 0.0,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ],
+      [
+        "_WiggleStrength",
+        {
+          "r": 0.10000000149011612,
+          "g": 0.05000000074505806,
+          "b": 0.0,
+          "a": 0.0
+        }
+      ]
+    ]
+  },
+  "m_BuildTextureStacks": []
+}

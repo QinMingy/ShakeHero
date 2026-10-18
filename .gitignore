@@ -1,0 +1,70 @@
+# Build artifacts & runtime state
+.build/
+dist/
+.cli/
+logs/
+*.log
+logs/.nfs*
+.sce/logs/
+.sce/build/build_steps/__pycache__/
+
+# Temp & swap files
+.tmp/
+*.crswap
+.DS_Store
+
+# OSS util
+.ossutil_checkpoint/
+ossutil_output/
+
+# Editor / IDE / agent configs
+.vscode/
+.cursor/
+.codex/
+.gemini/
+.claude/
+.emmylua/
+.installer/
+.maker/
+
+# Maker engine assets & agent files (provided by ai-dev-kit, not user source)
+engine-docs/
+examples/
+lua-tools/
+schemas/
+skills/
+templates/
+tools/
+urhox-libs/
+AGENTS.md
+
+# 本地平台身份和测试分发链接不公开。
+# 初始化时将 .project/project.example.json 复制为 .project/project.json。
+/.project/project.json
+/.project/project.json.meta
+
+# 本地代理会话、验收产物与个人运行存档
+/.agent/
+/.agents/
+/.opencode/
+/.*-validation*/
+/.*-probe/
+/.*-regression/
+/.*-backup/
+/.tmp-headless/
+/_uploads/
+/quick_start.bat
+/*.png
+/*-validation*.json
+/bottle-save-*.json
+/cooldown-runtime-output.txt
+/docs/.encoding-backup/
+
+# 凭据与本地缓存
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+__pycache__/
+*.pyc

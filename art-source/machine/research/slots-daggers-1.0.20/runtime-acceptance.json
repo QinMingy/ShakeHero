@@ -1,0 +1,38 @@
+{
+  "date": "2026-10-14",
+  "session_id": "168876a7-72e2-44f7-aafb-b69cd90644a9",
+  "reload_id": 8,
+  "visual_tool": "computer-use / sky",
+  "visual_checks": {
+    "main_light_ab": "PASS",
+    "moving_cookie": "PASS",
+    "lit_dust_motion": "PASS",
+    "structure_noise_ab_with_key_disabled": "PASS",
+    "equal_candidate_bounds": "PASS",
+    "candidate_selection_frame": "PASS",
+    "inventory_return_preserves_selection": "PASS",
+    "collapse_reopen_preserves_selection": "PASS",
+    "hide_bottle_controls_during_draft": "PASS",
+    "developer_controls_top_right": "PASS"
+  },
+  "lsp_errors": 0,
+  "offline_checks": {
+    "lua_files": 42,
+    "game_rules": 109,
+    "layout_reels": 34,
+    "widget_contracts": 39
+  },
+  "preview_check": "FAIL: existing DaySpecularHDR.dds and themis_x64.dll missing",
+  "new_lua_shader_errors": 0,
+  "not_implemented": [
+    "Bloom",
+    "DepthOfField"
+  ],
+  "not_claimed": [
+    "original Sprite With Depth graph recovered",
+    "bit-identical Unity noise solver",
+    "pixel-identical URP lighting"
+  ],
+  "screenshot": "outputs/lighting-acceptance/final-draft.png",
+  "preview_left_running": true
+}
