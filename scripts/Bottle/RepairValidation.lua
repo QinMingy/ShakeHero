@@ -51,6 +51,49 @@ end
 local cases = {}
 local function Case(name, run) cases[#cases + 1] = {name=name,run=run} end
 
+Case("幽灵从生成到漂移和牌库下落始终正面直立", function(check)
+    local game = Tests.Fixture({"ghost", "ghost", "apple"})
+    local sim = NewWorld(game)
+    -- 不调用 Place：必须验证生产创建的初始角度，防止夹具归零掩盖倾斜。
+    check(select(3, sim:GetPose(1)) == 0 and select(3, sim:GetPose(2)) == 0,
+        "不同 uid 的幽灵创建角度均为零")
+    check(math.abs(select(3, sim:GetPose(3))) > .01, "普通物品保留原初始旋转")
+    local upright = true
+    for step = 1, 180 do
+        sim:Shake(step % 2 == 0 and .3 or -.3, .2)
+        sim:Step(1 / 60)
+        upright = upright and select(3, sim:GetPose(1)) == 0 and select(3, sim:GetPose(2)) == 0
+    end
+    check(upright, "摇晃和自主漂移连续三秒不倾斜")
+    local PopIn = require("Bottle.PopIn")
+    local pop, ordinary = PopIn.NewPose(1, "ghost"), PopIn.NewPose(3, "apple")
+    local popUpright, scaled, ordinarySway = true, false, false
+    for _ = 1, 60 do
+        PopIn.Step(pop, 1 / 60); PopIn.Step(ordinary, 1 / 60)
+        popUpright = popUpright and pop.angle == 0 and pop.angleVelocity == 0
+        scaled = scaled or pop.scale > 1
+        ordinarySway = ordinarySway or math.abs(ordinary.angle) > .001
+    end
+    check(popUpright and scaled and ordinarySway, "幽灵入场无角回摆但保留缩放过冲，普通物品仍摇摆")
+    local deck = DeckBoard.Sim.New(game.deck)
+    local ok, err = pcall(function()
+        check(select(3, deck:GetPose(1)) == 0 and select(3, deck:GetPose(2)) == 0,
+            "牌库幽灵创建直立")
+        local startY = select(2, deck:GetPose(1))
+        local deckUpright = true
+        for _ = 1, 240 do
+            deck:Step(1 / 60)
+            deckUpright = deckUpright and select(3, deck:GetPose(1)) == 0
+                and select(3, deck:GetPose(2)) == 0
+        end
+        check(deckUpright and select(2, deck:GetPose(1)) < startY - .1,
+            "牌库幽灵下落及碰撞后保持直立，重力展示不变")
+    end)
+    deck:Dispose()
+    assert(ok, err)
+    print("[GhostUpright] 创建、漂移、入场缩放、牌库下落直立回归完成")
+end)
+
 Case("真实幽灵全fixture为动态sensor且可穿物品不推动普通物品", function(check)
     local base = NewWorld(Tests.Fixture({"ghost"}))
     Place(base,1,.8,3)
@@ -295,6 +338,62 @@ Case("牌库沙盒培根同样为真实软体且释放", function(check)
     end)
     sim:Dispose()
     assert(ok,err)
+end)
+
+Case("同尺寸重量真实影响瓶内和牌库全部刚体质量", function(check)
+    for _, id in ipairs({"apple","banana","bacon"}) do
+        local game = Tests.Fixture({id,id,id})
+        assert(game:Get(1)).weight=.5
+        assert(game:Get(2)).weight=1
+        assert(game:Get(3)).weight=2
+        local sim=NewWorld(game)
+        local function Mass(record)
+            local sum=0
+            for _,part in ipairs(record.parts) do sum=sum+part.body.mass end
+            return sum
+        end
+        local base=Mass(sim.bodies[2])
+        check(math.abs(Mass(sim.bodies[1])/base-.5)<1e-5,id.."瓶内50%重量")
+        check(math.abs(Mass(sim.bodies[3])/base-2)<1e-5,id.."瓶内200%重量")
+        local record=sim.bodies[2]
+        local pose=record.node.position2D
+        assert(game:Get(2)).weight=1.5
+        sim:Sync(game:BottleItems())
+        check(math.abs(Mass(sim.bodies[2])/base-1.5)<1e-5,id.."未发事件Sync仍更新重量")
+        check((sim.bodies[2].node.position2D-pose).length<1e-4,id.."重量同步保持位置")
+        local deck=DeckBoard.Sim.New(game.deck)
+        local ok,err=pcall(function()
+            local function DeckMass(entry)
+                local sum=0
+                if entry.soft then
+                    for _,segment in ipairs(entry.soft.segments) do sum=sum+segment.body.mass end
+                else sum=entry.body.mass end
+                return sum
+            end
+            local standard=DeckMass(deck.records[1])/.5
+            check(math.abs(DeckMass(deck.records[2])/standard-1.5)<1e-5,id.."牌库150%重量")
+            check(math.abs(DeckMass(deck.records[3])/standard-2)<1e-5,id.."牌库200%重量")
+            local entry=deck.records[2]
+            local node=entry.node
+            local position=node.position2D
+            local oldSoft=entry.soft
+            assert(game:Get(2)).weight=.75
+            deck:Sync()
+            check(entry.node==node and entry.soft==oldSoft,id.."牌库改重量不重建节点或关节")
+            check(math.abs(DeckMass(entry)/standard-.75)<1e-5,id.."牌库实时重量同步")
+            check((entry.node.position2D-position).length<1e-4,id.."牌库重量更新保持位置")
+        end)
+        deck:Dispose()
+        assert(ok,err)
+        DisposeWorlds()
+    end
+    local game=Tests.Fixture({"apple","apple"})
+    assert(game:Get(1)).scale=.5
+    assert(game:Get(2)).scale=2
+    local sim=NewWorld(game)
+    check(math.abs(sim.bodies[1].radius/Items.byId.apple.radius-.5)<1e-6,"50%体积同步碰撞半径")
+    check(math.abs(sim.bodies[2].radius/Items.byId.apple.radius-2)<1e-6,"200%体积同步碰撞半径")
+    check(math.abs(sim.bodies[1].envelope/sim.bodies[2].envelope-.25)<1e-6,"净空同步体积范围")
 end)
 
 local V=_G["V"]

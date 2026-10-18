@@ -98,8 +98,8 @@ function PopIn.NewPose(uid, id, delay)
     return {
         uid = uid, id = id, delay = delay or 0, age = 0, started = false,
         scale = 0, scaleVelocity = 0,
-        -- 角回摆方向由 uid 奇偶决定，避免相邻物品完全同相。
-        angle = 0, angleVelocity = (uid % 2 == 0 and 1 or -1) * .9,
+        -- 幽灵只缩放弹出、始终直立；其他物品按 uid 奇偶交错角回摆。
+        angle = 0, angleVelocity = id == "ghost" and 0 or (uid % 2 == 0 and 1 or -1) * .9,
     }
 end
 

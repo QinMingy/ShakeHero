@@ -38,7 +38,10 @@ local function Fixture(ids, bottleCount)
             permMult = 1, tokenAttempted = false,
             remaining = Items.byId[id].cooldown, bottleRounds = 0,
             location = uid <= count and "bottle" or "deck", temporary = false,
-            scale = 1, counter = 0, settleCount = 0, distance = 0,
+            scale = 1, weight = 1, counter = 0, settleCount = 0, distance = 0,
+            eventMult = 1, generatedTemporary = false, shielded = false, anchored = false,
+            refreshCount = 0, woolCount = 0, abacusMerges = 0, calfDashRemaining = 0,
+            discusWait = 0, compassProgress = 0,
         }
         snapshot.deck[#snapshot.deck + 1] = uid
         if uid <= count then snapshot.drawn[#snapshot.drawn + 1] = uid end
@@ -132,14 +135,15 @@ local function Test(name, run)
     cases[#cases + 1] = { name = name, run = run }
 end
 
-Test("71件全实装、19件屏蔽与硬币配方", function()
-    assert(#Items.list == 71)
+Test("93件全实装、26件屏蔽与硬币配方", function()
+    assert(#Items.list == 93)
     local blocked = {
         rotten_banana = true, banana_peel = true, apple_half = true, banana_half = true,
-        orange_half = true, cherry_half = true, fruit_ninja = true, laurel = true,
+        orange_half = true, cherry_half = true, fruit_ninja = true, tomato_egg = true,
         coin_4 = true, coin_8 = true, coin_16 = true, coin_32 = true, coin_64 = true,
         coin_128 = true, coin_256 = true, coin_512 = true, coin_1024 = true, coin_2048 = true,
-        juice = true,
+        juice = true, poop = true, golden_poop = true, diamond_poop = true, rainbow_poop = true,
+        discus = true, wool = true, sweater = true,
     }
     local blockedCount, normalCount = 0, 0
     for index, def in ipairs(Items.list) do
@@ -147,7 +151,7 @@ Test("71件全实装、19件屏蔽与硬币配方", function()
         assert(def.pool == (not blocked[def.id]), "卡池与源表及追加果汁约定不一致：" .. def.id)
         if def.pool then normalCount = normalCount + 1 else blockedCount = blockedCount + 1 end
     end
-    assert(blockedCount == 19 and normalCount == 52, "追加果汁不扩大正常三选一卡池")
+    assert(blockedCount == 26 and normalCount == 67, "源表93件中26件屏蔽、67件入池")
     for _, value in ipairs({ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 }) do
         local id = "coin_" .. value
         assert(Items.Recipe(id, id) == "coin_" .. (value * 2), "硬币配方缺失：" .. id)
@@ -458,19 +462,22 @@ Test("灵魂罐碰任意瓶壁消耗并随机生成1至3幽灵", function()
     end
 end)
 
-Test("棺材和墓碑每4秒各触发一次、不按相邻幽灵数放大", function()
+Test("棺材墓碑开局就绪且每4秒各触发一次、不按幽灵数放大", function()
     local game = Fixture({ "coffin", "tombstone", "ghost", "ghost" })
     assert(game:Start())
     local state = { pairs = { { 1, 3 }, { 1, 4 }, { 2, 3 }, { 2, 4 } } }
-    game:Step(3, state)
-    Close(BottleCount(game, "ghost"), 2)
-    Close(Item(game, 2).permBonus, 0)
-    game:Step(1, state)
+    game:Step(0, state)
+    Close(BottleCount(game, "ghost"), 3, "开局仅产一只而非按两个邻居倍增")
+    Close(Item(game, 2).permBonus, 1)
+    game:Step(3.99, state)
     Close(BottleCount(game, "ghost"), 3)
     Close(Item(game, 2).permBonus, 1)
-    game:Step(4, state)
+    game:Step(.01, state)
     Close(BottleCount(game, "ghost"), 4)
     Close(Item(game, 2).permBonus, 2)
+    game:Step(4, state)
+    Close(BottleCount(game, "ghost"), 5)
+    Close(Item(game, 2).permBonus, 3)
 end)
 
 Test("灵魂石消耗幽灵时双方各结算一次、重生旧接触不复用", function()
@@ -526,7 +533,7 @@ Test("硬币机按相邻人类数顶落硬币、升级可产4元", function()
         game.relics.upgrade_coin_machine = upgrade or nil
         RandomConstant(game, 3)
         assert(game:Start())
-        local events = game:Step(5, { pairs = { { 1, 2 }, { 1, 3 }, { 1, 4 } } })
+        local events = game:Step(0, { pairs = { { 1, 2 }, { 1, 3 }, { 1, 4 } } })
         local spawns = Events(events, "spawn")
         assert(#spawns == 2, "两个人类只产两枚，不按每种各产两枚")
         for _, event in ipairs(spawns) do
@@ -548,18 +555,19 @@ Test("星星仅触底传送、保留身份永久值并清除旧接触", function
     assert(#teleports == 1 and teleports[1].y == 6)
     assert(Item(game, 1).id == "star" and Item(game, 1).location == "bottle")
     Close(Item(game, 1).permBonus, 8)
-    Close(game:_Value(Item(game, 1)), 11)
+    Close(Item(game, 1).bonus, 1, "每次传送临时价值+1")
+    Close(game:_Value(Item(game, 1)), 12)
 end)
 
-Test("食客达到第5个立即停止、剩余邻居不被多吃", function()
+Test("食客最后一批全部吃完再自耗、允许计数超过5", function()
     local game = Fixture({ "diner", "apple", "apple", "apple" })
     Item(game, 1).counter = 4
     assert(game:Start())
-    game:Step(1, { pairs = { { 1, 2 }, { 1, 3 }, { 1, 4 } } })
-    Close(Item(game, 1).counter, 5)
+    game:Step(0, { pairs = { { 1, 2 }, { 1, 3 }, { 1, 4 } } })
+    Close(Item(game, 1).counter, 7)
     assert(Item(game, 1).location == "discard" and Item(game, 2).location == "discard")
-    assert(Item(game, 3).location == "bottle" and Item(game, 4).location == "bottle")
-    Close(game.roundScore, 4)
+    assert(Item(game, 3).location == "discard" and Item(game, 4).location == "discard")
+    Close(game.roundScore, 12, "三颗苹果各2×2，整批12金币")
 end)
 
 Test("带临时价值倍率的永久弃牌可存档恢复", function()

@@ -18,6 +18,7 @@
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local Extra = require("Bottle.ExtraEffects")
+local Expansion = require("Bottle.ExpansionEffects")
 
 ---@class Effects
 local Effects = {}
@@ -59,6 +60,8 @@ local POLICE_TARGETS = { gambler = true, thief = true, killer = true }
 ---@param contacts BottleStepContacts
 ---@return boolean
 function Effects.Touches(game, item, contacts)
+    local expansion = Expansion.Touches(game, item, contacts)
+    if expansion ~= nil then return expansion end
     local extra = Extra.Touches(game, item, contacts)
     if extra ~= nil then return extra end
     local trigger = Items.byId[item.id].trigger
@@ -89,7 +92,8 @@ function Effects.Merge(game, contacts, events)
         local a = game:Get(pair[1])
         local b = game:Get(pair[2])
         if a and b and a.location == "bottle" and b.location == "bottle" then
-            local resultId = Items.Recipe(a.id, b.id)
+            local special = Expansion.TryMerge(game, a, b, contacts, events)
+            local resultId = special == nil and Items.Recipe(a.id, b.id) or nil
             -- 用户确认：默认最高64元；遗物解锁后才允许64→128及更高配方。
             local coinValue = tonumber(a.id:match("^coin_(%d+)$"))
             if coinValue and coinValue >= 64 and not Relics.Has(game, "merge_2048") then
@@ -116,7 +120,7 @@ end
 ---@return boolean
 local function CutFruit(game, fruit, contacts, events, chefBonus, extraBonus)
     local halfId = FULL_FRUIT[fruit.id]
-    if not halfId or #game:BottleItems() >= Items.Settings.bottleLimit then return false end
+    if not halfId then return false end
     local position = contacts.positions[fruit.uid]
     local bonus = (chefBonus and 3 or 0) + (extraBonus or 0)
     game:_Transform(fruit, halfId, events)
@@ -163,7 +167,7 @@ local function TrashCan(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
         if other.uid ~= item.uid and (Items.HasTag(other.id, "垃圾") or other.temporary) then
-            if game:_Destroy(other.uid, other.temporary, events) then
+            if game:_Destroy(other.uid, other.temporary, events, item) then
                 item.permBonus = item.permBonus + 1
                 hit = true
             end
@@ -184,7 +188,7 @@ local function Glutton(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
         if other.uid ~= item.uid and Items.HasTag(other.id, "食物") then
-            if game:_Destroy(other.uid, other.temporary, events) then
+            if game:_Destroy(other.uid, other.temporary, events, item) then
                 item.permBonus = item.permBonus + 1
                 item.scale = math.min(2, item.scale + 0.1)
                 game:ApplyScale(item, events)
@@ -228,7 +232,8 @@ end
 local function Police(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
-        if POLICE_TARGETS[other.id] then
+        if POLICE_TARGETS[other.id]
+            and not (other.id == "thief" and Relics.Has(game, "wash_hands")) then
             if game:_Eliminate(other, item, 4, contacts, events) then hit = true end
         end
     end
@@ -311,9 +316,11 @@ local function Teacher(game, item, contacts, events)
         if other.uid ~= item.uid then
             if other.id == "student" then
                 Effects.GrowStudent(game, other, events, true)
+                item.permBonus = item.permBonus + 3
+                events[#events + 1] = {kind="buff", uid=item.uid, id=item.id, value=3}
                 hit = true
             elseif convertAll and (other.id == "killer" or other.id == "gambler"
-                or other.id == "thief") then
+                or (other.id == "thief" and not Relics.Has(game, "wash_hands"))) then
                 local value = game:_Value(other)
                 game:_Transform(other, "student", events)
                 other.permBonus = other.permBonus + value
@@ -336,6 +343,8 @@ local function Knife(game, item, contacts, events)
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
         if other.uid ~= item.uid and FULL_FRUIT[other.id] then
             if CutFruit(game, other, contacts, events, false) then hit = true end
+        elseif other.id == "sheep" and Expansion.ShedWool(game, other, events) then
+            hit = true
         end
     end
     return hit
@@ -369,11 +378,11 @@ local function Diner(game, item, contacts, events)
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
         if other.uid ~= item.uid and Items.HasTag(other.id, "食物") then
             local value = game:_Value(other)
-            if game:_Destroy(other.uid, other.temporary, events) then
+            if game:_Destroy(other.uid, other.temporary, events, item) then
                 game:_Score(events, item, value * 2, contacts.positions[item.uid])
                 item.counter = item.counter + 1
                 hit = true
-                if item.counter >= 5 then break end
+                -- 最新备注：最后一次按整批相邻食物处理，可超过五件后再自耗。
             end
         end
     end
@@ -394,7 +403,7 @@ local function Chef(game, item, contacts, events)
     local extra = 0
     if Relics.Has(game, "chef_hat") then
         for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
-            if other.id == "knife" and game:_Destroy(other.uid, false, events) then
+            if other.id == "knife" and game:_Destroy(other.uid, false, events, item) then
                 extra = extra + 1
             end
         end
@@ -439,6 +448,9 @@ function Effects.Apply(game, item, contacts, events)
     end
     local handler = TOUCH[item.id]
     if handler then return handler(game, item, contacts, events) end
+    if Expansion.Touches(game, item, contacts) ~= nil then
+        return Expansion.Apply(game, item, contacts, events)
+    end
     return Extra.Apply(game, item, contacts, events)
 end
 
@@ -483,7 +495,7 @@ function Effects.Continuous(game, contacts, events)
         elseif item.id == "counter" then
             item.bonus = math.floor(#game:BottleItems() / 3)
         end
-        local aura = AuraMult(game, item, contacts)
+        local aura = AuraMult(game, item, contacts) * (item.eventMult or 1)
         if item.mult ~= aura then
             item.mult = aura
             events[#events + 1] = {
@@ -513,12 +525,7 @@ function Effects.SettleEffects(game, events)
             item.scale = math.min(2, item.scale + 0.1)
             if item.scale >= 2 - 1e-9 then
                 item.scale = 2
-                -- 体积达到200%：爆炸，所有物品价值×2，气球自身消耗。
-                for _, other in ipairs(game:BottleItems()) do
-                    if other.uid ~= item.uid then other.mult = other.mult * 2 end
-                end
-                events[#events + 1] = {kind = "burst", uid = item.uid, id = item.id, value = 2}
-                game:_Destroy(item.uid, false, events)
+                Expansion.BurstBalloon(game, item, events, nil)
             else
                 game:ApplyScale(item, events)
             end
@@ -565,13 +572,26 @@ end
 ---@param item ItemInstance
 ---@param events GameEvent[]
 ---@param position {x:number,y:number}?
-function Effects.SettleItem(game, item, events, position)
+---@param contacts BottleStepContacts?
+function Effects.SettleItem(game, item, events, position, contacts)
     local value = game:_Value(item)
     local times = 1
     if item.id == "cherry" then
         times = times + (Relics.Has(game, "cherry_plus") and 2 or 1)
     elseif item.id == "cherry_half" then
         times = times + 1
+    elseif item.id == "gecko" and contacts then
+        -- 每个真实直接连接的壁虎额外一次；不数培根虚拟相邻或连通分量。
+        local seen = {}
+        for _, pair in ipairs(contacts.rawPairs or contacts.pairs) do
+            local uid = pair[1] == item.uid and pair[2] or pair[2] == item.uid and pair[1] or nil
+            local other = uid and game:Get(uid)
+            if other and other.uid ~= item.uid and other.id == "gecko"
+                and other.location == "bottle" and not seen[other.uid] then
+                seen[other.uid] = true
+                times = times + 1
+            end
+        end
     end
     for _ = 1, times do
         game:_Score(events, item, value, position)

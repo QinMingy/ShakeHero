@@ -20,6 +20,12 @@ local reelLoopSound = nil
 local reelStartSound = nil
 ---@type Sound?
 local reelStopSound = nil
+---@type Sound?
+local calfSound = nil
+---@type SoundSource?
+local calfSource = nil
+local lastCalfTime = -1
+local calfTime = 0
 local FADE_SECONDS = 1.2
 local MUSIC_GAIN = .36
 local CLICK_GAIN = .55
@@ -69,6 +75,8 @@ local POP_CHIP_FILE = "sfx/balatro_chip.wav"
 -- 【占位音效】瓶内物体碰撞音：暂用 assets/audio/sfx/balatro_coin.wav（筹码短音）代替，
 -- 与出现音区分。正式碰撞音确定后替换此文件并删除本注释，调用点（Music.Impact）不变。
 local IMPACT_FILE = "sfx/balatro_coin.wav"
+-- 本地合成的卡通短牛叫，不访问外部服务、不占用玩法随机序列。
+local CALF_FILE = "sfx/calf_moo.wav"
 
 local function Load(path, looped)
     local sound = cache:GetResource("Sound", path) --[[@as Sound?]]
@@ -150,6 +158,9 @@ function Music.Init()
     Music.reelStartSource:SetSoundType(SOUND_EFFECT)
     Music.reelStopSource = audioScene:CreateChild("ReelStop"):CreateComponent("SoundSource")
     Music.reelStopSource:SetSoundType(SOUND_EFFECT)
+    calfSound = Load(AUDIO_DIR .. CALF_FILE, false)
+    calfSource = audioScene:CreateChild("CalfDash"):CreateComponent("SoundSource")
+    calfSource:SetSoundType(SOUND_EFFECT)
     print("[音频] 双状态BGM与机械按钮音已启用")
 end
 
@@ -173,6 +184,7 @@ end
 
 function Music.Update(dt)
     if not audioScene then return end
+    calfTime = calfTime + math.max(0, dt)
     FlushImpacts()
     for _, track in pairs(Music.tracks) do
         track.elapsed = math.min(FADE_SECONDS, track.elapsed + math.max(0, dt))
@@ -183,6 +195,13 @@ function Music.Update(dt)
         track.source:SetGain(track.gain)
         if progress == 1 and track.target == 0 and track.source:IsPlaying() then track.source:Stop() end
     end
+end
+
+-- 同批多次消费只播一声；与物品出现、按钮及碰撞声源互不抢占。
+function Music.Calf()
+    if not calfSource or not calfSound or calfTime - lastCalfTime < .2 then return end
+    calfSource:Play(calfSound, 0, .55)
+    lastCalfTime = calfTime
 end
 
 function Music.Click()
@@ -298,6 +317,8 @@ function Music.Shutdown()
     for _, source in ipairs({Music.reelLoopSource, Music.reelStartSource, Music.reelStopSource}) do
         if source then source:Stop(); source:Dispose() end
     end
+    if calfSource then calfSource:Stop(); calfSource:Dispose(); calfSource = nil end
+    calfSound, lastCalfTime, calfTime = nil, -1, 0
     if audioScene then audioScene:Dispose(); audioScene = nil end
     Music.current, Music.tracks, Music.clicks, Music.pops, Music.impacts = "", {}, {}, {}, {}
     Music.nextClick, Music.nextPop, Music.clickCount, Music.popCount = 1, 1, 0, 0

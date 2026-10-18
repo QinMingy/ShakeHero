@@ -49,7 +49,10 @@ local function Fixture(ids, bottleCount)
             permMult = 1, tokenAttempted = false,
             remaining = Items.byId[id].cooldown, bottleRounds = 0,
             location = uid <= count and "bottle" or "deck", temporary = false,
-            scale = 1, counter = 0, settleCount = 0, distance = 0,
+            scale = 1, weight = 1, counter = 0, settleCount = 0, distance = 0,
+            eventMult = 1, generatedTemporary = false, shielded = false, anchored = false,
+            refreshCount = 0, woolCount = 0, abacusMerges = 0, calfDashRemaining = 0,
+            discusWait = 0, compassProgress = 0,
         }
         snapshot.deck[#snapshot.deck + 1] = uid
         if uid <= count then snapshot.drawn[#snapshot.drawn + 1] = uid end
@@ -111,7 +114,8 @@ local function Finish(game, contacts)
     assert(game.phase == "reveal", "结算后必须进入展示")
     -- 精确随机序列只限定本次规则效果；三选一属于另一个随机过程。
     rawset(game, "_RandomInt", nil)
-    game:RevealStep(2)
+    game:RevealStep(2 + Game.ScorePopTime(game._revealPopCount or 0))
+    assert(game.phase == "draft" or game.phase == "over", "全部浮字加2秒后才离开展示")
     Identity(game)
     return events
 end
@@ -124,16 +128,16 @@ local function Test(name, run)
     cases[#cases + 1] = { name = name, run = run }
 end
 
-Test("五遗物全部入候选、拥有后排除且24件耗尽", function()
+Test("原五遗物仍全部入候选、拥有后排除且33件耗尽", function()
     local game = Fixture({})
     local available = {}
     for _, def in ipairs(Relics.Available(game)) do available[def.id] = true end
-    assert(#Relics.list == 24 and #Relics.Available(game) == 24)
+    assert(#Relics.list == 33 and #Relics.Available(game) == 33)
     for _, id in ipairs({ "gambling_token", "lucky_charm", "scramble_recipe", "jungle_hunt", "juicer" }) do
         assert(Relics.byId[id].implemented and Relics.byId[id].pool and available[id], "遗物未接线：" .. id)
         game.relics[id] = true
     end
-    assert(#Relics.Available(game) == 19)
+    assert(#Relics.Available(game) == 28)
     for _, def in ipairs(Relics.Available(game)) do assert(not game.relics[def.id]) end
     for _, def in ipairs(Relics.list) do game.relics[def.id] = true end
     assert(#Relics.Available(game) == 0)
@@ -306,7 +310,7 @@ Test("幸运符小偷双方加值但零值目标仍不可偷", function()
     local game = Fixture({ "thief", "student", "gambler" })
     game.relics.lucky_charm = true
     assert(game:Start())
-    game:Step(6, { pairs = { { 1, 2 }, { 1, 3 } } })
+    game:Step(0, { pairs = { { 1, 2 }, { 1, 3 } } })
     Close(Item(game, 1).permBonus, 1)
     Close(Item(game, 2).permBonus, 1)
     Close(Item(game, 3).permBonus, 0, "幸运符不移除可偷价值>0的条件")
@@ -314,7 +318,7 @@ Test("幸运符小偷双方加值但零值目标仍不可偷", function()
     local washed = Fixture({ "thief", "gambler" })
     washed.relics.lucky_charm, washed.relics.wash_hands = true, true
     assert(washed:Start())
-    washed:Step(6, { pairs = { { 1, 2 } } })
+    washed:Step(0, { pairs = { { 1, 2 } } })
     Close(Item(washed, 1).permBonus, 1)
     Close(Item(washed, 2).permBonus, 1)
 end)
@@ -408,14 +412,14 @@ Test("杀手击杀追杀目标永久倍率连乘、即时金币不乘杀手倍�
     local events = game:Step(1, { pairs = { { 1, 2 }, { 1, 3 } } })
     done()
     Close(Item(game, 1).permMult, 2.25)
-    Close(game:_Value(Item(game, 1)), 9)
+    Close(game:_Value(Item(game, 1)), 9, "追杀当步有效价值")
     Close(game.roundScore, 70, "两次目标价值5×7，不乘杀手永久倍率")
     assert(#Events(events, "score", 1) == 2 and RelicEffects.HuntTarget(game) == 0)
     Finish(game)
     Close(Item(game, 1).permMult, 2.25, "Cleanup保永久倍率")
     Close(Item(game, 1).mult, 1)
     local restored = Game.Restore(game:Snapshot())
-    Close(restored:_Value(Item(restored, 1)), 9)
+    Close(restored:_Value(Item(restored, 1)), 9, "追杀读档保留有效价值")
     assert(restored:Skip() and restored:Start())
     restored:Step(0)
     Close(restored:_Value(Item(restored, 1)), 9, "Continuous不得抹除永久倍率")
@@ -798,11 +802,12 @@ end)
 Test("五遗物真实三选一选择立即获得并进入下一回合", function()
     for _, id in ipairs({ "gambling_token", "lucky_charm", "scramble_recipe", "jungle_hunt", "juicer" }) do
         local snapshot = Fixture({ "gambler", "doctor" }, 0):Snapshot()
-        snapshot.phase, snapshot.round, snapshot.stage = "draft", 5, 2
+        -- 选择接线夹具不占用考核禁普通场景，令牌品质1仍可在合法旧/非考核遗物draft选择。
+        snapshot.phase, snapshot.round, snapshot.stage = "draft", 6, 2
         snapshot.target, snapshot.relicDraft, snapshot.pendingRelicDraft = Game.GetTarget(2), true, true
         snapshot.options = { id }
         local game = Game.Restore(snapshot)
-        assert(game:Choose(1) and game.relics[id] and game.phase == "prepare" and game.round == 6)
+        assert(game:Choose(1) and game.relics[id] and game.phase == "prepare" and game.round == 7)
         assert(#game.deck == 2 and #game.discard == 0, "遗物不占牌库、不生成人类/果汁")
         if id == "jungle_hunt" then
             local target = Item(game, RelicEffects.HuntTarget(game))
@@ -818,11 +823,12 @@ Test("旧v2遗物候选字段兼容且缺省新状态可继续选择", function(
     snapshot.phase, snapshot.round, snapshot.stage = "draft", 5, 2
     snapshot.target, snapshot.relicDraft, snapshot.pendingRelicDraft = Game.GetTarget(2), true, true
     snapshot.options = { "gambling_token", "jungle_hunt", "juicer" }
-    snapshot.juicerValue, snapshot.huntTargetUid = nil, nil
+    snapshot.juicerValue, snapshot.huntTargetUid, snapshot.rulesVersion = nil, nil, nil
     snapshot.instances[1].permMult, snapshot.instances[1].tokenAttempted = nil, nil
     local game = Game.Restore(snapshot)
-    assert(Equal(game.options, snapshot.options) and game.relicDraft)
-    assert(game:Choose(2) and game.relics.jungle_hunt and RelicEffects.HuntTarget(game) == 1)
+    assert(Equal(game.options, {"jungle_hunt", "juicer"}) and game.relicDraft,
+        "旧候选先校验后仅过滤考核普通，保留其他顺序")
+    assert(game:Choose(1) and game.relics.jungle_hunt and RelicEffects.HuntTarget(game) == 1)
     Close(game.juicerValue, 0)
 end)
 

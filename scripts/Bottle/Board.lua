@@ -1,6 +1,7 @@
 -- 瓶内画布：真实姿态绘制、输入与纯表现动效。由 View 构建，UI 统一管理缩放/DPR。
 local UI = require("urhox-libs/UI")
 local Items = require("Bottle.Items")
+local Relics = require("Bottle.Relics")
 local Art = require("Bottle.Art")
 local SoftView = require("Bottle.SoftView")
 local PopIn = require("Bottle.PopIn")
@@ -93,6 +94,31 @@ local function BurstRing(vg, x, y, radius, progress)
     nvgRestore(vg)
 end
 
+-- 保镖护盾纯表现：沿用当前UI传入的NanoVG context，不参与碰撞/目标判断。
+-- 透明底泡泡配像素轮廓，跟随实例真实姿态；清盾后即消失，不保存到结算残影。
+local function ShieldBubble(vg, x, y, radius)
+    nvgSave(vg)
+    nvgBeginPath(vg)
+    nvgCircle(vg, x, y, radius)
+    nvgFillColor(vg, nvgRGBA(126, 212, 235, 24))
+    nvgFill(vg)
+    nvgShapeAntiAlias(vg, 0)
+    local pixel = math.max(1, math.min(3, radius * .09))
+    nvgBeginPath(vg)
+    for _, direction in ipairs(cooldownDirections) do
+        nvgRect(vg, math.floor(x + direction.x * radius - pixel / 2),
+            math.floor(y + direction.y * radius - pixel / 2), pixel, pixel)
+    end
+    nvgFillColor(vg, nvgRGBA(167, 233, 247, 164))
+    nvgFill(vg)
+    nvgBeginPath(vg)
+    nvgRect(vg, x - radius * .55, y - radius * .6, pixel * 2, pixel)
+    nvgRect(vg, x - radius * .65, y - radius * .5, pixel, pixel * 2)
+    nvgFillColor(vg, nvgRGBA(236, 255, 255, 180))
+    nvgFill(vg)
+    nvgRestore(vg)
+end
+
 ---@class BottleBoard : Widget
 ---@field layered boolean?
 ---@field game BottleGame
@@ -116,9 +142,11 @@ end
 ---@field particles {uid:number,value:number,age:number,x:number,y:number}[]
 ---@field scoreQueue {uid:number,value:number,x:number,y:number}[] 待逐个弹出的结算浮字
 ---@field scorePopTimer number
+---@field scorePopInterval number? 本次reveal固定节拍，按Game统计初始总收益事件计算
+---@field scorePopRevealing boolean
 ---@field displayScore number? 结算展示期间逐件递增的顶部滚轮暂显值；nil 时显示真实余额
 ---@field pulses table<number,number>
----@field residue table<number,{id:string,x:number,y:number,angle:number,radius:number,rollValue:number?,soft:BottleSoftPose[]?}> 结算残留：物品回牌库后保留的最后姿态
+---@field residue table<number,{id:string,x:number,y:number,angle:number,radius:number,rollValue:number?,woolCount:number?,soft:BottleSoftPose[]?}> 结算残留：物品回牌库后保留的最后姿态
 ---@field pops BottlePopPose[] 出现弹跳动效；按 uid 查表的 popByUid 与其同步维护
 ---@field popByUid table<number,BottlePopPose?>
 ---@field bursts BottlePopParticle[] 入场/爆炸的重力像素粒子（瓶内米制坐标）
@@ -150,6 +178,7 @@ function Board:ResetEffects()
     -- 新回合重摆布局（prepare/running/settle 相位切换或换回合）时才清空。
     self.particles, self.pulses, self.residue = {}, {}, {}
     self.scoreQueue, self.scorePopTimer = {}, 0
+    self.scorePopInterval, self.scorePopRevealing = nil, false
     self.displayScore = nil
     self.bursts, self.burstRings, self.explodedUids, self.inflations = {}, {}, {}, {}
 end
@@ -264,14 +293,24 @@ function Board:Update(dt)
         local nextAge = age + dt
         if nextAge > .45 then self.pulses[uid] = nil else self.pulses[uid] = nextAge end
     end
+    -- 入reveal只计算一次：分母是Game记录的初始总事件数，不随剩余队列递减而放慢。
+    if self.game.phase == "reveal" then
+        if not self.scorePopRevealing then
+            local count = math.max(1, self.game._revealPopCount or #self.scoreQueue)
+            self.scorePopInterval = math.min(self.game.REVEAL_SCORE_INTERVAL,
+                math.max(self.game.REVEAL_SCORE_MIN_INTERVAL, self.game.REVEAL_SCORE_BUDGET / count))
+            self.scorePopRevealing = true
+            self.scorePopTimer = 0
+        end
+    else
+        self.scorePopInterval, self.scorePopRevealing = nil, false
+    end
     -- 结算浮字逐个弹出：分数事件已入队，reveal 阶段按间隔逐件释放。
-    -- 节拍与 Game 的 reveal 时长共用同一组常量；离开展示阶段后丢弃未放完的队列。
+    -- running/settle时保留即时收益，不能在下一帧丢掉；离开展示后才清空。
     if #self.scoreQueue > 0 then
         if self.game.phase == "reveal" then
             self.scorePopTimer = self.scorePopTimer - dt
-            local interval = math.min(self.game.REVEAL_SCORE_INTERVAL,
-                math.max(self.game.REVEAL_SCORE_MIN_INTERVAL,
-                    self.game.REVEAL_SCORE_BUDGET / #self.scoreQueue))
+            local interval = self.scorePopInterval or self.game.REVEAL_SCORE_INTERVAL
             while #self.scoreQueue > 0 and self.scorePopTimer <= 0 do
                 local pending = table.remove(self.scoreQueue, 1)
                 self.particles[#self.particles + 1] = {
@@ -290,7 +329,7 @@ function Board:Update(dt)
             if #self.scoreQueue == 0 and self.displayScore ~= nil then
                 self.displayScore = self.game.score
             end
-        elseif self.game.phase ~= "settle" then
+        elseif self.game.phase ~= "settle" and self.game.phase ~= "running" then
             self.scoreQueue, self.scorePopTimer = {}, 0
             self.displayScore = nil
         end
@@ -378,6 +417,7 @@ function Board:Effects(events)
                     angle = poseAngle,
                     radius = def and def.radius * (item.scale or 1) or poseRadius,
                     rollValue = event.rollValue or item.rollValue,
+                    woolCount = item.woolCount,
                     soft = self.physics:GetSoftPose(event.uid),
                 }
             end
@@ -450,7 +490,8 @@ function Board:GetItemBounds(uid)
     if soft then return soft end
     local px, py, angle, radius = self.physics:GetPose(uid)
     local item = self.game:Get(uid)
-    local extent = Art.ItemExtent(item and item.id or "apple", radius * ppu, -angle) + 4
+    local extent = Art.ItemExtent(item and item.id or "apple", radius * ppu, -angle,
+        item and item.woolCount or nil) + 4
     return {x = x + px * ppu - extent, y = y - py * ppu - extent, w = extent * 2, h = extent * 2}
 end
 
@@ -471,7 +512,7 @@ function Board:PickItem(x, y)
         local softHit = item.id == "bacon" and self.physics:ContainsPoint(item.uid,
             (x - originX) / ppu, (originY - y) / ppu)
         if softHit or (item.id ~= "bacon" and Art.HitItem(item.id,
-            x - originX - px * ppu, y - originY + py * ppu, radius * ppu, -angle)) then
+            x - originX - px * ppu, y - originY + py * ppu, radius * ppu, -angle, item.woolCount)) then
             return item.uid
         end
     end
@@ -551,7 +592,9 @@ function Board:Render(vg)
             PixelFrame(vg, sx, sy, sr + 5 + math.floor(age * 28), C.warning,
                 math.floor(180 * (1 - age / .45)))
         end
+        -- 厨师本体源表未写冷却，只有持帽时显示遗物明确声明的1秒。
         local hasCooldown = Items.HasCooldown(item.id)
+            or (item.id == "chef" and Relics.Has(self.game, "chef_hat"))
         local cooling = self.game.phase == "running" and hasCooldown and item.remaining > 0
         local pop = self.popByUid and self.popByUid[item.uid] or nil
         -- 错峰等待中的物品保持不可见（含选中框与冷却环），轮到它时才弹跳出现。
@@ -576,8 +619,11 @@ function Board:Render(vg)
                 self:DrawItem(vg, item, x, y, cooling)
             end
         end
+        if visible and item.shielded then
+            ShieldBubble(vg, sx, sy, Art.ItemExtent(item.id, sr, -angle, item.woolCount) + 6)
+        end
         if visible and item.uid == self.selectedUid and not Busy(self.game) then
-            local extent = Art.ItemExtent(item.id, sr, -angle) + 4
+            local extent = Art.ItemExtent(item.id, sr, -angle, item.woolCount) + 4
             PixelFrame(vg, sx, sy, extent + 2, C.primary, 100)
             PixelFrame(vg, sx, sy, extent, C.warning)
         end
@@ -614,7 +660,7 @@ function Board:Render(vg)
                 math.floor(180 * (1 - age / .45)))
         end
         if res.soft then SoftView.Draw(vg, res.soft, x, y, self.ppu)
-        else Art.Item(vg, res.id, sx, sy, sr, -res.angle, false, res.rollValue) end
+        else Art.Item(vg, res.id, sx, sy, sr, -res.angle, false, res.rollValue, res.woolCount) end
     end
     for _, ring in ipairs(self.burstRings) do
         BurstRing(vg, x + ring.x * self.ppu, y - ring.y * self.ppu,

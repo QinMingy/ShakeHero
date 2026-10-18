@@ -17,7 +17,7 @@ local Art=require("Bottle.Art")
 local Items=require("Bottle.Items")
 local T=require("Bottle.RepairTests")
 local Description=require("Bottle.Description")
----@type {id:string,radius:number,x:number,y:number,angle:number,cooling:boolean,gray:number,color:number,rollValue:number?}[]
+---@type {id:string,radius:number,x:number,y:number,angle:number,cooling:boolean,gray:number,color:number,rollValue:number?,minAlpha:number?,maxAlpha:number?}[]
 local records={}
 ---@type any
 local api=nil
@@ -53,6 +53,8 @@ end
 _G["nvgRGBA"]=function(r,g,b,a)
     if currentDraw then currentDraw.ink=r==10 and g==10 and b==26 end
     if currentDraw and a>0 then
+        currentDraw.minAlpha = math.min(currentDraw.minAlpha or 255, a)
+        currentDraw.maxAlpha = math.max(currentDraw.maxAlpha or 0, a)
         if r==g and g==b then currentDraw.gray=currentDraw.gray+1
         else currentDraw.color=currentDraw.color+1 end
     end
@@ -149,6 +151,10 @@ end)
 
 Guard(3,function()
     Check(#records>0,"至少一帧真实NanoVG画布提交")
+    Check(Near(Last("ghost").angle, 0), "幽灵真实画布绘制角度为零、正面直立")
+    local ghost = Last("ghost")
+    Check(ghost.minAlpha == 153 and ghost.maxAlpha == 153, "幽灵身体、描边与五官实际绘制均60%不透明")
+    Check(Last("ball").minAlpha == 255 and Last("ball").maxAlpha == 255, "其他物品保持完全不透明")
     for _,id in ipairs({"ball","star","soul_jar","soul_stone","fruit_tree","cloud","lucky_coin","ghost","orange"}) do
         Check(not Last(id).cooling,id.."准备阶段实际绘制保持原色")
     end
@@ -200,6 +206,39 @@ end)
 Guard(5,function()
     local balloon=Last("balloon")
     Check(Near(balloon.radius,Items.byId.balloon.radius*1.1*view.board.ppu),"真实残留绘制保持110%")
+    -- 当前值：生产的瓶内／牌库／定义／分层候选共用同一格式化入口。
+    Use({"glutton","diner","tomato_egg"})
+    assert(game:Get(1)).scale=1.5
+    assert(game:Get(2)).counter=3
+    assert(game:Get(3)).counter=4
+    physics:Sync(game:BottleItems(),true,17)
+    for uid, expected in ipairs({"当前：150%","当前：3","当前：4"}) do
+        view:InspectItem(uid)
+        Check(view.detailEffect:GetText():find(expected,1,true)~=nil,"瓶内实际当前值uid"..uid)
+        view:CloseItemDetail()
+        view:OpenInventory(); view:ShowDeckItem(uid)
+        local prose=assert(view.deckBody:FindById("deckDescription"))
+        Check(prose:GetText():find(expected,1,true)~=nil,"牌库实际当前值uid"..uid)
+        view:CloseInventory()
+    end
+    Check(view:InspectDefinition("glutton"),"大胃王定义详情可打开")
+    Check(view.definitionEffect:GetText():find("当前：100%",1,true)~=nil,"定义显示默认100%而非拥有的150%")
+    Check(not view.definitionEffect:GetText():find("当前：x",1,true),"定义无x占位")
+    view:CloseDefinition()
+    Check(game:Start(),"当前值候选准备")
+    game:Finish(); game:RevealStep(10)
+    game.options={"glutton","diner","tomato_egg"}; game.revision=game.revision+1
+    view.draftSelected=1
+    view:Update(true); view:BuildDraft()
+    local function HasCurrent(root, expected)
+        if root.GetText and root:GetText():find(expected,1,true) then return true end
+        for _,child in ipairs(root:GetChildren()) do
+            if HasCurrent(child,expected) then return true end
+        end
+        return false
+    end
+    Check(HasCurrent(view.draft,"当前：100%"),"真实分层三选一显示初始100%")
+    Check(not HasCurrent(view.draft,"当前：x"),"真实三选一无x占位")
     -- 四个属性入口保留金币和tag，冷却整项不存在而非隐藏数字。
     Use({"bacon","ball"})
     view:InspectItem(1); Stats(view.detail,"瓶内实例详情")

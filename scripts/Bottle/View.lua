@@ -8,6 +8,7 @@ local Description = require("Bottle.Description")
 local DeckBoard = require("Bottle.DeckBoard")
 local ItemText = require("Bottle.ItemText")
 local ItemDetail = require("Bottle.ItemDetail")
+local RefreshUI = require("Bottle.RefreshUI")
 local MachineSkin = require("Machine.LayeredSkin")
 local Atmosphere=require("Machine.Atmosphere")
 local GameAudio = require("Bottle.Audio")
@@ -35,6 +36,7 @@ local QUALITY_INK = {
 ---@field itemId string
 ---@field isRelic boolean
 ---@field rollValue number? 有实例时的骰子点数，无实例默认1点
+---@field woolCount number? 小羊当前储毛量，新候选/定义默认0
 ---@overload fun(props:WidgetProps): BottleItemIcon
 local Icon = UI.Widget:Extend("BottleItemIcon") --[[@as BottleItemIcon]]
 function Icon:Init(props)
@@ -42,6 +44,7 @@ function Icon:Init(props)
     self.itemId = props.itemId or "apple"
     self.isRelic = props.isRelic == true
     self.rollValue = props.rollValue
+    self.woolCount = props.woolCount
 end
 function Icon:Render(vg)
     local l = self:GetAbsoluteLayout()
@@ -50,9 +53,9 @@ function Icon:Render(vg)
     else
         -- 固定UI槽按实际图形包围范围等比内收，保留原38%半宽的留白预算。
         -- 只缩图标，不改变瓶内/牌库沙盒的世界尺寸；培根的加长外形仍完整可见。
-        local extent = Art.ItemExtent(self.itemId, radius, 0)
+        local extent = Art.ItemExtent(self.itemId, radius, 0, self.woolCount)
         local fittedRadius = extent > radius and radius * radius / extent or radius
-        Art.Item(vg, self.itemId, x, y, fittedRadius, 0, false, self.rollValue)
+        Art.Item(vg, self.itemId, x, y, fittedRadius, 0, false, self.rollValue, self.woolCount)
     end
 end
 
@@ -217,6 +220,7 @@ function View:Init(game, physics, actions)
     self.deckDetailUid, self.deckDraftWasOpen = 0, false
     self.lastRevision, self.lastDisplayedScore, self.lastRound = -1, -1, -1
     self.lastRerollUsed = false
+    self.lastRefreshes = RefreshUI.Count(game)
     self.selectedUid, self.detailRound, self.detailRevision = 0, -1, -1
     self.detailIcon = Icon {itemId = "apple", width = 42, height = 42, pointerEvents = "none"}
     self.detailTitle = UI.Label {text = "", fontSize = 14.25, fontWeight = "bold",
@@ -384,7 +388,7 @@ function View:InspectDefinition(id)
     if self.definitionModal:IsVisible() and self.definitionId == id then return true end
     self.board:ResetShake()
     self.definitionId = id
-    self.definitionIcon.itemId = id
+    self.definitionIcon.itemId, self.definitionIcon.woolCount = id, nil
     self.definitionTitle:SetText(def.name .. " · " .. Items.rarityNames[def.rarity])
     self.definitionGold:SetText(string.format("%g", ItemText.InitialValue(self.game, id)))
     self.definitionTag:SetText(Items.TagsText(def))
@@ -416,7 +420,7 @@ function View:InspectItem(uid)
     local def = Items.byId[item.id]
     self.selectedUid, self.board.selectedUid = uid, uid
     self.detailRound, self.detailRevision = self.game.round, self.game.revision
-    self.detailIcon.itemId, self.detailIcon.rollValue = item.id, item.rollValue
+    self.detailIcon.itemId, self.detailIcon.rollValue, self.detailIcon.woolCount = item.id, item.rollValue, item.woolCount
     self.detailTitle:SetText(def.name .. "  #" .. uid .. " · " .. Items.rarityNames[def.rarity])
     self.detailGold:SetText(string.format("%g", self.game:_Value(item)))
     self.detailTag:SetText(Items.TagsText(def))
@@ -474,8 +478,9 @@ function View:Rebind(game)
     self.board.game = game
     self.board:ResetEffects()
     self.board:ResetPopState()
-    -- 读档/换局后的 rerollUsed 属于基线状态：重新入场只弹跳一次，不当作即时重抽。
+    -- 读档/换局后的刷新池及历史布尔值属于基线，不触发额外重抽动画。
     self.lastRerollUsed = game.rerollUsed
+    self.lastRefreshes = RefreshUI.Count(game)
     self.choiceHidden, self.inventoryOpen = false, false
     self.deckDetailUid, self.deckDraftWasOpen = 0, false
     self:DisposeDeckSim()
@@ -518,13 +523,17 @@ function View:Update(force)
     end
     self.deckButton:SetText("牌库 " .. #game.deck)
     self.deckButton:SetDisabled(Busy(game))
-    -- 重抽：即使抽回同一批 uid，也清空出现状态重新逐件错峰弹跳（用户要求）。
-    -- rerollUsed 只在 _Prepare 重置，因此同一回合的第二次重抽（已被拒绝）不会重复触发。
-    if game.rerollUsed and not self.lastRerollUsed then
+    -- 每次成功准备重抽都会扣共享池；即使抽回同批uid，也重新错峰弹跳。
+    -- 旧布尔字段只作为动画兼容基线，不再限制同回合多次重抽。
+    local refreshes = RefreshUI.Count(game)
+    local refreshChanged = refreshes ~= self.lastRefreshes
+    if game.phase == "prepare" and (refreshes < self.lastRefreshes
+        or (game.rerollUsed and not self.lastRerollUsed)) then
         self.board:ResetPopState()
     end
     self.lastRerollUsed = game.rerollUsed
-    if force or game.phase ~= self.currentPhase or game.round ~= self.lastRound
+    self.lastRefreshes = refreshes
+    if force or refreshChanged or game.phase ~= self.currentPhase or game.round ~= self.lastRound
         or game.revision ~= self.lastRevision or game.relicDraft ~= self.lastRelicDraft then
         local phaseChanged = game.phase ~= self.currentPhase or game.round ~= self.lastRound
             or game.relicDraft ~= self.lastRelicDraft
@@ -532,8 +541,8 @@ function View:Update(force)
             self:CloseDefinition()
             self.choiceHidden = false
             self.board:ResetShake()
-            if game.round ~= self.lastRound or game.phase == "prepare"
-                or game.phase == "running" or game.phase == "settle" then
+            -- 回合开始阶段已清旧残留；running/settle切换必须保留开局与即时收益队列。
+            if game.round ~= self.lastRound or game.phase == "prepare" then
                 self.board:ResetEffects()
             end
             self.physicsMenu:Hide()
@@ -560,13 +569,18 @@ function View:BuildFooter()
     if game.phase == "prepare" then
         self.statusLabel:SetText(game.lastResult ~= "" and game.lastResult
             or (self.physics.mode == 2 and "点击物品查看效果 · 开始后短距离来回摇" or "点击物品查看效果 · 开始后拖动瓶子"))
-        local reroll = Button(game.rerollUsed and "重抽已用" or "重抽 · 1 次", function() self.actions.reroll() end)
-        reroll:SetDisabled(game.rerollUsed)
+        local reroll = Button(RefreshUI.ButtonText(game, "重抽"), function() self.actions.reroll() end)
+        reroll.id = "prepareReroll"
+        reroll:SetDisabled(RefreshUI.Count(game) <= 0)
         reroll:SetStyle({flexGrow = 1, flexBasis = 0})
         local start = Button("开始摇晃", function() self.actions.start() end, true)
         start:SetStyle({flexGrow = 2, flexBasis = 0, height = 56, fontSize = 15})
         self.footer:AddChild(UI.Panel {flexDirection = "row", height = 60, gap = 10,
             alignItems = "center", children = {reroll, start}})
+        local hint = Label(RefreshUI.Hint(game), 11.25, C.textSecondary)
+        hint.id = "refreshPoolHint"
+        hint:SetStyle({width = "100%", textAlign = "center", textMotionDisabled = true})
+        self.footer:AddChild(hint)
     elseif game.phase == "running" then
         self.statusLabel:SetText(self.sensorStatus == "available" and "摇动手机或按住瓶子来回摇，带动物品碰撞"
             or self.physics.mode == 2 and "按住来回摇，换向时物品惯性翻滚"
@@ -641,6 +655,7 @@ function View:BuildDraft()
         card:AddChild(UI.Panel {width = "100%", flexDirection = "row", alignItems = "center", gap = 10,
             children = {
                 Icon {itemId = id, rollValue = type(option) == "table" and option.rollValue or nil,
+                    woolCount = type(option) == "table" and option.woolCount or nil,
                     isRelic = relicDraft, width = 52, height = 52, pointerEvents = "none"},
                 UI.Panel {flexGrow = 1, flexBasis = 0, gap = 4, children = {
                     UI.Label {text = def.name .. " · " .. Items.rarityNames[def.rarity], whiteSpace = "normal",
@@ -651,13 +666,18 @@ function View:BuildDraft()
             }})
         -- 效果说明独占整行，避免被图标和按钮挤窄，也不截断长描述。
         card:AddChild(Description {id = "draftDescription_" .. index,
-            text = relicDraft and def.effect or ItemText.Effect(self.game, id), fontSize = 12,
+            text = relicDraft and def.effect or ItemText.Effect(self.game, id,
+                type(option) == "table" and option or nil), fontSize = 12,
             onInspect = function(itemId) self:InspectDefinition(itemId) end})
         choices:AddChild(card)
     end
     panel:AddChild(choices)
-    local refresh = Button(self.game.refreshUsed and "刷新已用" or "刷新 · 1 次", function() self.actions.refresh() end)
-    refresh:SetDisabled(self.game.refreshUsed)
+    panel:AddChild(UI.Label {id = "refreshPoolHint", text = RefreshUI.Hint(self.game),
+        fontSize = 11.25, fontColor = C.textSecondary, textMotionDisabled = true,
+        width = "100%", whiteSpace = "normal"})
+    local refresh = Button(RefreshUI.ButtonText(self.game), function() self.actions.refresh() end)
+    refresh.id = "draftRefresh"
+    refresh:SetDisabled(RefreshUI.Count(self.game) <= 0)
     refresh:SetStyle({flexGrow = 1, flexBasis = 0})
     local skip = Button("跳过", function() self.actions.skip() end)
     skip:SetStyle({flexGrow = 1, flexBasis = 0})
@@ -732,7 +752,7 @@ function View:BuildDeckDetail(body, item, s)
     local content = ItemDetail.Create {prefix = "deck", scale = s, def = def,
         caption = "物品详情", meta = "持有编号 #" .. item.uid,
         gold = self.game:_Value(item),
-        icon = Icon {itemId = item.id, rollValue = item.rollValue,
+        icon = Icon {itemId = item.id, rollValue = item.rollValue, woolCount = item.woolCount,
             width = 88 * s, height = 88 * s, pointerEvents = "none"},
         descriptionId = "deckDescription", effect = ItemText.Effect(self.game, item.id, item),
         onInspect = function(id) self:InspectDefinition(id) end}
@@ -835,17 +855,17 @@ function View:OpenHelp()
     panel:AddChild(mood)
     local scroll = UI.ScrollView {width = "100%", flexGrow = 1, flexBasis = 0, gap = 12, padding = 4}
     local rules = {
-        {"01  抽取", "回合开始从牌库随机抽取最多 20 件进入瓶中。每回合可重抽一次；牌库不足时全部入瓶。"},
-        {"02  摇晃", "点击开始后运行 10 秒，瓶中物品按各自说明实时执行反应（如 [[ball]] 碰撞瓶子价值+1、[[orange]] 接触瓶底价值+2）。瓶子左上可切换物理：物理一保留原版；物理二适合短距离来回摇动。Android／iOS 原生端自动启用体感；网页预览请触摸拖动；不操作照常计时。"},
-        {"03  结算", "摇晃结束后禁止摇晃，物品自然下落 2 秒，期间不执行非结算效果；随后每件物品按当前价值一次性结算金币。"},
-        {"04  价值规则", "价值默认临时：本回合的+价值在结算后、新回合开始时清零回基础值；描述写明“永久+N”才跨回合保留。冷却下限 1 秒，每回合重置、不跨回合。"},
-        {"05  消耗", "消耗不等于移除：物品进入本回合弃牌堆，下回合开始清空。[[banana]] 被消耗时变为 [[banana_peel]]。"},
-        {"06  成长", "[[banana]] 入瓶满 3 个回合（入瓶的回合开始计数）后，在结算完成时变为 [[rotten_banana]]。"},
-        {"07  构筑", "结算后进入三选一，稀有度概率随考核阶段变化（第1次考核全为普通，第5次及以后65%/30%/3.75%/1%/0.25%）。选一件加入牌库；可刷新一次，也可跳过。"},
-        {"08  考核", "每 5 回合进行一次考核：达成后扣除目标分数（40/80/140…，之后每阶段×1.3），余额保留；未达成则本局结束，不再进入三选一。"},
-        {"09  上限", "瓶中物品上限 100 件；回合时间上限 99 秒。"},
-        {"10  存档", "每个非摇晃/结算阶段自动保存。运行中退出回退到本回合开始前，包括牌库生成与永久变化。网页刷新不能保证本地存档保留，请使用存档码。"},
-        {"11  开发进度", "当前版本已实装 [[apple]]、[[banana]]、[[orange]]、[[ball]] 及香蕉衍生物品；其余 60 件已录入图鉴但效果分批实装，暂不进入卡池。"},
+        {"01  抽取与刷新", "回合开始从牌库随机抽取最多20件进入瓶中，不足时全部入瓶。准备重抽、物品三选一与遗物三选一共用刷新池：新局1次，每完成两回合+1；成功刷新消耗1次，有次数即可连续刷新，回合开始不重置。[[egg]]入瓶满3回合消耗自身，50%概率增加1次免费刷新。"},
+        {"02  摇晃", "点击开始后运行10秒（遗物最后一秒可增加1秒），不操作照常计时。瓶中物品按说明实时反应。瓶子左上可切换物理；手机原生端可启用体感，网页预览可触摸拖动。"},
+        {"03  结算", "摇晃结束后禁止摇晃，物品自然下落2秒；持续接触加成继续同步，不再执行离散触发。随后按当前有效价值产金币，逐件弹出收益，全部展示后再停留2秒。"},
+        {"04  价值与冷却", "价值增益默认临时，回合末清除；明确永久的加值与倍率跨回合保留。冷却下限1秒（特别说明除外），仅在瓶中推进，每回合重置且入场不进入冷却。描述未写冷却的内部防抖、周期计时不显示冷却环。"},
+        {"05  消耗与生成", "消耗默认离开拥有牌库与瓶中，记入本回合弃牌堆，不在回合末自动恢复；临时消耗才会回牌库。生成默认永久，只有明确临时生成才在回合末移除。[[banana]]被消耗变为[[banana_peel]]等特例遵循各自说明。"},
+        {"06  入瓶计时", "每x秒、过x回合只在瓶中计算，未入瓶牌库不计时。[[banana]]、[[egg]]读取各自的瓶中回合数；[[chicken_keeper]]的每5次刷新永久+1明确在牌库也生效。"},
+        {"07  构筑与遗物", "结算后进入物品三选一，可选一件永久加入牌库或跳过；考核达标后还可选择遗物。候选稀有度概率随考核阶段变化；每次考核回合的物品及遗物三选一都不会出现普通品质，刷新后同样如此。已拥有的唯一物品与遗物不再作为对应候选。刷新使用同一累计池。"},
+        {"08  考核", "每5回合考核并扣除目标分数，余额保留。目标40/80/140/220/320/450/600/780，之后每阶段×1.3并向上取整到10；不足则结束本局。"},
+        {"09  上限与物理", "瓶中上限100件，超出的新生成物按顺序等待入瓶；等待物品不算瓶中物品，回合末回牌库。时间上限99秒。体积、重量默认100%，常规范围50%至200%；物理修改默认永久，特殊物品按自身说明。"},
+        {"10  存档", "非摇晃/结算阶段自动保存。运行中退出回退到本回合开始前，包括生成与永久变化。网页刷新可能丢失本地文件，请导出存档码。"},
+        {"11  物品目录", "当前93件物品均已实装；仅源表标记屏蔽的物品不进入普通卡池，GM可添加全部93件。分类严格按标签，不按名称或外观推测；士兵与医生保留人类标签。"},
     }
     for _, rule in ipairs(rules) do
         scroll:AddChild(UI.Card {width = "100%", gap = 5, padding = 12, backgroundColor = C.background,
@@ -880,21 +900,21 @@ function View:OpenAtmosphere()
     end
 end
 
---- GM 面板：接受数字编号 1–71 或字符串 id，由 Game:GmAddItem 统一匹配；未实装物品会被拒绝。
+--- GM 面板：接受数字编号 1–93 或字符串 id，由 Game:GmAddItem 统一匹配；未实装物品会被拒绝。
 function View:OpenGm()
     if Busy(self.game) then return end
     local panel = self:Modal("GM 面板")
     panel:SetStyle({textMotionDisabled = true})
-    panel:AddChild(UI.Label {text = "功能一 · 添加物品：输入数字编号 1–71 或字符串 id，全部71件可添加，加入牌库供后续抽取",
+    panel:AddChild(UI.Label {text = "功能一 · 添加物品：输入数字编号 1–93 或字符串 id，全部93件可添加，加入牌库供后续抽取",
         fontSize = 11.25, fontColor = C.textSecondary, whiteSpace = "normal", width = "100%"})
     local message = UI.Label {text = "输入数字或字符串 id；也可点击下方列表“添加”快捷加入",
         fontSize = 10.5, fontColor = C.primary, whiteSpace = "normal", width = "100%"}
-    local field = UI.TextField {id = "gmItemId", placeholder = "数字 1–71 或 id，如 1 / apple",
+    local field = UI.TextField {id = "gmItemId", placeholder = "数字 1–93 或 id，如 1 / apple",
         width = "100%", height = 48, fontSize = 12, fontFamily = "mono", flexGrow = 1, flexBasis = 0,
         onSubmit = function(self_, value)
             local id = value:match("^%s*(%S+)%s*$")
             if not id or id == "" then
-                message:SetText("请先输入数字编号 1–71 或字符串 id")
+                message:SetText("请先输入数字编号 1–93 或字符串 id")
                 return
             end
             local ok, text = self.actions.gmadd(id)
@@ -905,7 +925,7 @@ function View:OpenGm()
         local value = field:GetValue()
         local id = value:match("^%s*(%S+)%s*$")
         if not id or id == "" then
-            message:SetText("请先输入数字编号 1–71 或字符串 id")
+            message:SetText("请先输入数字编号 1–93 或字符串 id")
             return
         end
         local ok, text = self.actions.gmadd(id)

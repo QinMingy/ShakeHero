@@ -1,7 +1,7 @@
 -- Bottle 规则回归测试（V0.4 新结算模型）：纯 Lua assert，不启动引擎，不写文件，不输出日志。
 -- 在资源根 scripts 的环境中：require("Bottle.Tests").Run()
 -- 标准 Lua：package.path = "/workspace/scripts/?.lua;" .. package.path
--- 覆盖：71件数据表完整性、新主流程（抽20/摇10/结算2秒/考核/三选一概率表）、
+-- 覆盖：93件数据表完整性、新主流程（抽20/摇10/结算2秒/考核/三选一概率表）、
 -- 初始4物品、价值临时性、冷却回合重置、香蕉生命周期、橘子贴底、小球碰壁、
 -- V0.4 效果（合成/切割/消灭/偷取/催熟/消耗/结算/重生）、遗物三选一与遗物效果、
 -- 快照回滚与存档校验、ShakeMotion 物理二、Physics 接触计数（无引擎 mock）。
@@ -73,7 +73,10 @@ local function Fixture(ids, bottleCount, seed)
             permMult = 1, tokenAttempted = false,
             remaining = Items.byId[id].cooldown, bottleRounds = 0,
             location = uid <= count and "bottle" or "deck", temporary = false,
-            scale = 1, counter = 0, settleCount = 0, distance = 0,
+            scale = 1, weight = 1, counter = 0, settleCount = 0, distance = 0,
+            eventMult = 1, generatedTemporary = false, shielded = false, anchored = false,
+            refreshCount = 0, woolCount = 0, abacusMerges = 0, calfDashRemaining = 0,
+            discusWait = 0, compassProgress = 0,
         }
         snapshot.deck[#snapshot.deck + 1] = uid
         if uid <= count then snapshot.drawn[#snapshot.drawn + 1] = uid end
@@ -136,8 +139,8 @@ local function Test(name, run)
     cases[#cases + 1] = { name = name, run = run }
 end
 
-Test("71件物品表与数据一致性", function()
-    assert(#Items.list == 71 and #Items.rarityNames == 5 and #Items.rarityColors == 5)
+Test("93件物品表与数据一致性", function()
+    assert(#Items.list == 93 and #Items.rarityNames == 5 and #Items.rarityColors == 5)
     ---@type table<string, boolean>
     local seen = {}
     for index, def in ipairs(Items.list) do
@@ -155,7 +158,7 @@ Test("71件物品表与数据一致性", function()
             assert(Items.byId[ref], "描述引用未知物品：" .. ref .. " ← " .. def.id)
         end
     end
-    -- V0.4：71件全部实装；juice为追加生成物，不改变原有编号与正常卡池。
+    -- 最新源表93件全部实装，原1..70编号保留；juice移至87，71为chick。
     for _, def in ipairs(Items.list) do
         assert(def.implemented, "物品未实装：" .. def.id)
         assert(not def.pool or def.implemented, "未实装物品不能进卡池：" .. def.id)
@@ -165,16 +168,19 @@ Test("71件物品表与数据一致性", function()
     assert(Items.byNumber[48].id == "ball", "小球位于 #48")
     assert(Items.byNumber[68].id == "soldier" and Items.byNumber[69].id == "doctor"
         and Items.byNumber[70].id == "egg", "原末尾三件编号不变")
-    assert(Items.byNumber[71].id == "juice", "果汁仅追加到 #71")
+    assert(Items.byNumber[71].id == "chick", "小鸡位于源表 #71")
+    assert(Items.byNumber[87].id == "juice", "果汁保持字符串ID并位于 #87")
     -- 卡池屏蔽（源表第8列=1及追加生成物juice）不进三选一。
     for _, id in ipairs({
         "apple_half", "banana_half", "orange_half", "fruit_ninja", "cherry_half",
-        "laurel", "coin_4", "coin_8", "coin_16", "coin_32", "coin_64", "coin_128",
+        "tomato_egg", "coin_4", "coin_8", "coin_16", "coin_32", "coin_64", "coin_128",
         "coin_256", "coin_512", "coin_1024", "coin_2048", "rotten_banana",
-        "banana_peel", "juice",
+        "banana_peel", "juice", "poop", "golden_poop", "diamond_poop", "rainbow_poop",
+        "discus", "wool", "sweater",
     }) do
         assert(Items.byId[id].pool == false, "屏蔽物品不应进卡池：" .. id)
     end
+    assert(Items.byId.laurel.pool, "最新源表桂冠应进入卡池")
     assert(Items.byId.apple.base == 2 and Items.byId.banana.base == 2
         and Items.byId.orange.base == 2 and Items.byId.ball.base == 1)
     assert(Items.byId.ball.cooldown == 3 and Items.byId.ball.trigger == "wall")
@@ -297,7 +303,9 @@ Test("结算后价值增益清零、永久增益保留、冷却重置", function
     Close(Item(game, 2).mult, 1, "倍率复位")
     assert(game:Skip())
     Close(Item(game, 1).remaining, 0, "无冷却物品保持0")
-    Close(Item(game, 2).remaining, 3, "冷却每回合重置")
+    Close(Item(game, 2).remaining, 3, "准备期显示入瓶完整间隔")
+    assert(game:Start())
+    Close(Item(game, 2).remaining, 0, "触发冷却在回合开始重置为就绪")
     IdentityInvariant(game)
 end)
 
@@ -323,12 +331,9 @@ end)
 Test("小球碰撞瓶子+1价值且受3秒冷却", function()
     local game = Fixture({ "ball" })
     assert(game:Start())
-    Close(Item(game, 1).remaining, 3, "开始时冷却重置为完整值")
-    -- 入瓶完整冷却3秒后才就绪；就绪且接触瓶壁才触发。
-    local events = game:Step(2, { wall = { [1] = true } })
-    Close(Item(game, 1).bonus, 0, "冷却未就绪不触发")
-    events = game:Step(1, { wall = { [1] = true } })
-    Close(Item(game, 1).bonus, 1, "冷却就绪且碰壁触发+1")
+    Close(Item(game, 1).remaining, 0, "开始时触发冷却归零就绪")
+    local events = game:Step(0, { wall = { [1] = true } })
+    Close(Item(game, 1).bonus, 1, "开局接触立即触发+1")
     assert(#Events(events, "buff", 1) == 1)
     Close(Item(game, 1).remaining, 3, "触发后重新进入3秒冷却")
     -- 冷却内持续接触不再触发。
@@ -337,6 +342,12 @@ Test("小球碰撞瓶子+1价值且受3秒冷却", function()
     -- 冷却结束后仍接触则再次触发。
     events = game:Step(1, { wall = { [1] = true } })
     Close(Item(game, 1).bonus, 2, "冷却就绪后再次触发")
+    assert(#Events(events, "buff", 1) == 1)
+    Close(Item(game, 1).remaining, 3)
+    game:Step(2.99, {wall={[1]=true}})
+    Close(Item(game, 1).bonus, 2)
+    game:Step(.01, {wall={[1]=true}})
+    Close(Item(game, 1).bonus, 3, "第二次完整冷却后再触发")
     -- 物品互撞不算“碰撞瓶子”。
     local two = Fixture({ "ball", "ball" })
     assert(two:Start())
@@ -425,9 +436,9 @@ Test("三选一按考核阶段概率且候选不重复", function()
         seen[id] = true
         local def = Items.byId[id]
         assert(def.pool and def.implemented, "候选必须已实装并进卡池")
-        assert(def.rarity == 1, "第1次考核只出普通")
+        assert(def.rarity == 1, "首次考核前非考核回合只出普通")
     end
-    -- 第1考核阶段多次抽取，全部候选必须为稀有度1（100%普通）。
+    -- 首次考核前的非考核回合仍按100%普通；第5回合考核候选排除普通。
     for seed = 1, 30 do
         local g = Game.New(seed)
         for round = 1, 5 do
@@ -436,7 +447,9 @@ Test("三选一按考核阶段概率且候选不重复", function()
             SettleAndReveal(g)
             if g.phase == "over" then break end
             for _, id in ipairs(g.options) do
-                assert(Items.byId[id].rarity == 1, "考核1全为普通：" .. id)
+                local rarity = Items.byId[id].rarity
+                assert((round < 5 and rarity == 1) or (round == 5 and rarity > 1),
+                    "普通概率及考核排除规则：" .. id)
             end
             if not g:Skip() then break end
         end
@@ -630,15 +643,16 @@ end)
 Test("物理fixture导出全部内壁/底/顶且引用计数独立", function()
     -- 仅调用 Contact/Contacts/_ForgetContacts；不调用 Physics.New，不启动引擎。
     local world = {}
-    local itemA, itemB = {name = "item_1"}, {name = "item_2"}
+    local itemA, itemB = {name = "item_1", rotation2D = 0}, {name = "item_2", rotation2D = 0}
     local walls = {}
     for _, name in ipairs({"floor", "top", "wall_left", "wall_right",
         "shoulder_left", "shoulder_right", "neck_left", "neck_right"}) do
         walls[#walls + 1] = {name = name}
     end
     local physics = setmetatable({
-        world = world, bodies = {[1] = {node = itemA}, [2] = {node = itemB}},
-        _walls = walls, _pairs = {}, _bottom = {}, _top = {}, _wall = {}, _disposed = false,
+        world = world, bodies = {[1] = {uid=1,node = itemA}, [2] = {uid=2,node = itemB}},
+        _walls = walls, _pairs = {}, _bottom = {}, _top = {}, _wall = {}, _side = {},
+        expansion = require("Bottle.ExpansionPhysics").New(), _disposed = false,
         _impactContacts = {}, _impacts = {}, clock = 0,
     }, Physics) --[[@as any]]
     local function contact(a, b, begin, eventWorld)
@@ -680,7 +694,7 @@ Test("物理fixture导出全部内壁/底/顶且引用计数独立", function()
     contact(itemA, top, true); contact(itemA, itemB, true)
     physics:_ForgetContacts(1)
     assert(not physics:Contacts().wall[1] and not physics:Contacts().top[1] and #physics:Contacts().pairs == 0)
-    local replacement = {name = "item_1"}
+    local replacement = {name = "item_1", rotation2D = 0}
     physics.bodies[1].node = replacement
     contact(replacement, top, true)
     contact(itemA, top, false) -- 旧uid节点的迟到End不能清掉新节点接触
@@ -895,7 +909,7 @@ end)
 Test("小偷偷取相邻人类1点价值", function()
     local game = Fixture({ "thief", "student" })
     assert(game:Start())
-    game:Step(6, { pairs = { { 1, 2 } } })
+    game:Step(0, { pairs = { { 1, 2 } } })
     Close(Item(game, 2).permBonus, -1, "被偷方永久-1")
     Close(Item(game, 1).permBonus, 1, "小偷永久+1")
     Close(game:_Value(Item(game, 2)), 1, "学生价值 2-1=1")
@@ -1048,9 +1062,13 @@ Test("遗物三选一：考核达标后追加、刷新、跳过、选择", funct
     assert(game.phase == "draft" and game.relicDraft, "追加遗物三选一")
     assert(#game.options >= 1, "遗物候选非空")
     for _, id in ipairs(game.options) do assert(Relics.byId[id], "候选是遗物 id") end
-    -- 刷新一次可用。
-    assert(game:DraftRefresh() and game.relicDraft)
-    assert(not game:DraftRefresh(), "刷新仅一次")
+    -- 五回合未花刷新：初始1+完成第2/4回合各1，共3次，物品/遗物共享。
+    Close(game.refreshes, 3)
+    for remaining = 2, 0, -1 do
+        assert(game:DraftRefresh() and game.relicDraft)
+        Close(game.refreshes, remaining)
+    end
+    assert(not game:DraftRefresh(), "共享余额耗尽后拒绝刷新")
     -- 选择遗物后加入 relics 并推进回合。
     local chosen = game.options[1]
     assert(game:Choose(1))
@@ -1121,7 +1139,7 @@ Test("遗物效果二：小偷手册/有教无类/金盘洗手/精进刀法/厨�
     local wash = Fixture({ "thief", "student" })
     wash.relics.wash_hands = true
     assert(wash:Start())
-    wash:Step(6, { pairs = { { 1, 2 } } })
+    wash:Step(0, { pairs = { { 1, 2 } } })
     Close(Item(wash, 1).permBonus, 1, "小偷共同+1")
     Close(Item(wash, 2).permBonus, 1, "对方共同+1而非被偷")
     -- 厨师帽：厨师消耗相邻小刀，产物额外永久+1。
@@ -1185,10 +1203,11 @@ Test("可选cjson往返保持prepare/rollback/draft和RNG", function()
     if not json then return end -- 标准Lua无cjson也可跑其余全部纯规则测试。
     Tests.jsonRoundtripRan = true
     local game = Fixture({ "apple", "banana", "ball", "orange" }, nil, 9876)
+    game.refreshes = 3 -- 为prepare重抽、draft刷新、下回合重抽各准备一次共享余额。
     assert(game:Reroll())
     local prepare = game:Snapshot()
     local restored = Game.Restore(json.decode(json.encode(prepare)) --[[@as BottleSnapshot]])
-    assert(Equal(prepare, restored:Snapshot()) and not restored:Reroll())
+    assert(Equal(prepare, restored:Snapshot()) and restored.refreshes == 2)
     assert(game:Start() and restored:Start())
     game:Step(5, { wall = { [3] = true } })
     assert(Equal(prepare, Game.Restore(json.decode(json.encode(game:Snapshot())) --[[@as BottleSnapshot]]):Snapshot()))
@@ -1201,10 +1220,12 @@ Test("可选cjson往返保持prepare/rollback/draft和RNG", function()
     assert(Equal(draft, copy:Snapshot()))
     assert(game:DraftRefresh() and copy:DraftRefresh() and Equal(game.options, copy.options))
     local refreshed = Game.Restore(json.decode(json.encode(game:Snapshot())) --[[@as BottleSnapshot]])
-    assert(refreshed.refreshUsed and not refreshed:DraftRefresh())
+    assert(refreshed.refreshUsed and refreshed.refreshes == 1, "draft已用标记不重置共享余额")
     assert(game:Choose(1) and refreshed:Choose(1))
     assert(Equal(game:Snapshot(), refreshed:Snapshot()))
     assert(game:Reroll() and refreshed:Reroll() and Equal(game:Snapshot(), refreshed:Snapshot()))
+    assert(game.refreshes == 0 and refreshed.refreshes == 0)
+    assert(not game:Reroll() and not refreshed:Reroll(), "共享余额耗尽后均拒绝")
     IdentityInvariant(refreshed)
 end)
 
@@ -1218,7 +1239,8 @@ function Tests.Run()
         passed = passed + 1
     end
     return passed + require("Bottle.ExtraTests").Run() + require("Bottle.RelicTests").Run()
-        + require("Bottle.RepairTests").Run()
+        + require("Bottle.RepairTests").Run() + require("Bottle.CoreUpdateTests").Run()
+        + require("Bottle.ExpansionTests").Run() + require("Bottle.NewRelicTests").Run()
 end
 
 return Tests

@@ -30,9 +30,11 @@
 -- 非运行期只用 dt=0 的删除屏障，不预结算重力、不消耗任何回合时间。
 
 local Items = require "Bottle.Items"
-local Shapes = require "Bottle.Shapes"
+local Shapes = require("Bottle.Shapes")
 local ShakeMotion = require "Bottle.ShakeMotion"
 local SoftBacon = require "Bottle.SoftBacon"
+local PhysicalState = require "Bottle.PhysicalState"
+local ExpansionPhysics = require "Bottle.ExpansionPhysics"
 
 ---@class BottleBodyPart
 ---@field node Node
@@ -49,6 +51,10 @@ local SoftBacon = require "Bottle.SoftBacon"
 ---@field shape string
 ---@field envelope number 旋转包络半径，仅用于寻找生成位置。
 ---@field scale number 体积倍率；与 item.scale 不一致时重建 body 保持位置。
+---@field weight number 同尺寸原质量倍率；只改重量时更新密度，不重建接触/软体关节
+---@field shapes CollisionShape2D[] 普通物品全部 fixture；软体由 soft.segments 持有
+---@field sensor boolean 实际穿透体态，不修改全局物品定义
+---@field ghostLike boolean 幽灵/幽灵便便自主流场、直立且免摇晃
 ---@field newbornRemaining number
 ---@field lastX number 上次采样的中心 x（米），用于累计位移。
 ---@field lastY number 上次采样的中心 y（米），用于累计位移。
@@ -79,13 +85,27 @@ local SoftBacon = require "Bottle.SoftBacon"
 ---@field top table<number, boolean> 只计横向 top 封口，不包括瓶肩/瓶颈
 ---@field wall table<number, boolean> 全部静态内壁，含 floor/top/side/shoulder/neck
 ---@field positions table<number, BottlePhysicsSpawn> 所有当前存活 body 的中心坐标（米）
+---@field side table<number, boolean> 左右侧壁，含肩颈、不含底顶
+---@field angles table<number, number> 逆时针角度（弧度）
+---@field rotateOffsets table<number, number> 累计强制角差，不计指南针自然转角
+---@field angularTravel table<number, number> 累计自然绝对角路程；reset归零
+---@field flightArrived table<number, boolean> 飞行结束，保持到下次flight/teleport/reset
+---@field flightHits table<number, number> 真实Box2D命中的目标uid
+---@field shakeStrength number 单步强摇输入dv幅值，阈值4m/s，0.35秒防抖，无输入0
+
+---@class BottlePhysicsOptions
+---@field accelerator boolean?
+---@field ghostPoop boolean?
 
 ---@class BottlePhysicsSyncRequest
 ---@field items ItemInstance[]
 ---@field reset boolean
 ---@field seed number?
+---@field options BottlePhysicsOptions?
 
 ---@class BottlePhysics
+---@field speedMultiplier number 线移动速度倍率；不改变固定dt或规则计时
+---@field ghostPoop boolean 四类便便是否使用幽灵sensor物理
 ---@field scene Scene
 ---@field world PhysicsWorld2D
 ---@field bodies table<number, BottleBody>
@@ -96,6 +116,9 @@ local SoftBacon = require "Bottle.SoftBacon"
 ---@field _wall table<number, number>
 ---@field _impactContacts table<string, BottleImpactContact> 独立的声音接触状态，不参与玩法接触判定
 ---@field _impacts BottleImpact[]
+---@field _side table<number, number>
+---@field expansion BottleExpansionPhysics 扩展动作与真实输入采样
+---@field _exactSpawns table<number, BottlePhysicsSpawn>
 ---@field _retired BottleBody[]
 ---@field _mergeSpawns table<number, BottlePhysicsSpawn>
 ---@field _nearSpawns table<number, BottlePhysicsSpawn>
@@ -193,7 +216,10 @@ end
 ---@param radius number
 ---@param mirror boolean
 ---@param sensor boolean?
+---@return CollisionShape2D[]
 local function createProfile(node, profile, radius, mirror, sensor)
+    ---@type CollisionShape2D[]
+    local shapes = {}
     for _, points in ipairs(profile.polygons or {}) do
         local polygon = node:CreateComponent("CollisionPolygon2D")
         polygon:SetVertexCount(#points // 2)
@@ -210,6 +236,7 @@ local function createProfile(node, profile, radius, mirror, sensor)
         end
         setSurface(polygon)
         polygon.trigger = sensor == true
+        shapes[#shapes + 1] = polygon
     end
     for _, spec in ipairs(profile.circles or {}) do
         local x = (spec.x - 8) * radius / 8
@@ -218,19 +245,23 @@ local function createProfile(node, profile, radius, mirror, sensor)
         circle.center = Vector2(mirror and -x or x, (8 - spec.y) * radius / 8)
         setSurface(circle)
         circle.trigger = sensor == true
+        shapes[#shapes + 1] = circle
     end
+    return shapes
 end
 
 ---@param id string
 ---@return number radius
 ---@return string shape
 ---@return number envelope
-local function dimensions(id)
+---@param woolCount number?
+local function dimensions(id, woolCount)
     local def = assert(Items.byId[id], "[Bottle.Physics] 未知物品 id：" .. id)
     -- Items 是尺寸唯一源，不能用旧 .32 上限截断统一放大倍率。
     local radius = def.radius
     assert(radius > 0 and radius < math.huge, "[Bottle.Physics] 物品尺寸必须为有限正数")
-    local shape = def.shape
+    ---@type string
+    local shape = id == "sheep" and Shapes.Variant(id, woolCount) or def.shape
     return radius, shape, id == "bacon" and SoftBacon.Envelope(radius) or Shapes.Envelope(shape, radius)
 end
 
@@ -349,6 +380,10 @@ function Physics:_Init()
     self._top = {}
     self._wall = {}
     self._impactContacts = {}
+    self._side = {}
+    self._exactSpawns = {}
+    self.expansion = ExpansionPhysics.New()
+    self.speedMultiplier, self.ghostPoop = 1, false
     self._impacts = {}
     self._retired = {}
     self._mergeSpawns = {}
@@ -408,6 +443,7 @@ function Physics:_ForgetContacts(uid)
     self._bottom[uid] = nil
     self._top[uid] = nil
     self._wall[uid] = nil
+    self._side[uid] = nil
     for key, pair in pairs(self._pairs) do
         if pair.a == uid or pair.b == uid then self._pairs[key] = nil end
     end
@@ -421,6 +457,7 @@ function Physics:_Retire(uid)
     local record = self.bodies[uid]
     if not record then return end
     self.bodies[uid] = nil
+    self.expansion:Forget(uid)
     self:_ForgetContacts(uid)
     self._retired[#self._retired + 1] = record
 end
@@ -557,14 +594,15 @@ end
 ---@param x number
 ---@param y number
 function Physics:_CreateItem(item, x, y)
-    local radius, shape, envelope = dimensions(item.id)
+    local radius, shape, envelope = dimensions(item.id, item.woolCount)
     -- 体积倍率（大胃王/气球）：碰撞与包络同步缩放，显示尺寸由 View 用同一 scale。
-    local scale = item.scale or 1
+    local scale = PhysicalState.Clamp(item.id, "scale", item.scale)
+    local weight = PhysicalState.Clamp(item.id, "weight", item.weight)
     radius = radius * scale
     envelope = envelope * scale
     local angle = (item.uid * 137.507764) % 360
     if item.id == "bacon" then
-        local soft = SoftBacon.New(self.scene, item.uid, radius, x, y, angle, setSurface)
+        local soft = SoftBacon.New(self.scene, item.uid, radius, x, y, angle, setSurface, weight)
         local center = assert(soft.segments[SoftBacon.CENTER_SEGMENT])
         ---@type BottleBodyPart[]
         local parts = {}
@@ -574,40 +612,50 @@ function Physics:_CreateItem(item, x, y)
         self.bodies[item.uid] = {
             uid = item.uid, node = center.node, body = center.body, soft = soft,
             parts = parts, radius = radius, kind = item.id, shape = shape,
-            envelope = envelope, scale = scale, newbornRemaining = NEWBORN_SECONDS,
+            envelope = envelope, scale = scale, weight = weight, shapes = {}, sensor = false, ghostLike = false,
+            newbornRemaining = NEWBORN_SECONDS,
             lastX = x, lastY = y,
         }
         return
     end
     local node = self.scene:CreateChild(string.format("item_%d", item.uid))
     node:SetPosition2D(x, y)
-    -- 旋转也由 uid 确定；生成净空包络对所有角度均安全。
-    node.rotation2D = angle
-    local ghost = item.id == "ghost"
+    -- 幽灵便便沿用幽灵直立sensor，但不改变其图案、标签或全局物品定义。
+    local ghost = ExpansionPhysics.IsGhostLike(item.id, self.ghostPoop)
+    node.rotation2D = ghost and 0 or angle
+    local sensor = ExpansionPhysics.IsSensor(item.id, self.ghostPoop)
     local body = node:CreateComponent("RigidBody2D")
     body.bodyType = BT_DYNAMIC -- sensor 仍必须是动态体，保留与静态/动态体的真实接触。
     body.useFixtureMass = true
     body.fixedRotation = ghost
-    body.linearDamping = ghost and 0 or 0.25
-    body.angularDamping = ghost and 0 or 0.8
-    body.gravityScale = ghost and 0 or 1
+    body.linearDamping = sensor and 0 or 0.25
+    body.angularDamping = sensor and 0 or 0.8
+    body.gravityScale = sensor and 0 or 1
     body.bullet = true
-    body.allowSleep = not ghost
+    body.allowSleep = not sensor
     local profile = Shapes.profiles[shape]
+    ---@type CollisionShape2D[]
+    local shapes = {}
     if profile then
-        createProfile(node, profile, radius, item.id == "slipper_right", ghost)
+        shapes = createProfile(node, profile, radius, item.id == "slipper_right", sensor)
     elseif shape == "box" then
         -- profile 优先；仅用于尚无专用轮廓的 box 定义。
         local box = node:CreateComponent("CollisionBox2D")
         local halfSize = radius / math.sqrt(2)
         box:SetSize(halfSize * 2, halfSize * 2)
         setSurface(box)
-        box.trigger = ghost
+        box.trigger = sensor
+        shapes[#shapes + 1] = box
     else
         local circle = node:CreateComponent("CollisionCircle2D")
         circle.radius = radius
         setSurface(circle)
-        circle.trigger = ghost
+        circle.trigger = sensor
+        shapes[#shapes + 1] = circle
+    end
+    local density = weight * (item.id == "balloon" and .35 or 1)
+    for _, fixture in ipairs(shapes) do
+        if fixture.density ~= density then fixture.density = density end
     end
     body.linearVelocity = Vector2(0, 0)
     body.angularVelocity = 0
@@ -616,6 +664,7 @@ function Physics:_CreateItem(item, x, y)
         uid = item.uid, node = node, body = body, radius = radius,
         parts = {{node = node, body = body}},
         kind = item.id, shape = shape, envelope = envelope, scale = scale,
+        weight = weight, shapes = shapes, sensor = sensor, ghostLike = ghost,
         newbornRemaining = NEWBORN_SECONDS,
         lastX = x, lastY = y,
     }
@@ -628,6 +677,7 @@ end
 function Physics:RememberEvents(events)
     if self._disposed then return end
     for _, event in ipairs(events) do
+        self.expansion:Remember(event)
         if event.kind == "remove" then
             self._eventRemoved[event.uid] = true
         end
@@ -666,13 +716,17 @@ function Physics:RememberEvents(events)
                 self._mergeSpawns[event.uid] = { x = position.x, y = position.y }
             end
             if finite(event.x) and finite(event.y) then
-                self._nearSpawns[event.uid] = { x = event.x, y = event.y }
+                if (event --[[@as table]]).exact then
+                    self._exactSpawns[event.uid] = {x = event.x, y = event.y}
+                else
+                    self._nearSpawns[event.uid] = { x = event.x, y = event.y }
+                end
             end
             self._eventRemoved[event.uid] = true
         elseif event.kind == "resize" then
-            -- 体积变化（大胃王/气球）：重建 body 并保持当前位置。
+            -- 只有体积改变才重建。重量单独变化由 Sync 原位更新全部密度，保留接触/关节。
             local record = self.bodies[event.uid]
-            if record then
+            if record and event.value ~= record.scale then
                 local position = record.node.position2D
                 self._mergeSpawns[event.uid] = { x = position.x, y = position.y }
                 self._eventRemoved[event.uid] = true
@@ -690,14 +744,20 @@ end
 ---@param items ItemInstance[]
 ---@param reset boolean?
 ---@param seed number?
-function Physics:Sync(items, reset, seed)
+---@param options BottlePhysicsOptions? 省略沿用上次设置；新世界默认无遗物
+function Physics:Sync(items, reset, seed, options)
     if self._disposed then return end
     if self._updating or self._flushing then
         ---@type ItemInstance[]
         local copy = {}
         for _, item in ipairs(items) do copy[#copy + 1] = item end
-        self._pendingSync = { items = copy, reset = reset == true, seed = seed }
+        local savedOptions = options and {accelerator = options.accelerator, ghostPoop = options.ghostPoop}
+        self._pendingSync = { items = copy, reset = reset == true, seed = seed, options = savedOptions }
         return
+    end
+    if options then
+        self.speedMultiplier = options.accelerator and 1.2 or 1
+        self.ghostPoop = options.ghostPoop == true
     end
     if reset then
         self:ResetMotion()
@@ -709,6 +769,9 @@ function Physics:Sync(items, reset, seed)
         self._wall = {}
         self._impactContacts = {}
         self._impacts = {}
+        self._side = {}
+        self._exactSpawns = {}
+        self.expansion:Reset()
         self._mergeSpawns = {}
         self._nearSpawns = {}
         self._eventRemoved = {}
@@ -727,22 +790,47 @@ function Physics:Sync(items, reset, seed)
     ---@type table<number, string>
     local definitions = {}
     ---@type table<number, number>
-    local scales = {}
+    local scales, weights = {}, {}
+    ---@type table<number, string>
+    local variants = {}
     for _, item in ipairs(ordered) do
         definitions[item.uid] = item.id
-        scales[item.uid] = item.scale or 1
+        local _, shape = dimensions(item.id, item.woolCount)
+        variants[item.uid] = shape
+        scales[item.uid] = PhysicalState.Clamp(item.id, "scale", item.scale)
+        weights[item.uid] = PhysicalState.Clamp(item.id, "weight", item.weight)
     end
+    ---@type table<number, {x:number,y:number,angle:number,vx:number,vy:number,motion:BottleExpansionMotion}>
+    local rebuilt = {}
     for uid, record in pairs(self.bodies) do
         -- 香蕉→香蕉皮等原地转化通过 kind 变化触发 body 重建，保留 uid；
-        -- 体积倍率变化（大胃王/气球）同样重建，位置由 _mergeSpawns 保持。
-        if not wanted[uid] or record.kind ~= definitions[uid]
-            or record.scale ~= scales[uid] or self._eventRemoved[uid] then
-            if wanted[uid] and record.scale ~= scales[uid] and not self._mergeSpawns[uid] then
+        -- 遗物改变便便穿透态时安全重建，保持中心、速度及角路程基线。
+        local sensorChanged = wanted[uid] and record.sensor ~= ExpansionPhysics.IsSensor(definitions[uid], self.ghostPoop)
+        if not wanted[uid] or record.kind ~= definitions[uid] or record.shape ~= variants[uid]
+            or record.scale ~= scales[uid] or sensorChanged or self._eventRemoved[uid] then
+            if sensorChanged and record.kind == definitions[uid] and not self._eventRemoved[uid] then
+                local p, v = record.node.position2D, record.body.linearVelocity
+                rebuilt[uid] = {x=p.x,y=p.y,angle=record.node.rotation2D,vx=v.x,vy=v.y,
+                    motion=self.expansion:State(record)}
+            end
+            if wanted[uid] and (record.scale ~= scales[uid] or record.shape ~= variants[uid] or sensorChanged)
+                and not self._mergeSpawns[uid] then
                 -- 兜底：scale 变化未经 resize 事件（不应发生），保持当前位置重建。
                 local position = record.node.position2D
                 self._mergeSpawns[uid] = { x = position.x, y = position.y }
             end
             self:_Retire(uid)
+        elseif record.weight ~= weights[uid] then
+            local weight = assert(weights[uid])
+            if record.soft then
+                record.soft:SetWeight(weight)
+            else
+                -- 原始密度为1；绝不能用当前密度反复相乘，避免连续改重量后漂移。
+                local density = weight * (record.kind == "balloon" and .35 or 1)
+                for _, fixture in ipairs(record.shapes) do fixture.density = density end
+                record.body.awake = true
+            end
+            record.weight = weight
         end
     end
     -- 先真正删除旧 fixture，再创建替代物体，避免复用 uid 的旧接触混入。
@@ -753,17 +841,26 @@ function Physics:Sync(items, reset, seed)
     local created, crowded = 0, 0
     for _, item in ipairs(ordered) do
         if not self.bodies[item.uid] then
-            local _, _, extent = dimensions(item.id)
-            extent = extent * (item.scale or 1)
+            local _, _, extent = dimensions(item.id, item.woolCount)
+            extent = extent * assert(scales[item.uid])
             local remembered = self._mergeSpawns[item.uid]
             local near = self._nearSpawns[item.uid]
+            local exact = self._exactSpawns[item.uid]
+            local previous = rebuilt[item.uid]
             local x, y = 0, HEIGHT * 0.5
-            if near then
+            if previous then
+                x, y = previous.x, previous.y
+            elseif exact then
+                x, y = exact.x, exact.y
+            elseif near then
                 x, y = self:_NearPosition(item.uid, extent, near)
             elseif remembered then
                 -- 瓶内安全时保持精确材料中点；近墙只修正新产物生成点，
                 -- 不修改任何存活动态物体的位置。
                 x, y = clampSpawn(remembered.x, remembered.y, extent)
+            elseif reset and item.woolExtraEntry then
+                -- 额外羊毛按规则在准备阶段已入瓶，位置取瓶顶且不消耗抽取名额。
+                x, y = clampSpawn(((item.uid * 37) % 81 - 40) / 100, 6.0, extent)
             elseif reset then
                 local exact = false
                 x, y, exact = self:_ScatterPosition(scatterSeed, item.uid, extent)
@@ -772,12 +869,22 @@ function Physics:Sync(items, reset, seed)
                 x, y = self:_FreePosition(item.uid, extent)
             end
             self:_CreateItem(item, x, y)
+            local record = assert(self.bodies[item.uid])
+            if previous then
+                record.node.rotation2D = record.ghostLike and 0 or previous.angle
+                record.body.linearVelocity = Vector2(previous.vx, previous.vy)
+                previous.motion.angle = record.node.rotation2D * math.pi / 180
+                self.expansion.states[item.uid] = previous.motion
+            end
+            self.expansion:State(record)
             created = created + 1
         end
     end
     self._mergeSpawns = {}
     self._nearSpawns = {}
     self._eventRemoved = {}
+    self._exactSpawns = {}
+    self.expansion:Flush(self)
     if reset then
         print(string.format("[Bottle.Physics] 重置 %d 个瓶内物体，随机散布，等待 Step 后才运动", #ordered))
         if crowded > 0 then
@@ -876,6 +983,9 @@ function Physics:Contact(eventData, begin)
         changeContactCount(self._wall, uid, delta)
         if wallNode.name == "floor" then changeContactCount(self._bottom, uid, delta) end
         if wallNode.name == "top" then changeContactCount(self._top, uid, delta) end
+        if wallNode.name ~= "floor" and wallNode.name ~= "top" then
+            changeContactCount(self._side, uid, delta)
+        end
         -- 各段瓶壁分别计数：沿侧壁下滑再撞瓶底仍然能响，不被侧壁接触吞掉。
         local impactKey = "wall:" .. tostring(uid) .. ":" .. wallNode.name
         if self:_ImpactContact(impactKey, uid, nil, begin) then
@@ -891,7 +1001,7 @@ end
 ---@param key string
 function Physics:_EmitImpact(recordA, recordB, key)
     -- sensor 穿透是玩法接触，不是实体撞击；任一方为幽灵都不得发碰撞音。
-    if (recordA and recordA.kind == "ghost") or (recordB and recordB.kind == "ghost") then return end
+    if (recordA and recordA.sensor) or (recordB and recordB.sensor) then return end
     local va = recordA and recordA.body and recordA.body.linearVelocity or nil
     local vb = recordB and recordB.body and recordB.body.linearVelocity or nil
     if not va then return end
@@ -917,7 +1027,8 @@ end
 ---@return BottlePhysicsContacts
 function Physics:Contacts()
     ---@type BottlePhysicsContacts
-    local result = { pairs = {}, bottom = {}, top = {}, wall = {}, positions = {} }
+    local result = { pairs = {}, bottom = {}, top = {}, wall = {}, side = {}, positions = {},
+        angles = {}, rotateOffsets = {}, angularTravel = {}, flightArrived = {}, flightHits = {}, shakeStrength = 0 }
     for uid, record in pairs(self.bodies) do
         local position = record.node.position2D
         if position then result.positions[uid] = { x = position.x, y = position.y } end
@@ -939,6 +1050,10 @@ function Physics:Contacts()
     for uid, count in pairs(self._wall) do
         if count > 0 and self.bodies[uid] then result.wall[uid] = true end
     end
+    for uid, count in pairs(self._side) do
+        if count > 0 and self.bodies[uid] then result.side[uid] = true end
+    end
+    self.expansion:Contacts(self, result)
     return result
 end
 
@@ -957,6 +1072,7 @@ end
 
 function Physics:ResetMotion()
     self.motion:Reset()
+    self.expansion:ResetShake()
 end
 
 function Physics:BeginShake()
@@ -971,7 +1087,10 @@ end
 ---@param ay number
 ---@param dt number
 function Physics:Sensor(ax, ay, dt)
-    if not self._disposed and self.mode == 2 then self.motion:Sensor(ax, ay, dt) end
+    if not self._disposed and self.mode == 2 then
+        self.motion:Sensor(ax, ay, dt)
+        if finite(ax) and finite(ay) and finite(dt) and dt > 0 then self.expansion:Input(false,true) end
+    end
 end
 
 ---物理一原样保留：世界坐标拖动增量，dx 向右、dy 向上；立即同向冲量。
@@ -981,14 +1100,16 @@ end
 function Physics:Shake(dx, dy)
     if self._disposed or dx ~= dx or dy ~= dy then return end
     if self.mode == 2 then
+        if self.motion.holding and (dx ~= 0 or dy ~= 0) then self.expansion:Input(true,false) end
         self.motion:Move(dx, dy)
         return
     end
     local length = math.sqrt(dx * dx + dy * dy)
     if length == 0 or length == math.huge then return end
     local scale = math.min(1, MAX_SHAKE_DELTA / length) * SHAKE_GAIN
+    self.expansion:Input(false,false,dx*scale,dy*scale)
     for _, record in pairs(self.bodies) do
-        if record.kind ~= "ghost" then
+        if not self.expansion:Controlled(record) then
             for _, part in ipairs(record.parts) do
                 local mass = part.body.mass
                 part.body:ApplyLinearImpulseToCenter(Vector2(dx * scale * mass, dy * scale * mass), true)
@@ -1051,7 +1172,8 @@ end
 ---@param record BottleBody
 ---@param clock number
 ---@param dt number
-local function floatGhost(record, clock, dt)
+---@param multiplier number
+local function floatGhost(record, clock, dt, multiplier)
     containGhost(record)
     local phase = (record.uid % 997) * 2.399963229728653
     local targetX = 0.95 * math.cos(clock * 0.83 + phase)
@@ -1076,11 +1198,14 @@ local function floatGhost(record, clock, dt)
     local factor = speed > GHOST_MAX_SPEED and GHOST_MAX_SPEED / speed or 1
     -- 用安全终点反推本步速度；底/顶、肩颈凹角均按整个旋转包络留内，
     -- 不依赖 sensor 的 CCD（Box2D sensor 本身不产生实体阻挡）。
-    local nextX, nextY = position.x + targetX * factor * dt, position.y + targetY * factor * dt
+    local nextX, nextY = position.x + targetX * factor * dt * multiplier,
+        position.y + targetY * factor * dt * multiplier
     if not ghostPointInside(nextX, nextY, record.envelope) then
         nextX, nextY = clampSpawn(nextX, nextY, record.envelope)
     end
-    record.body.linearVelocity = Vector2((nextX - position.x) / dt, (nextY - position.y) / dt)
+    -- 返回基准速度；加速积分屏障统一乘倍率，不能此处与屏障重复乘。
+    record.body.linearVelocity = Vector2((nextX - position.x) / (dt * multiplier),
+        (nextY - position.y) / (dt * multiplier))
     record.body.angularVelocity = 0
     record.body.awake = true
 end
@@ -1092,6 +1217,7 @@ function Physics:Step(dt)
     if self._disposed or self._updating or self._flushing or dt ~= dt or math.abs(dt) == math.huge then
         return
     end
+    self.expansion:Flush(self)
     if dt <= 0 then
         self:_RemovalBarrier()
         self:_RunDeferred()
@@ -1099,21 +1225,23 @@ function Physics:Step(dt)
     end
     self:_RunDeferred()
     if self._disposed then return end
-    local dvx, dvy = 0, 0
+    local dvx, dvy, sensorX, sensorY = 0, 0, 0, 0
     if self.mode == 2 then
         dvx, dvy = self.motion:Step(dt)
-        local sensorX, sensorY = self.motion:SensorImpulse(dt)
-        dvx, dvy = dvx + sensorX, dvy + sensorY
+        sensorX, sensorY = self.motion:SensorImpulse(dt)
     end
+    self.expansion:SampleShake(dt,dvx,dvy,sensorX,sensorY)
+    dvx,dvy=dvx+sensorX,dvy+sensorY
     for _, record in pairs(self.bodies) do
-        if record.kind == "ghost" then floatGhost(record, self.clock, dt) end
+        if record.ghostLike then floatGhost(record, self.clock, dt, self.speedMultiplier) end
         if record.soft then record.soft:Step(dt) end
+        self.expansion:Before(record, dt, self.bodies, clampSpawn, self.speedMultiplier)
         for _, part in ipairs(record.parts) do
             local body = part.body
-            if record.kind ~= "ghost" and (dvx ~= 0 or dvy ~= 0) then
+            if not self.expansion:Controlled(record) and (dvx ~= 0 or dvy ~= 0) then
                 body:ApplyLinearImpulseToCenter(Vector2(dvx * body.mass, dvy * body.mass), true)
             end
-            if record.kind ~= "ghost" and record.newbornRemaining > 0 then
+            if not self.expansion:Controlled(record) and record.newbornRemaining > 0 then
                 -- 每个柔软分段独立缓冲，不能只限制中心而放任末段高速飞散。
                 local velocity = body.linearVelocity
                 local speed = math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
@@ -1126,13 +1254,18 @@ function Physics:Step(dt)
         end
         record.newbornRemaining = math.max(0, record.newbornRemaining - dt)
     end
+    -- 固定dt不变：把基准线速度/重力映射进1.2倍移动坐标，解算后恢复基准速度。
+    -- 真实Box2D负责CCD/接触/关节，绝不用事后额外平移绕过薄墙；角速度不加速。
+    local accelerated = self.expansion:BeginSpeed(self)
     self.clock = self.clock + dt
     self._updating = true
     self.scene:Update(dt)
     self._updating = false
+    self.expansion:EndSpeed(accelerated, self.speedMultiplier)
     for _, record in pairs(self.bodies) do
-        if record.kind == "ghost" then containGhost(record) end
+        if record.sensor then containGhost(record) end
     end
+    self.expansion:After(self, dt)
     self:_DrainRetired()
     self:_RunDeferred()
 end
@@ -1146,6 +1279,9 @@ function Physics:_ClearBodies()
     self._top = {}
     self._wall = {}
     self._impactContacts = {}
+    self._side = {}
+    self._exactSpawns = {}
+    self.expansion:Reset()
     self._impacts = {}
     self._mergeSpawns = {}
     self._nearSpawns = {}
@@ -1179,7 +1315,7 @@ function Physics:_RunDeferred()
     self._pendingSync = nil
     self._clearRequested = false
     if clearRequested then self:Clear() end
-    if request then self:Sync(request.items, request.reset, request.seed) end
+    if request then self:Sync(request.items, request.reset, request.seed, request.options) end
 end
 
 ---四个返回值：瓶内局部 x/y（米）、逆时针 angle（弧度）、radius（米）。

@@ -264,7 +264,7 @@ end
 local function Monkey(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
-        if other.id == "banana" and game:_Destroy(other.uid, false, events) then
+        if other.id == "banana" and game:_Destroy(other.uid, false, events, item) then
             -- 固定7金币/香蕉，与香蕉当前价值、猴子当前价值及倍率无关。
             game:_Score(events, item, 7, contacts.positions[item.uid])
             hit = true
@@ -315,7 +315,7 @@ end
 local function SoulStone(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
-        if other.id == "ghost" and game:_Destroy(other.uid, false, events) then
+        if other.id == "ghost" and game:_Destroy(other.uid, false, events, item) then
             -- 幽灵自身的被消耗结算由 Game:_Destroy 完成，这里只结算灵魂石。
             game:_Score(events, item, game:_Value(item), contacts.positions[item.uid])
             hit = true
@@ -372,7 +372,14 @@ function Extra.Apply(game, item, contacts, events)
         return Droplet(game, item, contacts, events)
     elseif id == "cloud" then
         local spawnId = Relics.Has(game, "coin_rain") and "coin_1" or "droplet"
-        return game:_Spawn(spawnId, events, false, contacts.positions[item.uid]) ~= nil
+        local spawned = game:_Spawn(spawnId, events, false, contacts.positions[item.uid]) ~= nil
+        -- 每周期保底永久一件，独立20%瓶顶追加六件临时；硬币雨只换类型。
+        if game:_RandomInt(5) == 1 then
+            for _ = 1, 6 do
+                if game:_SpawnTop(spawnId, events, true) then spawned = true end
+            end
+        end
+        return spawned
     elseif id == "monkey" then
         return Monkey(game, item, contacts, events)
     elseif id == "lucky_coin" then
@@ -392,6 +399,8 @@ function Extra.Apply(game, item, contacts, events)
     elseif id == "coin_machine" then
         return CoinMachine(game, item, contacts, events)
     elseif id == "star" then
+        item.bonus = item.bonus + 1
+        Buff(game, item, events, 1)
         game:_TeleportTop(item, events)
         return true
     end

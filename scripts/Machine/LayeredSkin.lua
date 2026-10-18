@@ -9,6 +9,7 @@ local Clock=require("Machine.Clock")
 local Items=require("Bottle.Items")
 local ItemText=require("Bottle.ItemText")
 local ItemDetail=require("Bottle.ItemDetail")
+local RefreshUI=require("Bottle.RefreshUI")
 local Art=require("Bottle.Art")
 local Atmosphere=require("Machine.Atmosphere")
 local Storage=require("Bottle.Storage")
@@ -78,7 +79,7 @@ local function prepareDraftMotion(view,DraftValue)
     -- 回合／刷新决定组生命周期；GM 过滤旧组选项不等于重抽。
     -- 同一回合内物品组会切到遗物组，必须区分两种候选的动画生命周期。
     local key=tostring(view.game.round)..":"..tostring(view.game.relicDraft==true)
-        ..":"..tostring(view.game.refreshUsed)
+        ..":"..tostring(RefreshUI.Count(view.game))..":"..tostring(view.game.refreshUsed)
     if m.draftMotionKey~=key then
         m.draftMotionKey=key;m.draftMotionByItem={};m.draftMotionSelected=nil
         m.draftMotionOptions=nil
@@ -542,6 +543,10 @@ function Skin.Footer(view)
             place(buttons[2],L.start,s);spriteButton(view,buttons[2],"green",22)
             m.pageMotion:Attach(buttons[2],"prepare-start","footer",L.start,"bottom",.03)
         end
+        if children[2] then
+            place(children[2],{20,844,362,22},s)
+            labelStyle(children[2],11,s)
+        end
     elseif (phase=="running" or phase=="settle" or phase=="reveal") and children[1] then
         place(children[1],L.start,s);labelStyle(children[1],18,s)
         if not children[1].layeredStatus then
@@ -642,6 +647,7 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
     place(screen,L.board,s)
     local icon=Icon{id="draftPreviewIcon",itemId=id,isRelic=relicDraft,
         rollValue=type(option)=="table" and option.rollValue or nil,
+        woolCount=type(option)=="table" and option.woolCount or nil,
         width=88*s,height=88*s,pointerEvents="none"}
     animateDraftIcon(view,icon,m.draftMotion[selected],true)
     local detail=ItemDetail.Create{prefix="draft",scale=s,def=def,isRelic=relicDraft,icon=icon,
@@ -650,9 +656,15 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
         valueCaption=type(option)=="table" and "当前收益" or "初始收益",
         gold=gold,
         descriptionId="draftDescription_"..selected,
-        effect=relicDraft and def.effect or ItemText.Effect(view.game,id),
+        effect=relicDraft and def.effect or ItemText.Effect(view.game,id,
+            type(option)=="table" and option or nil),
         onInspect=function(itemId) view:InspectDefinition(itemId) end}
+    detail:SetStyle({height="auto",flexGrow=1,flexBasis=0})
     screen:AddChild(detail)
+    local refreshHint=UI.Label{id="refreshPoolHint",text=RefreshUI.Hint(view.game),
+        textMotionDisabled=true,fontSize=11*s,fontColor=muted,pointerEvents="none"}
+    refreshHint:SetStyle({width="100%",paddingHorizontal=16*s,paddingBottom=8*s})
+    screen:AddChild(refreshHint)
     view.draft:AddChild(screen)
     for index,choice in ipairs(view.game.options) do
         local itemId,_,itemDef=DraftValue(view.game,choice)
@@ -695,7 +707,8 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
         end
         face:AddChild(shadow)
         local itemIcon=Icon{id="draftIcon_"..index,itemId=itemId,isRelic=relicDraft,
-            rollValue=type(choice)=="table" and choice.rollValue or nil,position="absolute",zIndex=1,
+            rollValue=type(choice)=="table" and choice.rollValue or nil,
+            woolCount=type(choice)=="table" and choice.woolCount or nil,position="absolute",zIndex=1,
             left=(width-36)*.5*s,top=9*s,width=36*s,height=36*s,pointerEvents="none"}
         animateDraftIcon(view,itemIcon,m.draftMotion[index],false)
         face:AddChild(itemIcon)
@@ -724,9 +737,9 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
     action("draftHide","收起候选",L.draftHide,"wood",12,function() Skin.SetDraftOpen(view,false) end)
     action("draftConfirm",relicDraft and "选择此遗物" or "选择此物品",L.draftConfirm,"green",17,
         function() view.actions.choose(selected) end)
-    local refresh=action("draftRefresh",view.game.refreshUsed and "刷新已用" or "刷新 · 1次",
+    local refresh=action("draftRefresh",RefreshUI.ButtonText(view.game),
         L.draftRefresh,"wood",12,function() view.actions.refresh() end)
-    refresh:SetDisabled(view.game.refreshUsed)
+    refresh:SetDisabled(RefreshUI.Count(view.game)<=0)
     action("draftSkip","跳过",L.draftSkip,"metal",11,function() view.actions.skip() end)
     view.draft:SetVisible(not view.choiceHidden and m.clock.flashElapsed<0)
     Skin.SyncPages(view)

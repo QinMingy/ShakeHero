@@ -1,0 +1,451 @@
+-- 核心规则升级回归。只构造内存快照/接触夹具，不读写玩家存档、不创建引擎对象。
+-- 由 Bottle.Tests.Run 统一执行；真实 Box2D/界面验收由独立运行时专项完成。
+local Game = require("Bottle.Game")
+local Items = require("Bottle.Items")
+local RelicEffects = require("Bottle.RelicEffects")
+local Repair = require("Bottle.RepairTests")
+local Tests = {}
+
+---@param actual number?
+---@param expected number
+---@param label string?
+local function Close(actual, expected, label)
+    assert(type(actual) == "number" and math.abs(actual - expected) < 1e-7,
+        (label or "数值") .. "：expected=" .. expected .. " actual=" .. tostring(actual))
+end
+
+---@param game BottleGame
+---@param uid integer
+---@return ItemInstance
+local function Item(game, uid) return assert(game:Get(uid), "缺少实例uid=" .. uid) end
+
+---@param ids string[]
+---@param bottleCount integer?
+---@return BottleGame
+local function Fixture(ids, bottleCount)
+    local game = Repair.Fixture(ids)
+    if bottleCount ~= nil then
+        local snapshot = game:Snapshot()
+        snapshot.drawn = {}
+        for _, item in ipairs(snapshot.instances) do
+            item.location = item.uid <= bottleCount and "bottle" or "deck"
+            if item.uid <= bottleCount then snapshot.drawn[#snapshot.drawn + 1] = item.uid end
+        end
+        return Game.Restore(snapshot)
+    end
+    return game
+end
+
+---@param game BottleGame
+---@param contacts BottleContacts?
+---@return GameEvent[]
+local function Finish(game, contacts)
+    local events = game:Finish(contacts)
+    assert(game.phase == "reveal", "结算后必须展示")
+    game:RevealStep(100)
+    assert(game.phase == "draft", "本夹具必须进入三选一")
+    return events
+end
+
+---@param game BottleGame
+local function Fill(game)
+    while #game:BottleItems() < Items.Settings.bottleLimit do game:_Spawn("ball", {}) end
+    assert(#game:BottleItems() == 100)
+end
+
+---@param array ItemInstance[]
+---@param uid integer
+---@return boolean
+local function Contains(array, uid)
+    for _, item in ipairs(array) do if item.uid == uid then return true end end
+    return false
+end
+
+---@type {name:string,run:fun()}[]
+local cases = {}
+---@param name string
+---@param run fun()
+local function Test(name, run) cases[#cases + 1] = {name=name, run=run} end
+
+Test("新局共享刷新1次、每完成2回合加1且跳过不再发", function()
+    local game = Fixture({"apple"})
+    assert(Game.New(1).refreshes == 1 and game.refreshes == 1)
+    Item(game, 1).permBonus = 100
+    for round = 1, 4 do
+        assert(game:Start())
+        Finish(game)
+        Close(game.refreshes, 1 + math.floor(round / 2), "完成回合后累计")
+        local earned = game.refreshes
+        assert(game:Skip())
+        Close(game.refreshes, earned, "推进准备不重复奖励")
+    end
+    assert(game.round == 5)
+end)
+
+Test("prepare重抽与物品遗物draft共用刷新且可连续扣除", function()
+    local game = Fixture({"apple"})
+    game.refreshes = 4
+    assert(game:Reroll() and game:Reroll())
+    Close(game.refreshes, 2)
+    assert(game:Start())
+    local before = game.refreshes
+    assert(not game:Reroll())
+    Close(game.refreshes, before, "无效阶段不扣次数")
+    Finish(game)
+    assert(game:DraftRefresh() and game:DraftRefresh())
+    Close(game.refreshes, 0)
+    local revision = game.revision
+    assert(not game:DraftRefresh() and game.revision == revision, "耗尽刷新原子拒绝")
+    local snapshot = game:Snapshot()
+    snapshot.phase, snapshot.round, snapshot.stage = "draft", 5, 2
+    snapshot.target, snapshot.relicDraft = Game.GetTarget(2), true
+    snapshot.options, snapshot.refreshes = {"juicer"}, 2
+    local relic = Game.Restore(snapshot)
+    assert(relic:DraftRefresh() and relic:DraftRefresh() and not relic:DraftRefresh())
+    Close(relic.refreshes, 0)
+end)
+
+Test("所有成功刷新为已拥有养鸡人计数、失败不计且余数读档", function()
+    local game = Fixture({"chicken_keeper", "chicken_keeper", "apple"}, 1)
+    game.refreshes = 6
+    for _ = 1, 4 do assert(game:Reroll()) end
+    for uid = 1, 2 do Close(Item(game, uid).refreshCount, 4); Close(Item(game, uid).permBonus, 0) end
+    local restored = Game.Restore(game:Snapshot())
+    Close(restored.refreshes, 2)
+    assert(restored:Reroll())
+    for uid = 1, 2 do Close(Item(restored, uid).refreshCount, 0); Close(Item(restored, uid).permBonus, 1) end
+    assert(restored:Start())
+    assert(not restored:Reroll())
+    Finish(restored)
+    assert(restored:DraftRefresh() and not restored:DraftRefresh())
+    for uid = 1, 2 do Close(Item(restored, uid).refreshCount, 1); Close(Item(restored, uid).permBonus, 1) end
+end)
+
+Test("鸡蛋3次入瓶成功加1刷新、失败不加且不重复领取", function()
+    for _, outcome in ipairs({1, 2}) do
+        local game = Fixture({"egg"})
+        Item(game, 1).bottleRounds = 2
+        assert(game:Start())
+        local calls = 0
+        rawset(game, "_RandomInt", function(_, maximum)
+            assert(maximum == 2, "鸡蛋只判一次50%")
+            calls = calls + 1
+            return outcome
+        end)
+        game:Finish()
+        assert(calls == 1 and Item(game, 1).location == "discard")
+        Close(game.refreshes, outcome == 1 and 2 or 1)
+        assert(#game:Finish() == 0 and calls == 1)
+        rawset(game, "_RandomInt", nil)
+        game:RevealStep(100)
+        local restored = Game.Restore(game:Snapshot())
+        Close(restored.refreshes, outcome == 1 and 2 or 1)
+    end
+end)
+
+Test("刷新余额prepare与draft读档保留且运行中回滚", function()
+    local game = Fixture({"apple"})
+    game.refreshes = 7
+    assert(game:Reroll())
+    local prepare = game:Snapshot()
+    assert(prepare.version == 2 and prepare.rulesVersion == 6 and prepare.refreshes == 6)
+    local restored = Game.Restore(prepare)
+    Close(restored.refreshes, 6)
+    assert(restored:Start())
+    restored.refreshes = 100
+    Close(Game.Restore(restored:Snapshot()).refreshes, 6, "半回合刷新收益不存档")
+    assert(game:Start())
+    Finish(game)
+    Close(Game.Restore(game:Snapshot()).refreshes, 6)
+end)
+
+Test("旧档缺刷新只继承当前一次、不追溯已完成回合", function()
+    for _, used in ipairs({false, true}) do
+        local prepare = Fixture({"apple"}):Snapshot() --[[@as any]]
+        prepare.rulesVersion, prepare.refreshes, prepare.rerollUsed = nil, nil, used
+        prepare.round, prepare.stage, prepare.target = 17, 4, Game.GetTarget(4)
+        local restored = Game.Restore(prepare)
+        Close(restored.refreshes, used and 0 or 1)
+        local draft = Fixture({"apple"}, 0):Snapshot() --[[@as any]]
+        draft.phase, draft.round, draft.stage, draft.target = "draft", 17, 4, Game.GetTarget(4)
+        draft.rulesVersion, draft.refreshes, draft.refreshUsed = nil, nil, used
+        restored = Game.Restore(draft)
+        Close(restored.refreshes, used and 0 or 1)
+        assert(restored:Snapshot().rulesVersion == 6 and restored:Snapshot().version == 2)
+    end
+end)
+
+Test("满瓶生成永久入牌库且FIFO补位、队列只保运行态", function()
+    local game = Fixture({"apple"})
+    assert(game:Start())
+    Fill(game)
+    local events = {}
+    local first = assert(game:_Spawn("orange", events, false, {x=.1,y=4}))
+    local second = assert(game:_Spawn("cherry", events, false, {x=.2,y=5}))
+    assert(#events == 0 and #game.spawnQueue == 2)
+    assert(game.spawnQueue[1] == first.uid and game.spawnQueue[2] == second.uid)
+    assert(first.location == "queued" and second.location == "queued")
+    assert(Contains(game.deck, first.uid) and Contains(game.deck, second.uid), "排队时已经永久拥有")
+    assert((game:Snapshot() --[[@as any]]).spawnQueue == nil, "运行快照不导出队列")
+    local spawned = game:Consume(2)
+    assert(first.location == "bottle" and second.location == "queued")
+    assert(#Repair.Events(spawned, "spawn", first.uid) == 1)
+    Close(Repair.Events(spawned, "spawn", first.uid)[1].x, .1)
+    assert(#game.spawnQueue == 1 and game.spawnQueue[1] == second.uid)
+    spawned = game:Consume(3)
+    assert(second.location == "bottle" and #game.spawnQueue == 0)
+    assert(#Repair.Events(spawned, "spawn", second.uid) == 1)
+    Close(Repair.Events(spawned, "spawn", second.uid)[1].y, 5)
+    local queued = assert(game:_Spawn("juice", {}))
+    assert(queued.location == "queued")
+    Finish(game)
+    assert(queued.location == "deck" and Contains(game.deck, queued.uid) and #game.spawnQueue == 0)
+    local snapshot = game:Snapshot() --[[@as any]]
+    assert(snapshot.spawnQueue == nil)
+    snapshot.spawnQueue = {99999}
+    local restored = Game.Restore(snapshot)
+    assert(#restored.spawnQueue == 0 and Item(restored, queued.uid).location == "deck")
+end)
+
+Test("临时生成瓶内弃牌与排队回合末真正移除", function()
+    local game = Fixture({"apple"})
+    assert(game:Start())
+    local bottled = assert(game:_Spawn("wool", {}, true))
+    local consumed = assert(game:_Spawn("wool", {}, true))
+    assert(consumed.generatedTemporary and bottled.generatedTemporary)
+    game:Consume(consumed.uid)
+    Fill(game)
+    local queued = assert(game:_Spawn("wool", {}, true))
+    assert(queued.location == "queued")
+    Finish(game)
+    for _, uid in ipairs({bottled.uid, consumed.uid, queued.uid}) do
+        assert(game:Get(uid) == nil and not Contains(game.deck, uid) and not Contains(game.discard, uid),
+            "临时生成uid必须从注册表/牌库/弃牌全部移除")
+    end
+    assert(#game.spawnQueue == 0)
+    Game.Restore(game:Snapshot())
+end)
+
+Test("临时消耗返还原件不混同临时生成、死灵返还也不能永久化产物", function()
+    local game = Fixture({"apple", "necromancer"})
+    local original = Item(game, 1)
+    assert(game:Start())
+    game:Consume(original.uid, true)
+    assert(original.temporary and not original.generatedTemporary and original.location == "discard")
+    local generated = assert(game:_Spawn("wool", {}, true))
+    game:Consume(generated.uid)
+    rawset(game, "_RandomInt", function() return 1 end)
+    Finish(game)
+    assert(game:Get(original.uid) == original and original.location == "deck" and not original.temporary)
+    assert(not original.generatedTemporary and Contains(game.deck, original.uid))
+    assert(game:Get(generated.uid) == nil, "死灵存在也不得把临时生成转为永久")
+    Game.Restore(game:Snapshot())
+end)
+
+Test("新果汁基础3、消费奖励锁定有效值且榨汁产物不额外加3", function()
+    local game = Fixture({"diner", "juice"})
+    Close(game:_Value(Item(game, 2)), 3, "普通新果汁基础")
+    Item(game, 2).valueBase, Item(game, 2).permMult = 8, 1.5
+    assert(game:Start())
+    game:Step(0, {pairs={{1,2}}})
+    Close(Item(game, 1).permBonus, 12, "消耗者永久得到果汁有效值")
+    Close(game.roundScore, 24, "食客金币仍为消耗前12×2")
+    assert(Item(game, 2).location == "discard")
+    local juicer = Fixture({})
+    juicer.relics.juicer = true
+    juicer.juicerValue = 12.5
+    local ok, _, juice = RelicEffects.UseJuicer(juicer)
+    assert(ok and juice)
+    Close(juice.valueBase, 12.5); Close(juice.permBonus, 0); Close(juicer:_Value(juice), 12.5)
+    local restored = Game.Restore(juicer:Snapshot())
+    Close(restored:_Value(Item(restored, juice.uid)), 12.5)
+end)
+
+Test("旧果汁迁移基础0保持累计价值、不改其他物品或永久增益", function()
+    local snapshot = Fixture({"juice", "apple"}):Snapshot() --[[@as any]]
+    snapshot.rulesVersion, snapshot.refreshes = nil, nil
+    snapshot.instances[1].valueBase, snapshot.instances[1].permBonus = nil, 12.5
+    snapshot.instances[2].permBonus = 4
+    local restored = Game.Restore(snapshot)
+    Close(Item(restored, 1).valueBase, 0)
+    Close(Item(restored, 1).permBonus, 12.5)
+    Close(restored:_Value(Item(restored, 1)), 12.5)
+    Close(restored:_Value(Item(restored, 2)), 6)
+    local again = Game.Restore(restored:Snapshot())
+    Close(again:_Value(Item(again, 1)), 12.5, "迁移不重复扣加基础")
+end)
+
+Test("金盘洗手小偷不再被警察消灭或老师负面转化", function()
+    for _, protected in ipairs({false, true}) do
+        local police = Fixture({"police", "thief"})
+        police.relics.wash_hands = protected or nil
+        assert(police:Start())
+        police:Step(0, {pairs={{1,2}}})
+        assert(Item(police, 2).location == (protected and "bottle" or "discard"))
+        Close(police.roundScore, protected and 0 or 4)
+        local teacher = Fixture({"teacher", "thief"})
+        teacher.relics.teach_all, teacher.relics.wash_hands = true, protected or nil
+        assert(teacher:Start())
+        teacher:Step(0, {pairs={{1,2}}})
+        assert(Item(teacher, 2).id == (protected and "thief" or "student"))
+    end
+end)
+
+Test("厨师帽本次小刀加成与1秒冷却、不跨次累计", function()
+    local game = Fixture({"chef", "knife", "apple"})
+    game.relics.chef_hat = true
+    Close(game:CooldownOf("chef"), 1)
+    assert(game:Start())
+    game:Step(0, {pairs={{1,2},{1,3}}})
+    Close(Item(game, 3).permBonus, 4)
+    assert(Item(game, 2).location == "discard")
+    Close(Item(game, 1).remaining, 1)
+    local nextFruit = assert(game:_Spawn("apple", {}))
+    game:Step(.99, {pairs={{1,nextFruit.uid}}})
+    assert(nextFruit.id == "apple", "冷却未到不得切")
+    game:Step(.01, {pairs={{1,nextFruit.uid}}})
+    assert(nextFruit.id == "apple_half")
+    Close(nextFruit.permBonus, 3, "下次无刀不继承额外+1")
+end)
+
+Test("回合重置与读档不清永久物理、触发就绪而timer完整周期", function()
+    local game = Fixture({"apple", "ball", "cloud"})
+    Item(game, 1).scale, Item(game, 1).weight = .75, 1.5
+    assert(game:Start())
+    Close(Item(game, 1).scale, .75); Close(Item(game, 1).weight, 1.5)
+    Close(Item(game, 2).remaining, 0); Close(Item(game, 3).remaining, 5)
+    assert(#Repair.Events(game:Step(0, {wall={[2]=true}}), "buff", 2) == 1)
+    assert(#Repair.Events(game:Step(0), "spawn") == 0, "timer不能因开局就绪立即生产")
+    Finish(game)
+    local restored = Game.Restore(game:Snapshot())
+    assert(restored:Skip() and restored:Start())
+    Close(Item(restored, 1).scale, .75); Close(Item(restored, 1).weight, 1.5)
+    Close(Item(restored, 2).remaining, 0); Close(Item(restored, 3).remaining, 5)
+end)
+
+Test("羊毛库存及可入场回合永久读档、旧缺字段安全默认", function()
+    local snapshot = Fixture({"sheep", "wool"}, 1):Snapshot() --[[@as any]]
+    snapshot.instances[1].woolCount = 2147483647
+    snapshot.instances[2].woolReadyRound = 3
+    local restored = Game.Restore(snapshot)
+    Close(Item(restored, 1).woolCount, 2147483647)
+    Close(Item(restored, 2).woolReadyRound, 3)
+    assert(restored:Start())
+    Finish(restored)
+    local again = Game.Restore(restored:Snapshot())
+    Close(Item(again, 1).woolCount, 2147483647)
+    Close(Item(again, 2).woolReadyRound, 3)
+    snapshot.instances[1].woolCount, snapshot.instances[2].woolReadyRound = nil, nil
+    local legacy = Game.Restore(snapshot)
+    Close(Item(legacy, 1).woolCount, 0)
+    assert(Item(legacy, 2).woolReadyRound == nil, "旧档缺ready不擅加等待回合")
+end)
+
+Test("额外羊毛prepare原uid与普通drawn分离、Start才临时化并清理", function()
+    local snapshot = Fixture({"apple", "wool", "wool"}, 1):Snapshot()
+    snapshot.instances[2].location, snapshot.instances[2].woolExtraEntry = "bottle", true
+    snapshot.instances[2].woolReadyRound = 1
+    snapshot.instances[3].woolExtraEntry = true -- 超额暂留deck的同一白名单形态。
+    local restored = Game.Restore(snapshot)
+    assert(#restored.drawn == 1 and restored.drawn[1] == 1)
+    for uid = 2, 3 do
+        assert(Item(restored, uid).woolExtraEntry and not Item(restored, uid).generatedTemporary)
+    end
+    local again = Game.Restore(restored:Snapshot())
+    assert(again:Start())
+    for uid = 2, 3 do
+        assert(Item(again, uid).generatedTemporary and Item(again, uid).temporary)
+        assert(Item(again, uid).woolExtraEntry == nil)
+    end
+    assert(Item(again, 3).location == "queued" and again.spawnQueue[1] == 3)
+    local rollback = Game.Restore(again:Snapshot())
+    assert(rollback.phase == "prepare" and Item(rollback, 2).woolExtraEntry
+        and Item(rollback, 3).woolExtraEntry and #rollback.spawnQueue == 0)
+    Finish(again)
+    assert(again:Get(2) == nil and again:Get(3) == nil and #again.spawnQueue == 0)
+    Game.Restore(again:Snapshot())
+end)
+
+Test("额外羊毛存档拒绝错误类型价值回合抽取位置及瓶容量", function()
+    ---@type fun(snapshot:any)[]
+    local corruptions = {
+        function(snapshot) snapshot.instances[2].id = "apple" end,
+        function(snapshot) snapshot.instances[2].permBonus = 1 end,
+        function(snapshot) snapshot.instances[2].woolReadyRound = 2 end,
+        function(snapshot) snapshot.drawn[#snapshot.drawn + 1] = 2 end,
+        function(snapshot)
+            snapshot.phase, snapshot.drawn = "draft", {}
+            snapshot.instances[1].location, snapshot.instances[2].location = "deck", "deck"
+        end,
+        function(snapshot)
+            snapshot.phase, snapshot.drawn, snapshot.deck, snapshot.discard = "draft", {}, {1}, {2}
+            snapshot.instances[1].location, snapshot.instances[2].location = "deck", "discard"
+        end,
+    }
+    for _, corrupt in ipairs(corruptions) do
+        local snapshot = Fixture({"apple", "wool"}, 1):Snapshot() --[[@as any]]
+        snapshot.instances[2].location, snapshot.instances[2].woolExtraEntry = "bottle", true
+        corrupt(snapshot)
+        assert(not pcall(Game.Restore, snapshot), "错误额外入场状态不得绕过严格drawn规则")
+    end
+    local game = Fixture({"apple"})
+    for _ = 1, 100 do
+        local item = game:_Create("wool")
+        item.location, item.woolExtraEntry, item.woolReadyRound = "bottle", true, 1
+    end
+    assert(not pcall(Game.Restore, game:Snapshot()), "额外入场仍受100瓶容量限制")
+end)
+
+Test("存档严格拒绝新永久字段非法值和所有运行态残留", function()
+    local invalid = {
+        refreshes={-1,.5,false,"1",0/0,math.huge},
+        rulesVersion={0,4,7,false,"6"},
+        valueBase={false,"3",{},0/0,math.huge,-math.huge},
+        refreshCount={-1,5,.5,false,"1",0/0,math.huge},
+        woolCount={-1,2147483648,.5,false,"1",0/0,math.huge},
+        woolReadyRound={0,-1,2147483648,.5,false,"1",0/0,math.huge},
+        woolExtraEntry={0,"true",{}},
+        eventMult={0,2,false,"1",{}}, generatedTemporary={true,0,"false"},
+        shielded={true,0,"false"}, anchored={true,0,"false"},
+        abacusMerges={1,false,{}}, calfDashRemaining={.1,false,{}},
+        discusWait={1,false,{}}, compassProgress={1,false,{}},
+        ghostTravel={.1,false,{}}, spinProgress={.1,false,{}}, geckoContactTime={.1,false,{}},
+        spinTravel={0}, spinAngle={0}, spinForced={0},
+        pendingConsumerUid={1}, calfDashHits={{}}, discusOwnerUid={1}, discusTargetUid={1},
+        discusState={"flying"}, discusHolderUid={1}, compassAngle={0}, compassTravel={0},
+        compassForced={0}, cactusScale={1},
+    }
+    for field, values in pairs(invalid) do
+        for _, value in ipairs(values) do
+            local snapshot = Fixture({"apple"}):Snapshot() --[[@as any]]
+            local target = (field == "refreshes" or field == "rulesVersion") and snapshot or snapshot.instances[1]
+            target[field] = value
+            assert(not pcall(Game.Restore, snapshot), "必须拒绝损坏字段 " .. field .. "=" .. tostring(value))
+        end
+    end
+    local missingRefresh = Fixture({"apple"}):Snapshot() --[[@as any]]
+    missingRefresh.refreshes = nil
+    assert(not pcall(Game.Restore, missingRefresh), "新规则不得套用旧档缺余额默认")
+    local valid = Fixture({"apple"}):Snapshot()
+    valid.refreshes = 100
+    valid.instances[1].valueBase, valid.instances[1].refreshCount = -2.5, 4
+    local restored = Game.Restore(valid)
+    Close(restored.refreshes, 100); Close(Item(restored, 1).valueBase, -2.5)
+    Close(Item(restored, 1).refreshCount, 4)
+end)
+
+---@return integer
+function Tests.Run()
+    local passed = 0
+    ---@type string[]
+    local failures = {}
+    for _, case in ipairs(cases) do
+        local ok, message = pcall(case.run)
+        if ok then passed = passed + 1 else failures[#failures + 1] = case.name .. "：" .. tostring(message) end
+    end
+    assert(#failures == 0, "Bottle.CoreUpdateTests " .. passed .. "/" .. #cases
+        .. " 通过\n" .. table.concat(failures, "\n"))
+    return passed
+end
+
+return Tests

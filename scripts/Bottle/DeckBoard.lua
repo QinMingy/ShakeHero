@@ -6,6 +6,7 @@ local Shapes = require("Bottle.Shapes")
 local Art = require("Bottle.Art")
 local SoftBacon = require("Bottle.SoftBacon")
 local SoftView = require("Bottle.SoftView")
+local PhysicalState = require("Bottle.PhysicalState")
 -- 碰撞设计（米）：培根 [1]-o-[2]-o-[3]-o-[4]-o-[5]，与瓶中同一5段4关节。
 -- 任意段均可撞墙/物品；弯曲后逐段拾取，所有段仍只返回一个实例 uid。
 -- 缩窄面板时整条等量平移，不只移动中心破坏关节；释放先关节后所有段。
@@ -50,7 +51,10 @@ end
 ---@param profile BottleCollisionProfile
 ---@param radius number
 ---@param mirror boolean
+---@return CollisionShape2D[]
 local function createProfile(node, profile, radius, mirror)
+    ---@type CollisionShape2D[]
+    local shapes = {}
     for _, points in ipairs(profile.polygons or {}) do
         local polygon = node:CreateComponent("CollisionPolygon2D")
         polygon:SetVertexCount(#points // 2)
@@ -63,6 +67,7 @@ local function createProfile(node, profile, radius, mirror)
             polygon:SetVertex(index, Vector2(mirror and -x or x, y))
         end
         setSurface(polygon)
+        shapes[#shapes + 1] = polygon
     end
     for _, spec in ipairs(profile.circles or {}) do
         local x = (spec.x - 8) * radius / 8
@@ -70,13 +75,20 @@ local function createProfile(node, profile, radius, mirror)
         circle.radius = spec.radius * radius / 8
         circle.center = Vector2(mirror and -x or x, (8 - spec.y) * radius / 8)
         setSurface(circle)
+        shapes[#shapes + 1] = circle
     end
+    return shapes
 end
 
 ---@class BottleDeckSimRecord
 ---@field uid number
 ---@field id string
 ---@field scale number
+---@field weight number
+---@field woolCount number 小羊当前储毛量（只影响专用图案/轮廓，不改变scale/weight）
+---@field woolTier number 小羊轮廓档0/1/5
+---@field source ItemInstance 实例实时引用，只读；用于沙盒已打开时同步物理倍率
+---@field shapes CollisionShape2D[] 普通物品的全部 fixture，基准密度保持原1
 ---@field rollValue number? 骰子实际点数，仅供绘制
 ---@field radius number?
 ---@field node Node?
@@ -172,36 +184,46 @@ function Sim:_CreateBody(item, x, y)
     local radius = def.radius * item.scale
     if item.id == "bacon" then
         local soft = SoftBacon.New(self.scene, item.uid, radius, x, y,
-            (item.uid * 137.507764) % 360, setSurface)
+            (item.uid * 137.507764) % 360, setSurface, item.weight)
         local center = assert(soft.segments[SoftBacon.CENTER_SEGMENT])
         item.node, item.body, item.radius, item.soft = center.node, center.body, radius, soft
         return
     end
     local node = self.scene:CreateChild("deck_item_" .. item.uid)
     node:SetPosition2D(x, y)
-    node.rotation2D = (item.uid * 137.507764) % 360
+    node.rotation2D = item.id == "ghost" and 0 or (item.uid * 137.507764) % 360
     local body = node:CreateComponent("RigidBody2D")
     body.bodyType = BT_DYNAMIC
     body.useFixtureMass = true
-    body.fixedRotation = false
+    body.fixedRotation = item.id == "ghost"
     body.linearDamping = .25
     body.angularDamping = .8
     body.gravityScale = 1
     body.bullet = true
     body.allowSleep = true
-    local profile = Shapes.profiles[def.shape]
+    local profile = Shapes.profiles[Shapes.Variant(def.shape, item.woolCount)]
+    ---@type CollisionShape2D[]
+    local shapes = {}
     if profile then
-        createProfile(node, profile, radius, item.id == "slipper_right")
+        shapes = createProfile(node, profile, radius, item.id == "slipper_right")
     elseif def.shape == "box" then
         local box = node:CreateComponent("CollisionBox2D")
         local halfSize = radius / math.sqrt(2)
         box:SetSize(halfSize * 2, halfSize * 2)
         setSurface(box)
+        shapes[#shapes + 1] = box
     else
         local circle = node:CreateComponent("CollisionCircle2D")
         circle.radius = radius
         setSurface(circle)
+        shapes[#shapes + 1] = circle
     end
+    -- 气球原型密度为普通物品的35%；公开weight仍是相对原型的100%。
+    local density = item.weight * (item.id == "balloon" and .35 or 1)
+    for _, fixture in ipairs(shapes) do
+        if fixture.density ~= density then fixture.density = density end
+    end
+    item.shapes = shapes
     body.linearVelocity = Vector2(0, 0)
     body.angularVelocity = 0
     body.awake = true
@@ -229,11 +251,13 @@ function Sim.New(entries)
 
     for _, item in ipairs(entries) do
         if Items.byId[item.id] then
-            ---@type table
-            local source = item
-            local scale = source.scale
-            if type(scale) ~= "number" or scale ~= scale or scale <= 0 then scale = 1 end
-            local record = {uid = item.uid, id = item.id, scale = scale, rollValue = item.rollValue}
+            local scale = PhysicalState.Clamp(item.id, "scale", item.scale)
+            local weight = PhysicalState.Clamp(item.id, "weight", item.weight)
+            local woolCount = item.woolCount or 0
+            ---@type BottleDeckSimRecord
+            local record = {uid = item.uid, id = item.id, scale = scale, weight = weight,
+                woolCount = woolCount, woolTier = woolCount >= 5 and 5 or (woolCount >= 1 and 1 or 0),
+                source = item, shapes = {}, rollValue = item.rollValue}
             self.records[item.uid] = record
             self.order[#self.order + 1] = record
         end
@@ -245,7 +269,8 @@ function Sim.New(entries)
     for _, record in ipairs(self.order) do
         local def = Items.byId[record.id]
         local radius = def.radius * record.scale
-        local extent = record.id == "bacon" and SoftBacon.Envelope(radius) or Shapes.Envelope(def.shape, radius)
+        local extent = record.id == "bacon" and SoftBacon.Envelope(radius)
+            or Shapes.Envelope(Shapes.Variant(def.shape, record.woolCount), radius)
         maxExtent = math.max(maxExtent, extent)
     end
     local margin = math.max(.24, maxExtent * .8)
@@ -279,9 +304,55 @@ function Sim.New(entries)
     return self
 end
 
+---沙盒打开期间也同步实时倍率；只改重量不重建物体/软体关节。
+---仅在世界解锁时调用（Step 推进前），绝不修改规则实例本身。
+function Sim:Sync()
+    if self.disposed then return end
+    for _, record in ipairs(self.order) do
+        local source = record.source
+        local scale = PhysicalState.Clamp(source.id, "scale", source.scale)
+        local weight = PhysicalState.Clamp(source.id, "weight", source.weight)
+        local woolCount = source.woolCount or 0
+        local woolTier = source.id == "sheep" and (woolCount >= 5 and 5 or (woolCount >= 1 and 1 or 0)) or 0
+        record.rollValue, record.woolCount = source.rollValue, woolCount
+        if record.node and (record.id ~= source.id or record.scale ~= scale or record.woolTier ~= woolTier) then
+            local position = record.node.position2D
+            local angle = record.node.rotation2D
+            local velocity = record.body and record.body.linearVelocity or Vector2(0, 0)
+            local angularVelocity = record.body and record.body.angularVelocity or 0
+            if record.soft then record.soft:Dispose()
+            else record.node:Remove(); record.node:Dispose() end
+            record.soft, record.node, record.body = nil, nil, nil
+            record.shapes = {}
+            record.id, record.scale, record.weight, record.woolTier = source.id, scale, weight, woolTier
+            self:_CreateBody(record, position.x, position.y)
+            if record.soft then
+                for _, segment in ipairs(record.soft.segments) do
+                    segment.body.linearVelocity = velocity
+                    segment.body.angularVelocity = angularVelocity
+                end
+            elseif record.node and record.body then
+                record.node.rotation2D = record.id == "ghost" and 0 or angle
+                record.body.linearVelocity = velocity
+                record.body.angularVelocity = record.id == "ghost" and 0 or angularVelocity
+            end
+        elseif record.weight ~= weight then
+            if record.soft then
+                record.soft:SetWeight(weight)
+            else
+                local density = weight * (record.id == "balloon" and .35 or 1)
+                for _, fixture in ipairs(record.shapes) do fixture.density = density end
+                if record.body then record.body.awake = true end
+            end
+            record.weight = weight
+        end
+    end
+end
+
 ---@param dt number
 function Sim:Step(dt)
     if self.disposed or not finite(dt) or dt <= 0 then return end
+    self:Sync()
     for _, record in ipairs(self.order) do
         if record.soft then record.soft:Step(dt) end
     end
@@ -305,7 +376,7 @@ function Sim:ContainsPoint(uid, x, y)
     if record.soft then return record.soft:ContainsPoint(x, y) end
     local position = record.node.position2D
     return Art.HitItem(record.id, x - position.x, position.y - y,
-        record.radius or .27, -record.node.rotation2D * math.pi / 180)
+        record.radius or .27, -record.node.rotation2D * math.pi / 180, record.woolCount)
 end
 
 ---@param uid number
@@ -390,7 +461,8 @@ function Board:GetItemBounds(uid)
     end
     local px, py, angle, radius = self.sim:GetPose(uid)
     local record = self.sim.records[uid]
-    local extent = Art.ItemExtent(record and record.id or "apple", radius * ppu, -angle) + 4
+    local extent = Art.ItemExtent(record and record.id or "apple", radius * ppu, -angle,
+        record and record.woolCount or nil) + 4
     return {x = x + px * ppu - extent, y = y - py * ppu - extent, w = extent * 2, h = extent * 2}
 end
 
@@ -465,7 +537,7 @@ function Board:Render(vg)
         else
             local px, py, angle, radius = self.sim:GetPose(record.uid)
             Art.Item(vg, record.id, originX + px * ppu, originY - py * ppu,
-                radius * ppu, -angle, false, record.rollValue)
+                radius * ppu, -angle, false, record.rollValue, record.woolCount)
         end
     end
     nvgRestore(vg)

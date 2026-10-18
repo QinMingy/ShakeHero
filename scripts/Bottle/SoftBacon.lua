@@ -16,6 +16,8 @@
 ---@class BottleSoftSegment
 ---@field node Node
 ---@field body RigidBody2D
+---@field shape CollisionBox2D
+---@field baseDensity number 未乘重量的原始密度，不随重量同步累计叠乘
 ---@field halfLength number
 ---@field halfWidth number
 ---@field u0 number
@@ -61,10 +63,12 @@ end
 ---@param y number
 ---@param angle number 度（与 Node.rotation2D 一致）
 ---@param setSurface fun(shape:CollisionShape2D)
+---@param weight number? 相同尺寸下原始质量的相对倍率，缺省1
 ---@return BottleSoftBacon
-function SoftBacon.New(scene, uid, radius, x, y, angle, setSurface)
+function SoftBacon.New(scene, uid, radius, x, y, angle, setSurface, weight)
     local self = setmetatable({}, SoftBacon)
     self:_Init(scene, uid, radius, x, y, angle, setSurface)
+    self:SetWeight(weight or 1)
     return self
 end
 
@@ -103,8 +107,8 @@ function SoftBacon:_Init(scene, uid, radius, x, y, angle, setSurface)
         setSurface(box)
         body.linearVelocity = Vector2(0, 0)
         body.angularVelocity = 0
-        self.segments[i] = { node = node, body = body, halfLength = halfLength,
-            halfWidth = halfWidth, u0 = (i - 1) / COUNT, u1 = i / COUNT }
+        self.segments[i] = { node = node, body = body, shape = box, baseDensity = box.density,
+            halfLength = halfLength, halfWidth = halfWidth, u0 = (i - 1) / COUNT, u1 = i / COUNT }
     end
     for i = 1, COUNT - 1 do
         local a, b = self.segments[i], self.segments[i + 1]
@@ -118,6 +122,22 @@ function SoftBacon:_Init(scene, uid, radius, x, y, angle, setSurface)
         joint.collideConnected = false
         joint.otherBody = b.body
         self.joints[i] = joint
+    end
+end
+
+---世界解锁后更新每段真实密度；不重建段或关节，不改变姿态与速度。
+---调用方按可信 ItemDef 钳制范围，这里只守住有限正数的物理 API 边界。
+---@param weight number
+function SoftBacon:SetWeight(weight)
+    assert(type(weight) == "number" and weight == weight and weight > 0 and weight < math.huge,
+        "培根重量倍率必须为有限正数")
+    if self.disposed then return end
+    for _, segment in ipairs(self.segments) do
+        local density = segment.baseDensity * weight
+        if segment.shape.density ~= density then
+            segment.shape.density = density
+            segment.body.awake = true
+        end
     end
 end
 

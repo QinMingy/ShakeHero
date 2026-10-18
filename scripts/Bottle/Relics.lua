@@ -1,13 +1,13 @@
--- 遗物数据与机制（docs/relic.txt，24 件）。纯 Lua，不依赖引擎。
+-- 遗物数据与机制（docs/relic.txt，33 件）。纯 Lua，不依赖引擎。
 -- 遗物是永久被动加成，通过“考核后的遗物三选一”获得，不进瓶、不参与物理。
 -- 效果多为声明式标记：Game/Effects 在相应时机查询 Relics.Has(game, id)。
--- 全部24件已接线，五件复杂遗物的行为集中在 RelicEffects / RelicState。
+-- 全部33件已接线；复杂行为由 RelicEffects / RelicExpansion 与规则/物理查询协作。
 -- 骰子、赌徒、云朵、兔子、灵魂石和硬币机的关联钩子已随物品实装接通。
 -- 数据来源 relic.txt 的“备注”列保留语义；本轮明确细则在各 note 中注明。
 
 ---@class RelicDef
 ---@field id string
----@field numberId integer 1..24，与 relic.txt 序号一致
+---@field numberId integer 1..33，与 relic.txt 序号一致
 ---@field name string
 ---@field rarity integer 1..5（白/绿/蓝/紫/黄）
 ---@field effect string UI 说明；@ 为金币图标，[[id]] 为物品引用
@@ -91,7 +91,7 @@ Add {
 Add {
     numberId = 13, id = "lucky_charm", name = "幸运符", rarity = 2, pool = true, implemented = true,
     effect = "所有物品描述中与价值有关的“-”号全部变为“+”号",
-    note = "垃圾桶基础-1变+1、信用卡每结算永久+1、小偷被偷方-1变+1；不绝对化历史负加值，不改变体积、冷却或计数",
+    note = "垃圾桶基础-1变+1、信用卡每结算永久+1、小偷被偷方-1变+1、草堆每次触发永久-1变+1；不反转历史负加值，不改变体积、冷却或计数",
 }
 Add {
     numberId = 14, id = "scramble_recipe", name = "炒蛋秘籍", rarity = 2, pool = true, implemented = true,
@@ -115,7 +115,7 @@ Add {
 Add {
     numberId = 18, id = "juicer", name = "榨汁机", rarity = 2, pool = true, implemented = true,
     effect = "回合结束时消耗瓶内所有半份水果，将当前有效价值累积到榨汁机；点击生成等值[[juice]]永久加入牌库，并清空累计值",
-    note = "仅四种_half；默认时序为统一结算、死灵返还之后再榨取。果汁基础0、仅食物tag、无特殊效果、不入卡池，permBonus=本次累计值、不入瓶；点击需弹窗确认，running/settle/reveal不可用，失败不清值",
+    note = "仅四种_half；统一结算、死灵返还之后再榨取。果汁采用新源表#87基础3、品质3、仅食物tag及被消耗加值效果；生成时当前价值等于本次累计值，不入瓶；点击需弹窗确认，running/settle/reveal不可用，失败不清值",
 }
 Add {
     numberId = 19, id = "last_second", name = "最后一秒", rarity = 1, pool = true, implemented = true,
@@ -132,17 +132,63 @@ Add {
 }
 Add {
     numberId = 22, id = "wash_hands", name = "金盘洗手", rarity = 2, pool = true, implemented = true,
-    effect = "[[thief]]不再偷取价值，而是和对方共同增加价值，且不再是负面职业",
-    note = "V0.4 已接线：Effects.Thief 分支；负面职业部分（警察消灭名单）待警察效果确认语义",
+    effect = "[[thief]]不再偷取价值，而是和对方共同永久+1价值，且不再是负面职业（不会被[[police]]、[[teacher]]影响）",
+    note = "共同加值保留原合法目标分类；警察不消灭该小偷，有教无类老师不将其转为学生；不改变杀手的一般人类目标规则",
 }
 Add {
     numberId = 23, id = "chef_hat", name = "厨师帽", rarity = 2, pool = true, implemented = true,
-    effect = "[[chef]]现在可以消耗相邻的[[knife]]，为产物增加的价值永久+1（当前：+0；冷却：1秒）",
-    note = "V0.4 已接线：Effects.Chef 先消耗相邻小刀再切割，产物额外+1/把",
+    effect = "[[chef]]现在可以消耗相邻的[[knife]]，每消耗一把小刀，为本次切割产物额外增加1点永久价值（冷却：1秒）",
+    note = "持帽厨师1秒调度，无帽5秒；本次先消耗相邻小刀，再令本次全部切割产物永久+1/把；无切割不累计给下次，不永久累计到厨师自身",
 }
 Add {
     numberId = 24, id = "credit_line", name = "贷款额度", rarity = 2, pool = true, implemented = true,
     effect = "后续获取的[[credit_card]]，初始价值为25",
+}
+
+Add {
+    numberId = 25, id = "teacher_team", name = "名师团队", rarity = 2, pool = true, implemented = true,
+    effect = "[[teacher]]与老师会合成老师，新的老师获得他们的价值和倍率",
+    note = "双方加法项相加写入新基础，永久倍率及事件倍率分别乘积；接触光环重新计算，不固化重复乘算，不改变普通催熟收益",
+}
+Add {
+    numberId = 26, id = "accelerator", name = "加速器", rarity = 2, pool = true, implemented = true,
+    effect = "物品移动速度增加20%",
+    note = "瓶内移动速度×1.2，不缩短冷却/回合时间，不每帧指数叠加；牌库独立展示沙盒不应用瓶内加速",
+}
+Add {
+    numberId = 27, id = "ghost_poop", name = "幽灵便便", rarity = 2, pool = true, implemented = true,
+    effect = "现在便便在瓶子内自由飘动，可穿透物品",
+    note = "适用于普通/黄金/钻石/彩虹四种便便；按对局查询，不修改共享物品定义，不污染新局；牌库仍普通下落展示",
+}
+Add {
+    numberId = 28, id = "premium_grass", name = "优质小草", rarity = 1, pool = true, implemented = true,
+    effect = "现在消耗[[grass]]的动物必定产出便便",
+    note = "动物必产按普通40/60、黄金15/60、钻石4/60、彩虹1/60；人类消费保原概率，羊的额外草判定同样必产且积毛仍独立50%",
+}
+Add {
+    numberId = 29, id = "food_comfort", name = "吃了不烧心", rarity = 2, pool = true, implemented = true,
+    effect = "所有食物当前价值+2",
+    note = "持有期间对食物基础项加2，之后再算倍率；不是永久加值，不写permBonus，不改变物品tag",
+}
+Add {
+    numberId = 30, id = "bacon_network", name = "培根是对的", rarity = 2, pool = true, implemented = true,
+    effect = "所有和[[bacon]]相邻的物品视为相邻",
+    note = "共享同一块培根的邻居建立效果邻接关系，不扩大物理碰撞或拾取轮廓",
+}
+Add {
+    numberId = 31, id = "ghost_sport", name = "幽灵运动", rarity = 1, pool = true, implemented = true,
+    effect = "[[ghost]]每移动5m，+1金币",
+    note = "只记真实位移，不把闪现算路程；不直接增加幽灵价值",
+}
+Add {
+    numberId = 32, id = "spin_reward", name = "转圈圈", rarity = 2, pool = true, implemented = true,
+    effect = "物品每次旋转一圈，+1金币",
+    note = "记录真实自然旋转，不把指南针强制转向重复算为自然角路程",
+}
+Add {
+    numberId = 33, id = "wool_market", name = "羊毛集市", rarity = 1, pool = true, implemented = true,
+    effect = "[[sheep]]现在产出的[[wool]]会自动兑换成[[coin_1]]",
+    note = "只替换小羊脱毛的新产出，不兑换已有羊毛；每份产出对应一枚1元硬币",
 }
 
 --- 查询对局是否持有某遗物。

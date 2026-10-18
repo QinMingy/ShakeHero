@@ -5,6 +5,7 @@ local Palette = require("Machine.Palette")
 local SoftBacon = require("Bottle.SoftBacon")
 local PixelCache = require("Bottle.PixelCache")
 local GainIcon = require("Bottle.GainIcon")
+local Shapes = require("Bottle.Shapes")
 -- Native NanoVG RTT has no usable compound-path stencil. Draw the identical
 -- cached sprite rectangles separately only in registered offscreen contexts.
 local offscreenContexts = setmetatable({}, {__mode = "k"})
@@ -112,6 +113,8 @@ local LoadItems = require("Bottle.ItemSprites")
 SPRITES = LoadItems(Sprite, INK)
 local LoadExtra = require("Bottle.ExtraSprites")
 LoadExtra(Sprite, INK, SPRITES)
+local LoadExpansion = require("Bottle.ExpansionSprites")
+LoadExpansion(Sprite, INK, SPRITES)
 
 
 ---@param vg NVGContextWrapper
@@ -209,14 +212,15 @@ end
 ---@param angle? number
 ---@param cooling? boolean
 ---@param rollValue? number 骰子实例点数；缺省显示1点，不使用加成后的有效价值
-function Art.Item(vg, id, x, y, r, angle, cooling, rollValue)
+---@param woolCount? number 小羊永久羊毛库存，0/1..4/5以上三档
+function Art.Item(vg, id, x, y, r, angle, cooling, rollValue, woolCount)
     nvgSave(vg)
     nvgShapeAntiAlias(vg, 0)
     nvgTranslate(vg, x, y)
     nvgRotate(vg, angle or 0)
     if id == "bacon" then nvgScale(vg, SoftBacon.LENGTH_SCALE, 1) end
     local diceValue = Art.DiceValue(id, rollValue)
-    local spriteId = diceValue and (id .. "_" .. diceValue) or id
+    local spriteId = diceValue and (id .. "_" .. diceValue) or Shapes.Variant(id, woolCount)
     DrawSprite(vg, SPRITES[spriteId] or SPRITES.coin_one, r, cooling, true)
     nvgRestore(vg)
 end
@@ -315,9 +319,10 @@ end
 ---@param r number
 ---@param angle number 绘制角度（弧度）
 ---@return boolean
-function Art.HitItem(id, dx, dy, r, angle)
+---@param woolCount? number
+function Art.HitItem(id, dx, dy, r, angle, woolCount)
     if r <= 0 then return false end
-    local sprite = SPRITES[id] or SPRITES.coin_one
+    local sprite = SPRITES[Shapes.Variant(id, woolCount)] or SPRITES.coin_one
     local cosine, sine = math.cos(angle), math.sin(angle)
     local localX, localY = dx * cosine + dy * sine, -dx * sine + dy * cosine
     if id == "bacon" then localX = localX / SoftBacon.LENGTH_SCALE end
@@ -341,8 +346,9 @@ end
 ---@param r number
 ---@param angle number
 ---@return number
-function Art.ItemExtent(id, r, angle)
-    local sprite = SPRITES[id] or SPRITES.coin_one
+---@param woolCount? number
+function Art.ItemExtent(id, r, angle, woolCount)
+    local sprite = SPRITES[Shapes.Variant(id, woolCount)] or SPRITES.coin_one
     local halfWidth = id == "bacon" and r * SoftBacon.LENGTH_SCALE or r
     -- 培根只有原图第5..11行有像素，横向拉长不改变厚度/透明留白。
     local halfHeight = id == "bacon" and r * SoftBacon.HALF_WIDTH_RATIO
@@ -599,5 +605,5 @@ function Art.Relic(vg, id, x, y, size, cooling)
     nvgRestore(vg)
 end
 
-print("[Bottle.Art] 像素美术初始化完成：新表图案、像素眼睛、手托金币/冷却图标、24件遗物徽记及4.8x6.4米实验瓶。")
+print("[Bottle.Art] 像素美术初始化完成：新表图案、像素眼睛、手托金币/冷却图标、33件遗物徽记及4.8x6.4米实验瓶。")
 return Art

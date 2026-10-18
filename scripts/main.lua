@@ -10,6 +10,7 @@ local TextMotion = require("Bottle.TextMotion")
 local ButtonMotion = require("Bottle.ButtonMotion")
 local GameAudio = require("Bottle.Audio")
 local RelicEffects = require("Bottle.RelicEffects")
+local Relics = require("Bottle.Relics")
 local StartScreen = require("Bottle.StartScreen")
 
 -- WebGPU 校验 SetScissorRect 必须落在渲染区域内：全屏 scissor 按 ceil(逻辑尺寸 × scale) 取设备像素。
@@ -104,10 +105,18 @@ local function Save()
     if game then Storage.Save(game) end
 end
 
+local function SyncPhysics(reset)
+    if not game or not physics then return end
+    physics:Sync(game:BottleItems(), reset, game.revision, {
+        accelerator = Relics.Has(game, "accelerator"),
+        ghostPoop = Relics.Has(game, "ghost_poop"),
+    })
+end
+
 local function Refresh(reset)
     if not game or not physics or not view then return end
     -- reset 时用 revision 作洗牌种子：重抽/新回合 revision 必变，布局才会刷新。
-    physics:Sync(game:BottleItems(), reset, game.revision)
+    SyncPhysics(reset)
     view:Update(true)
     Save()
 end
@@ -125,10 +134,10 @@ local function StartRound()
         ResetSensor()
         -- 自动启用失败或设备断开后，开始按钮再试一次；仍保留触摸操作。
         if lastSensorNotice ~= "available" then Sensor(false) end
+        view:Update(true)
         view.board:Effects(game.startEvents)
         game.startEvents = {}
         Save()
-        view:Update(true)
         print(string.format("[回合] 开始 %d，入瓶 %d，余额 %.0f，目标 %.0f", game.round,
             #game:BottleItems(), game.score, game.target))
     end
@@ -139,7 +148,7 @@ local function NewRun()
     game = Game.New(math.floor(os.time() % 2147483646) + 1)
     accumulator = 0
     physics:Clear()
-    physics:Sync(game:BottleItems(), true, game.revision)
+    SyncPhysics(true)
     view:Rebind(game)
     Save()
     print("[对局] 新局：苹果、香蕉、小球、橘子各一件")
@@ -162,7 +171,7 @@ local function Import(text)
     accumulator = 0
     physics:Clear()
     -- 存档含 revision：同一份存档恢复出同一布局，保持可复现。
-    physics:Sync(game:BottleItems(), true, game.revision)
+    SyncPhysics(true)
     view:Rebind(game)
     Save()
     return true, nil
@@ -200,7 +209,7 @@ function Start()
     if not game then game = Game.New(math.floor(os.time() % 2147483646) + 1) end
     physics = Physics.New()
     physics:SetMode(Storage.physicsMode)
-    physics:Sync(game:BottleItems(), true, game.revision)
+    SyncPhysics(true)
     view = View.New(game, physics, {
         start = StartRound,
         shake = function(dx, dy)
@@ -270,7 +279,7 @@ function Start()
     SubscribeToEvent("PhysicsEndContact2D", "HandleContactEnd")
     SubscribeToEvent("KeyDown", "HandleKeyDown")
     Save()
-    print("[启动] 摇摇牌库 V0.4，单机竖屏2D，71件物品与24件遗物已实装")
+    print("[启动] 摇摇牌库 V0.5，单机竖屏2D，93件物品与33件遗物已实装")
 end
 
 ---@param eventType string
@@ -341,8 +350,9 @@ function HandleUpdate(eventType, eventData)
                 or game:Step(step, physics:Contacts() --[[@as BottleContacts]])
             physics:RememberEvents(events)
             view.board:Effects(events)
-            physics:Sync(game:BottleItems())
+            SyncPhysics(false)
             for _, event in ipairs(events) do
+                if event.kind == "dash" then GameAudio.Calf() end
                 if event.kind == "transform" then
                     print("[转化] uid" .. event.uid .. " → " .. tostring(event.id))
                 end

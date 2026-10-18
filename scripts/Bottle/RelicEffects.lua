@@ -165,7 +165,7 @@ function RelicEffects.AfterSettle(game, events)
         if item.location == "bottle" then
             total = total + game:_Value(item)
             -- _Destroy 保留 discard 与 gm_fruit 语义；本钩子之后不再统一结算/返还。
-            game:_Destroy(item.uid, false, events)
+            game:_Destroy(item.uid, false, events, { id = "juicer" })
         end
     end
     if total ~= 0 then
@@ -199,7 +199,7 @@ function RelicEffects.UseJuicer(game)
         return false, "当前无法生成果汁", nil
     end
     local item = game:_Create("juice")
-    item.permBonus = value
+    item.valueBase, item.permBonus = value, 0
     game.juicerValue = 0
     game.revision = game.revision + 1
     RelicEffects.Maintain(game)

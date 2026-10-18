@@ -1,4 +1,4 @@
--- 24件遗物像素原稿，拆分不改变原色/像素/接口。
+-- 33件遗物像素原稿，拆分不改变原色/像素/接口。
 ---@param Sprite fun(rows:string[], palette:table<string,number[]>, mirror?:boolean):BottlePixelSprite
 ---@param INK number[]
 ---@return table<string,BottlePixelSprite>
@@ -555,6 +555,78 @@ RELIC_SPRITES["credit_line"] = Sprite({
     o = INK, f = { 245, 240, 225, 255 },
     m = { 110, 110, 130, 255 }, d = { 195, 185, 160, 255 },
 })
+
+-- 名师团队：三位教师与共同的金色课本。
+RELIC_SPRITES.teacher_team = Sprite({
+    "................", "..ooo..ooo..ooo.", "..oso..oso..oso.", "..ooo..ooo..ooo.",
+    ".obbb.obbb.obbb.", ".obbb.obbb.obbb.", "..oooooooooooo..", "..offffofffffo..",
+    "..offffofffffo..", "..offffofffffo..", "..offffofffffo..", "..oooooooooooo..",
+    "...bbb..bbb.....", "...obo..obo.....", "...ooo..ooo.....", "................",
+}, {o=INK,s={227,184,145,255},b={85,119,161,255},f={233,207,132,255}})
+
+-- 加速器：青色推进环与两道向右的箭头。
+RELIC_SPRITES.accelerator = Sprite({
+    "................", "....oooooo......", "..ooccccccoo....", ".occhhhhhccco...",
+    ".occhhcccccoco..", "occhcccccccoco..", "occch..y...occo.", "occc...yy..occo.",
+    "occcyyyyyy.occco", "occc...yy..occo.", "occch..y...occo.", ".occchhhhccco...",
+    "..occcccccco....", "...oooooooo.....", "................", "................",
+}, {o=INK,c={66,157,178,255},h={156,230,225,255},y={245,201,94,255}})
+
+-- 幽灵便便：半透明蓝绿便便与星点。
+RELIC_SPRITES.ghost_poop = Sprite({
+    "................", "..h......h......", ".......ooo......", "......occco.....",
+    ".....occccco....", "....occcccco....", "....occcchcco...", "...occcccccco...",
+    "..occcmccmccco..", ".occcccccccccco.", ".occchccccccccco", "occcccccccccccco",
+    "occchcccccccccdo", ".oddddddddddddo.", "..oooooooooooo..", "................",
+}, {o={45,58,67,153},c={110,205,182,153},h={224,255,232,190},m={50,70,76,200},d={74,146,151,153}})
+
+-- 优质小草：扎金带的嫩绿草束。
+RELIC_SPRITES.premium_grass = Sprite({
+    "................", "...h.......h....", "....g..g........", "..g.gg.gg..g....",
+    "..ggggggg.gg....", "...gggggggg.....", "...gghggggg.....", "....gggggg......",
+    "....gggggg......", "....yyyyyy......", "...oyyyyyo......", "....gggggg......",
+    "....gggggg......", ".....gggg.......", "......oo........", "................",
+}, {o=INK,g={102,187,105,255},h={202,235,155,255},y={233,191,74,255}})
+
+-- 吃了不烧心：粉色胃袋配清凉薄荷十字。
+RELIC_SPRITES.food_comfort = Sprite({
+    "......ooo.......", "......opo.......", "......opo.......", ".....oppo.......",
+    "....opppo.......", "...oppppooo.....", "..oppppppppo....", ".oppphppppppo...",
+    ".oppphpppppppo..", ".opppppppppppo..", "..opppppppppo...", "...opppppppo....",
+    "....ooooooo..g..", "............ggg.", ".............g..", "................",
+}, {o=INK,p={215,132,151,255},h={246,188,185,255},g={116,209,172,255}})
+
+-- 培根是对的：培根结点连起三个蓝色节点。
+RELIC_SPRITES.bacon_network = Sprite({
+    "................", "..ooo......ooo..", "..oco......oco..", "..ooo......ooo..",
+    "....c......c....", ".....c....c.....", "...oooooooooo...", "..opprpprppppo..",
+    "..orppprppprpo..", "..opprpprppppo..", "...oooooooooo...", "........c.......",
+    "........c.......", ".......ooo......", ".......oco......", ".......ooo......",
+}, {o=INK,p={224,153,141,255},r={168,79,89,255},c={112,179,201,255}})
+
+-- 幽灵运动：白幽灵系着红头带、脚边运动鞋。
+RELIC_SPRITES.ghost_sport = Sprite({
+    "................", ".....oooooo.....", "....ohhhhhho....", "...orrrrrrrro...",
+    "...ohhhhhhhho...", "..ohhmhhmhhhho..", "..ohhhhhhhhhho..", "..ohhhhhhhhhho..",
+    "...ohhhhhhhho...", "...ohhhhhhhho...", "....ohhhohho....", ".....oo..oo.....",
+    "..rrrr....rrrr..", ".orrrro..orrrro.", "..oooo....oooo..", "................",
+}, {o=INK,h={212,228,235,255},m={66,76,96,255},r={202,94,100,255}})
+
+-- 转圈圈：环形金箭头围着青色旋钮。
+RELIC_SPRITES.spin_reward = Sprite({
+    "................", ".....yyyyyy.....", "...yy......yy...", "..yy........yy..",
+    ".yy.....y....yy.", ".y.....yyy....y.", ".y....yyyyy...y.", ".y.....ooo....y.",
+    ".y....occco...y.", ".y....occco...y.", ".yy....ooo...yy.", "..yy........yy..",
+    "...yy......yy...", ".....yyyyyy.....", "................", "................",
+}, {o=INK,y={225,190,87,255},c={114,177,185,255}})
+
+-- 羊毛集市：毛线球与1元金币摆在木摊上。
+RELIC_SPRITES.wool_market = Sprite({
+    "................", "..oooooooooooo..", ".orryyrryyrryyo.", ".orryyrryyrryyo.",
+    "..oooooooooooo..", "..o..........o..", "..o..hhh..yy.o..", "..o.hhhho.yyo...",
+    "..ohhhhhhoymyo..", "..ohhhhho.yyo...", "..o.hhh...yy.o..", "..oooooooooooo..",
+    "..obbbbbbbbbbo..", "..obbbbbbbbbbo..", "..oo........oo..", "................",
+}, {o=INK,r={181,90,96,255},y={235,193,84,255},h={229,224,202,255},m={133,97,44,255},b={131,101,76,255}})
 
 return RELIC_SPRITES
 end

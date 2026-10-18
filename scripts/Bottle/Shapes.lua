@@ -139,6 +139,113 @@ Shapes.profiles = {
     }},
 }
 
+-- 扩展轮廓设计（16×16网格；全部凸片最多8点，交界有搭接）：
+--  小草   /|/       壁虎 \[头]/       毛衫  /[领]\       分裂器 | |
+--         /|/             [身]             |袖|             |_|
+--       [根]              弯尾              [腰]       门中光为装饰，不造宽实体墙。
+-- 检测目的：任一真实fixture接触->同uid；保留叶隙/袖下/机门凹口，不用大凸包填满。
+-- 四类卷堆共用外形但各自持有独立profile，色纹由ExpansionSprites分别绘制。
+Shapes.profiles.chick = {polygons = {
+    {6,2, 10,2, 13,5, 13,10, 11,13, 5,13, 1,9, 2,5},
+    {5,12, 11,12, 12,15, 4,15},
+}}
+Shapes.profiles.sheep = {polygons = {
+    {4,1, 12,1, 16,5, 16,9, 12,12, 4,12, 0,9, 0,5},
+    {4,11, 13,11, 13,15, 4,15},
+}}
+Shapes.profiles.sheep_0 = {polygons = {
+    {4,3, 11,3, 11,7, 9,9, 5,9, 4,7},
+    {4,8, 10,8, 12,10, 11,13, 4,13, 3,10},
+    {4,12, 7,12, 7,16, 4,16}, {9,12, 12,12, 12,16, 9,16},
+}}
+Shapes.profiles.sheep_5 = {polygons = {
+    {3,0, 13,0, 16,3, 16,12, 13,15, 3,15, 0,12, 0,3},
+    {3,14, 13,14, 13,16, 3,16},
+}}
+Shapes.profiles.pig = {polygons = {
+    {4,4, 12,4, 15,7, 16,10, 12,14, 4,14, 0,10, 1,7},
+    {2,1, 5,1, 7,5, 2,5}, {10,1, 13,1, 13,5, 8,5},
+}}
+Shapes.profiles.calf = {polygons = {
+    {4,2, 12,2, 15,4, 15,8, 12,12, 4,12, 1,8, 1,4},
+    {3,10, 13,10, 13,15, 3,15},
+}}
+Shapes.profiles.grass = {polygons = {
+    {7,1, 9,2, 10,12, 7,13},
+    {3,3, 5,4, 8,12, 6,13},
+    {13,4, 15,4, 10,13, 7,13},
+    {4,11, 10,11, 10,15, 5,15},
+}}
+Shapes.profiles.hay = {polygons = {
+    {5,1, 11,1, 16,7, 16,13, 14,15, 2,15, 0,13, 0,7},
+}}
+for _, id in ipairs({"poop", "golden_poop", "diamond_poop", "rainbow_poop"}) do
+    Shapes.profiles[id] = {polygons = {
+        {7,1, 9,2, 9,5, 5,6, 4,5, 5,3},
+        {4,5, 10,5, 13,9, 13,11, 2,11, 2,8},
+        {2,9, 12,9, 16,12, 16,13, 14,15, 2,15, 0,13, 0,11},
+    }}
+end
+Shapes.profiles.gecko = {polygons = {
+    {5,2, 9,2, 11,4, 11,6, 9,8, 6,8, 4,5},
+    {6,6, 10,6, 11,10, 8,13, 5,11, 5,8},
+    {1,7, 4,6, 8,9, 6,10, 2,10},
+    {9,8, 12,6, 15,7, 15,9, 10,10},
+    {7,11, 9,11, 11,14, 10,16, 8,15},
+    {10,14, 14,14, 14,16, 10,16},
+}}
+Shapes.profiles.cactus = {polygons = {
+    {6,0, 10,0, 11,2, 11,13, 5,13, 5,2},
+    {1,4, 4,4, 4,10, 3,10, 1,8},
+    {3,7, 6,7, 6,10, 3,10},
+    {12,5, 15,5, 15,9, 13,11, 12,11},
+    {10,8, 13,8, 13,11, 10,11},
+    {4,13, 12,13, 12,15, 11,16, 5,16, 4,15},
+}}
+Shapes.profiles.abacus = {polygons = {
+    {1,1, 15,1, 15,15, 1,15},
+}}
+Shapes.profiles.bodyguard = {polygons = {
+    {5,0, 11,0, 13,2, 13,7, 11,9, 5,9, 3,7, 3,2},
+    {3,9, 13,9, 16,12, 16,14, 14,16, 2,16, 0,14, 0,12},
+}}
+Shapes.profiles.chicken_keeper = {polygons = {
+    {5,0, 11,0, 15,4, 13,5, 3,5, 1,4},
+    {4,4, 12,4, 13,9, 3,9},
+    {3,9, 12,9, 15,12, 14,15, 3,15, 0,12},
+}}
+Shapes.profiles.splitter = {polygons = {
+    {2,1, 6,1, 7,3, 7,14, 1,14, 1,3},
+    {10,1, 14,1, 15,3, 15,14, 9,14, 9,3},
+    {2,13, 14,13, 14,15, 12,16, 4,16, 2,15},
+}}
+Shapes.profiles.discus_athlete = {polygons = {
+    {5,0, 11,0, 13,2, 13,7, 11,9, 5,9, 3,7, 3,2},
+    {3,9, 12,9, 15,11, 15,13, 11,16, 3,16, 0,13, 0,11},
+    {10,12, 13,12, 16,13, 16,14, 13,15, 10,15, 9,14, 9,13},
+}}
+Shapes.profiles.discus = {polygons = {
+    {5,4, 11,4, 16,7, 16,9, 11,12, 5,12, 0,9, 0,7},
+}}
+Shapes.profiles.compass = {polygons = {
+    {5,0, 11,0, 16,5, 16,11, 11,16, 5,16, 0,11, 0,5},
+}}
+Shapes.profiles.jelly = {polygons = {
+    {5,2, 11,2, 14,5, 16,11, 14,14, 3,15, 0,11, 2,5},
+}}
+Shapes.profiles.wool = {polygons = {
+    {4,1, 12,1, 16,5, 16,10, 12,14, 5,15, 0,11, 0,5},
+}}
+Shapes.profiles.sweater = {polygons = {
+    {4,2, 12,2, 12,14, 4,14},
+    {3,1, 5,1, 5,6, 3,11, 0,11, 0,4},
+    {11,1, 13,1, 16,4, 16,11, 13,11, 11,6},
+}}
+-- 果汁只补匹配既有图案的杯身和吸管，不修改任何像素。
+Shapes.profiles.juice = {polygons = {
+    {2,4, 14,4, 11,14, 5,14}, {10,0, 12,0, 10,5, 8,5},
+}}
+
 for _, profile in pairs(Shapes.profiles) do
     local envelope = 0
     for _, polygon in ipairs(profile.polygons or {}) do
@@ -153,6 +260,16 @@ for _, profile in pairs(Shapes.profiles) do
         envelope = math.max(envelope, math.sqrt(x * x + y * y) + circle.radius / 8)
     end
     profile.envelope = envelope
+end
+
+---小羊库存三档的统一轮廓/图案查询；不改实例公开scale或weight。
+---@param id string
+---@param woolCount number?
+---@return string
+function Shapes.Variant(id, woolCount)
+    if id ~= "sheep" then return id end
+    local count = type(woolCount) == "number" and woolCount or 0
+    return count >= 5 and "sheep_5" or (count >= 1 and "sheep" or "sheep_0")
 end
 
 ---@param shape string

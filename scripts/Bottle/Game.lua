@@ -1,11 +1,11 @@
 -- Bottle 纯 Lua 规则核心（V0.3 新结算模型）；不依赖引擎、文件系统或全局 math.random。
 -- 主流程（docs/游戏流程.txt）：
---   prepare  回合开始：从牌库抽最多20件入瓶，可重抽1次
---   running  摇晃阶段：10秒，物品按 trigger 实时执行效果（只改价值/状态，不产金币）
+--   prepare  回合开始：从牌库普通抽最多20件，共享刷新次数重抽
+--   running  摇晃阶段：10秒，物品按 trigger 实时执行效果，明确即时收益当场入账
 --   settle   结算阶段：禁止摇晃，物体自然下落2秒，不执行非结算效果；
 --            2秒后全体物品按当前价值一次性结算金币
 --   考核      每5回合扣除阶段目标（40/80/140…×1.3），余额不足则 over
---   draft    三选一：按考核次数查 docs/概率.txt 稀有度权重，刷新1次/可跳过
+--   draft    三选一：按考核次数查 docs/概率.txt 稀有度权重，共享次数刷新/可跳过
 -- 基础设定（docs/基础设定.txt）：
 --   价值增益默认临时（bonus，结算后回合末清零）；“永久+N”写入 permBonus。
 --   冷却下限1秒、每回合重置、不跨回合。瓶中物品上限100。消耗≠移除：进弃牌堆。
@@ -22,6 +22,10 @@ local Relics = require("Bottle.Relics")
 local ExtraEffects = require("Bottle.ExtraEffects")
 local RelicEffects = require("Bottle.RelicEffects")
 local RelicState = require("Bottle.RelicState")
+local PhysicalState = require("Bottle.PhysicalState")
+local Expansion = require("Bottle.ExpansionEffects")
+local RelicExpansion = require("Bottle.RelicExpansion")
+local Lifecycle = require("Bottle.GameLifecycle")
 local DURATION = 10
 local SETTLE_DELAY = 2
 -- 结算展示：先逐个弹出收益浮字（队列），队列结束后再停留 REVEAL_DELAY 秒进入考核/三选一。
@@ -43,7 +47,7 @@ local MAX_TARGET = 9007199254740990
 local MAX_COUNTER = 2147483647
 
 ---@alias BottlePhase 'prepare'|'running'|'settle'|'reveal'|'draft'|'over'
----@alias ItemLocation 'deck'|'bottle'|'discard'|'consumed'
+---@alias ItemLocation 'deck'|'bottle'|'discard'|'consumed'|'queued'
 
 ---@class ItemInstance
 ---@field uid integer
@@ -57,31 +61,83 @@ local MAX_COUNTER = 2147483647
 ---@field bottleRounds integer 入瓶回合计数；香蕉“3回合后”以此为准
 ---@field location ItemLocation
 ---@field temporary boolean 临时消耗或临时产物
----@field scale number 体积倍率（大胃王/气球）；1=100%，物理与显示同步缩放
+---@field scale number 体积倍率；1=100%，直接乘物理/显示半径，不作平方立方换算
+---@field weight number 相同尺寸下原 fixture 质量的相对倍率；1=100%，独立于 scale
 ---@field counter integer 通用计数器（食客吃掉的food数/西红柿炒蛋被消耗次数）
 ---@field settleCount integer 结算次数计数（学生成长5次）
 ---@field distance number 本回合累计物理位移米数（大胃王/兔子）
 ---@field rollValue number? 骰子本回合点数；替代基础价值，不覆盖永久加成
 ---@field rerolled table<number,number>? 每位赌徒对各骰子的本回合重投次数
 ---@field treeBlessed boolean? 果树下一次判定的农民祝福
+---@field valueBase number? 实例基础价值覆盖；分裂、羊毛合并与榨汁使用
+---@field eventMult number 本回合事件倍率，不被相邻光环重算覆盖
+---@field generatedTemporary boolean 临时生成物，回合末移除而非返还
+---@field shielded boolean 本回合保镖护盾
+---@field refreshCount integer 养鸡人累计刷新余数
+---@field pendingConsumerUid integer? 排队小草的指定消费者
+---@field anchored boolean 壁虎已固定
+---@field abacusMerges integer 本回合算盘合成计数
+---@field calfDashRemaining number 小牛冲刺剩余秒
+---@field calfDashHits table<number,boolean>?
+---@field discusOwnerUid integer?
+---@field discusTargetUid integer?
+---@field discusHolderUid integer?
+---@field woolCount integer? 小羊永久积攒的羊毛数量
+---@field woolExtraEntry boolean? 准备阶段羊毛额外入场标记
+---@field woolReadyRound integer? 羊毛最早额外入场回合，避免同回合重抽提前触发
+---@field discusState string?
+---@field discusWait number 飞盘接力等待秒
+---@field compassProgress number 指南针累计角路程
+---@field compassAngle number?
+---@field compassTravel number?
+---@field compassForced number?
+---@field cactusScale number?
+---@field geckoContactTime number? 壁虎连续真接触延迟
+---@field ghostTravel number? 幽灵运动遗物本回合余程
+---@field spinProgress number? 转圈圈本回合余角
+---@field spinAngle number? 转圈圈角度采样
+---@field spinTravel number? 转圈圈物理角路程采样
+---@field spinForced number? 转圈圈排除强制转角采样
 
 ---@class GameEvent
----@field kind 'spawn'|'remove'|'score'|'merge'|'buff'|'transform'|'respawn'|'resize'|'burst'
+---@field kind 'spawn'|'remove'|'score'|'merge'|'buff'|'transform'|'respawn'|'resize'|'burst'|'anchor'|'rotate'|'impulse'|'flight'|'teleport'|'dash'
 ---@field uid integer
 ---@field id string?
 ---@field value number?
+---@field weight number? resize 时的重量倍率；value 仍为体积倍率
 ---@field rollValue number? 骰子score时的点数，仅用于结算残影显示
 ---@field a integer? 合成材料 uid（merge 事件保留）
 ---@field b integer? 合成材料 uid
 ---@field x number? 事件位置，瓶内局部米制坐标
 ---@field y number?
+---@field delta number? 原地旋转角差，弧度
+---@field duration number? 运动事件持续秒
+---@field ownerUid integer?
+---@field targetUid integer?
+---@field sourceUid integer?
+---@field dx number? 冲刺／弹开方向
+---@field dy number?
+---@field strength number? 速度增量，米/秒
+---@field fromX number?
+---@field fromY number?
+---@field toX number?
+---@field toY number?
+---@field excludeCompass boolean? 强制旋转不计自然角路程
 
 ---@class BottleContacts
 ---@field pairs number[][]?
+---@field rawPairs number[][]? 原始真实接触，培根派生邻接不得冒充真碰撞
 ---@field bottom table<number, boolean>?
 ---@field top table<number, boolean>?
 ---@field wall table<number, boolean>? 任意静态内壁，包含瓶底和瓶顶
 ---@field positions table<number, {x:number,y:number}>? 当前物理位置
+---@field side table<number,boolean>? 左右内侧壁，含肩颈，不含底/顶
+---@field angles table<number,number>? 真实姿态弧度
+---@field rotateOffsets table<number,number>? 指南针强制旋转的累计角差
+---@field angularTravel table<number,number>? 物理累计自然绝对角路程
+---@field flightArrived table<number,boolean>?
+---@field flightHits table<number,number>?
+---@field shakeStrength number? 本物理步来自实际输入的速度变化模长，米/秒
 
 ---@class BottleStepContacts : BottleContacts
 ---@field pairs number[][]
@@ -89,8 +145,16 @@ local MAX_COUNTER = 2147483647
 ---@field top table<number, boolean>
 ---@field wall table<number, boolean>
 ---@field positions table<number, {x:number,y:number}>
+---@field side table<number,boolean>
+---@field angles table<number,number>
+---@field rotateOffsets table<number,number>
+---@field angularTravel table<number,number>
+---@field flightArrived table<number,boolean>
+---@field flightHits table<number,number>
 
 ---@class BottleSnapshot
+---@field rulesVersion integer? 扩展规则版本，当前6；外层存档版本保持2
+---@field refreshes integer 跨回合共享刷新次数
 ---@field version integer 固定 2（V0.3 新表；v1 旧档不兼容）
 ---@field phase BottlePhase 只保存 prepare/draft/over
 ---@field round integer
@@ -121,6 +185,8 @@ local MAX_COUNTER = 2147483647
 ---@field pendingRelicDraft boolean 考核达标后待追加的遗物三选一（V0.4 新增）
 
 ---@class BottleGame
+---@field Snapshot fun(self:BottleGame):BottleSnapshot
+---@field Restore fun(snapshot:BottleSnapshot):BottleGame
 ---@field phase BottlePhase
 ---@field round integer
 ---@field stage integer
@@ -152,6 +218,12 @@ local MAX_COUNTER = 2147483647
 ---@field _instances table<number, ItemInstance>
 ---@field _lastPositions table<number, {x:number,y:number}> 位移累计用的上次采样位置
 ---@field _rollback BottleSnapshot?
+---@field refreshes integer 跨回合共享刷新次数
+---@field spawnQueue integer[] 等待入瓶的生成物FIFO
+---@field _queueOrigins table<number,{x:number,y:number}>
+---@field _drainingQueue boolean
+---@field _roundPopCount integer 本回合正收益事件数，与浮字队列固定节拍一致
+---@field _revealPopCount integer? 本次展示的完整正收益事件数
 ---@field startEvents GameEvent[] 回合开始掷骰的待显示事件，不持久化
 local Game = {}
 Game.__index = Game
@@ -232,7 +304,6 @@ end
 Game.REVEAL_SCORE_INTERVAL = REVEAL_SCORE_INTERVAL
 Game.REVEAL_SCORE_MIN_INTERVAL = REVEAL_SCORE_MIN_INTERVAL
 Game.REVEAL_SCORE_BUDGET = REVEAL_SCORE_BUDGET
-Game.REVEAL_DELAY = REVEAL_DELAY
 
 --- 结算浮字队列从第一件弹出到最后一件弹出的时长（第一件立即出现）。
 ---@param count integer
@@ -254,6 +325,7 @@ function Game:_Init(seed)
     self.score = 0
     self.totalScore = 0
     self.roundScore = 0
+    self._roundPopCount = 0
     self.elapsed = 0
     self.settleElapsed = 0
     self.revealElapsed = 0
@@ -279,6 +351,9 @@ function Game:_Init(seed)
     self._lastPositions = {}
     self._rollback = nil
     self.startEvents = {}
+    self.refreshes = 1
+    self.spawnQueue, self._queueOrigins = {}, {}
+    self._drainingQueue = false
 end
 
 -- Park-Miller 48271：所有运算 < 2^53，Lua 5.4 整数与 JSON 数字往返都可精确保存。
@@ -305,10 +380,13 @@ function Game:_Create(id, temporary)
     local item = {
         uid = self._nextUid, id = id, bonus = 0, permBonus = 0, mult = 1,
         remaining = def.cooldown, bottleRounds = 0, location = "deck",
-        temporary = temporary or false,
-        scale = 1, counter = 0, settleCount = 0, distance = 0,
+        temporary = temporary or false, generatedTemporary = false,
+        scale = 1, weight = 1, counter = 0, settleCount = 0, distance = 0,
         permMult = 1, tokenAttempted = false,
     }
+    PhysicalState.Init(item)
+    Expansion.InitItem(item)
+    if id == "wool" then item.woolReadyRound = self.round + 1 end
     -- 遗物 credit_line（贷款额度）：后续获取的信用卡初始价值25（即 permBonus +15）。
     if id == "credit_card" and Relics.Has(self, "credit_line") then
         item.permBonus = 15
@@ -379,10 +457,14 @@ function Game:_EnterBottle(item, events)
 end
 
 function Game:_Draw()
+    local extras = Expansion.ExtraEntrants(self)
+    local extraUids = {}
+    for _, item in ipairs(extras) do extraUids[item.uid] = true end
     ---@type ItemInstance[]
     local candidates = {}
     for _, item in ipairs(self.deck) do
-        if item.location == "deck" then candidates[#candidates + 1] = item end
+        item.woolExtraEntry = nil
+        if item.location == "deck" and not extraUids[item.uid] then candidates[#candidates + 1] = item end
     end
     table.sort(candidates, ByUid)
     self.drawn = {}
@@ -390,6 +472,11 @@ function Game:_Draw()
         local item = table.remove(candidates, self:_RandomInt(#candidates))
         self:_EnterBottle(item)
         self.drawn[#self.drawn + 1] = item.uid
+    end
+    -- 额外羊毛不占普通20抽；超100件的部分开始回合后进FIFO，不挤掉普通抽取。
+    for _, item in ipairs(extras) do
+        item.woolExtraEntry = true
+        if #self:BottleItems() < BOTTLE_LIMIT then self:_EnterBottle(item) end
     end
 end
 
@@ -404,6 +491,7 @@ function Game:_Prepare()
     self.settleElapsed = 0
     self.revealElapsed = 0
     self.roundScore = 0
+    self._roundPopCount = 0
     self.rerollUsed = false
     self.refreshUsed = false
     self.options = {}
@@ -425,7 +513,9 @@ end
 
 ---@return boolean
 function Game:Reroll()
-    if self.phase ~= "prepare" or self.rerollUsed then return false end
+    if self.phase ~= "prepare" or self.refreshes <= 0 then return false end
+    self.refreshes = self.refreshes - 1
+    Expansion.OnRefresh(self)
     for _, item in ipairs(self:BottleItems()) do item.location = "deck" end
     self.rerollUsed = true
     self:_Draw()
@@ -443,12 +533,25 @@ function Game:Start()
     self.settleElapsed = 0
     self.revealElapsed = 0
     self.roundScore = 0
+    self._roundPopCount = 0
+    for _, item in ipairs(self.deck) do
+        if item.woolExtraEntry then
+            item.temporary, item.generatedTemporary = true, true
+            item.woolExtraEntry = nil
+            if item.location == "deck" then
+                item.location = "queued"
+                self.spawnQueue[#self.spawnQueue + 1] = item.uid
+                self._queueOrigins[item.uid] = {x=0,y=6}
+            end
+        end
+    end
     for _, item in ipairs(self:BottleItems()) do
-        -- 冷却不跨回合，每回合重置为完整值（基础设定.txt）。
-        item.remaining = self:CooldownOf(item.id)
+        -- 周期仍从入瓶起等待；触发冷却每回合重置为就绪，不预等一整轮。
+        item.remaining = Items.byId[item.id].trigger == "timer" and self:CooldownOf(item.id) or 0
         -- 入瓶回合计数：香蕉“3回合后”只在瓶中记录（用户确认 2026-10-16）。
         item.bottleRounds = item.bottleRounds + 1
         ExtraEffects.ResetRound(item)
+        Expansion.ResetRound(item)
     end
     ExtraEffects.Start(self, self.startEvents)
     self.revision = self.revision + 1
@@ -469,13 +572,14 @@ function Game:CooldownOf(id)
     if id == "thief" and Relics.Has(self, "thief_handbook") then
         cooldown = math.max(Items.Settings.minCooldown, cooldown - 1)
     end
+    if id == "chef" and Relics.Has(self, "chef_hat") then cooldown = 1 end
     return cooldown
 end
 
 ---@param item ItemInstance
 ---@return number 当前有效价值 =（基础 + 临时 + 永久）× 倍率
 function Game:_Value(item)
-    local base = item.rollValue or Items.byId[item.id].base
+    local base = item.rollValue or item.valueBase or Items.byId[item.id].base
     if item.id == "trash_can" and Relics.Has(self, "lucky_charm") then base = 1 end
     -- 灵魂共振先复制墓碑当前最值，再应用灵魂石自身的加成与倍率；不递归查询灵魂石。
     if item.id == "soul_stone" and Relics.Has(self, "soul_resonance") then
@@ -485,7 +589,7 @@ function Game:_Value(item)
         end
         if best > -math.huge then base = best end
     end
-    local value = (base + item.bonus + item.permBonus) * item.mult
+    local value = (base + item.bonus + item.permBonus + RelicExpansion.ValueBonus(self, item)) * item.mult
     -- 遗物 tomato_tycoon（西红柿首富）：西红柿价值×2。
     if item.id == "tomato" and Relics.Has(self, "tomato_tycoon") then
         value = value * 2
@@ -501,6 +605,7 @@ function Game:_Score(events, item, value, position)
     self.score = self.score + value
     self.totalScore = self.totalScore + value
     self.roundScore = self.roundScore + value
+    if value > 0 then self._roundPopCount = (self._roundPopCount or 0) + 1 end
     Emit(events, "score", item, value)
     events[#events].rollValue = item.rollValue
     if position then
@@ -517,11 +622,15 @@ end
 function Game:_Transform(item, newId, events)
     assert(Items.byId[newId], "未知转化目标: " .. newId)
     local rerolled = item.id == "gambler" and newId == "gambling_god" and item.rerolled or nil
+    local shielded = item.shielded
     item.id = newId
     item.bonus, item.permBonus, item.mult = 0, 0, 1
     RelicState.InitItem(item)
     item.remaining = self:CooldownOf(newId)
-    item.scale, item.counter, item.settleCount = 1, 0, 0
+    PhysicalState.Init(item)
+    Expansion.InitItem(item)
+    item.shielded = shielded or false
+    item.counter, item.settleCount = 0, 0
     ExtraEffects.ResetRound(item)
     item.rerolled = rerolled
     self._lastPositions[item.uid] = nil
@@ -532,21 +641,8 @@ end
 
 --- 生成新实例并立即入瓶（默认永久生成；temporary=true 为临时生成）。
 --- origin 提供近源生成坐标（瓶内局部米制）；缺省时 Physics 搜索净空位置。
----@param id string
----@param events GameEvent[]
----@param temporary? boolean
----@param origin? {x:number,y:number}
----@return ItemInstance?
-function Game:_Spawn(id, events, temporary, origin)
-    if #self:BottleItems() >= BOTTLE_LIMIT then return nil end
-    local item = self:_Create(id, temporary)
-    self:_EnterBottle(item, events)
-    local event = events[#events]
-    if event and event.kind == "spawn" and origin then
-        event.x, event.y = origin.x, origin.y
-    end
-    return item
-end
+Game._Spawn = Lifecycle.Spawn
+Game._DrainQueue = Lifecycle.DrainQueue
 
 --- 瓶顶生成（西红柿炒蛋/金针菇重生、转基因水果等“在瓶顶重新生成”）。
 ---@param id string
@@ -581,15 +677,9 @@ function Game:_Adjacents(uid, contacts)
     return result
 end
 
---- 体积变化广播：大胃王/气球缩放后通知 Physics 重建碰撞体（保持位置）。
----@param item ItemInstance
----@param events GameEvent[]
-function Game:ApplyScale(item, events)
-    events[#events + 1] = {
-        kind = "resize", uid = item.uid, id = item.id, value = item.scale,
-    }
-    self.revision = self.revision + 1
-end
+---统一钳制体积/重量后再发 resize，调用者先修改对应实例字段。
+Game.ApplyScale = PhysicalState.Apply
+Game.ApplyWeight = PhysicalState.Apply
 
 --- 合成：消耗 pair 双方，在两者中点生成产物（merge 事件供 Physics 定位）。
 --- 调用方保证 a、b 都仍在瓶中；目标只能消耗一次由 _Destroy 的位置检查兜底。
@@ -601,11 +691,14 @@ end
 ---@return boolean
 function Game:_Merge(a, b, resultId, contacts, events)
     if a.location ~= "bottle" or b.location ~= "bottle" then return false end
+    -- 双材料先预检，不能先耗掉一方才发现另一方受护盾保护。
+    if not Expansion.BeforeDestroy(self, a, nil, events, "merge")
+        or not Expansion.BeforeDestroy(self, b, nil, events, "merge") then return false end
     local posA, posB = contacts.positions[a.uid], contacts.positions[b.uid]
     local origin = (posA and posB)
         and { x = (posA.x + posB.x) * 0.5, y = (posA.y + posB.y) * 0.5 } or nil
-    if not self:_Destroy(a.uid, false, events) then return false end
-    if not self:_Destroy(b.uid, false, events) then return false end
+    if not self:_Destroy(a.uid, false, events, nil, "merge_checked") then return false end
+    if not self:_Destroy(b.uid, false, events, nil, "merge_checked") then return false end
     local item = self:_Create(resultId)
     self:_EnterBottle(item, events)
     local event = events[#events]
@@ -614,6 +707,7 @@ function Game:_Merge(a, b, resultId, contacts, events)
         event.a, event.b = a.uid, b.uid
         if origin then event.x, event.y = origin.x, origin.y end
     end
+    Expansion.OnMerge(self, a, b, item, contacts, events)
     return true
 end
 
@@ -630,7 +724,7 @@ function Game:_Eliminate(target, by, multiplier, contacts, events)
     RelicEffects.MaintainHuntTarget(self)
     local huntTargetUid = self.huntTargetUid
     local value = self:_Value(target)
-    if not self:_Destroy(target.uid, false, events) then return false end
+    if not self:_Destroy(target.uid, false, events, by, "eliminate") then return false end
     local position = contacts.positions[by.uid]
     self:_Score(events, by, value * multiplier, position)
     RelicEffects.OnEliminate(self, target, by, huntTargetUid, events)
@@ -668,7 +762,8 @@ function Game:_ReturnToDeck(item)
     if item.location ~= "discard" then return false end
     RemoveReference(self.discard, item.uid)
     AddReference(self.deck, item)
-    item.location, item.temporary = "deck", false
+    item.location = "deck"
+    if not item.generatedTemporary then item.temporary = false end
     item.bonus, item.mult = 0, 1
     item.remaining = self:CooldownOf(item.id)
     ExtraEffects.ResetRound(item)
@@ -677,71 +772,8 @@ function Game:_ReturnToDeck(item)
     return true
 end
 
---- 消耗：进入弃牌堆（消耗≠移除）。
---- 被消耗时钩子（按 item.txt 描述）：
----   banana      → 变为香蕉皮留在瓶中（不进弃牌堆，永久转化）。
----   tomato_egg  → 瓶顶重生；被消耗5次后消失（counter 计数，跨回合保留）。
----   enoki       → 瓶顶重生；遗物 seeYouTomorrow 时每次被消耗永久+1。
----   ghost       → 进行一次结算（立即按当前价值产金币；“立刻产生的效果”）。
---- 遗物 gm_fruit：水果被消耗时10%几率在瓶顶生成一个新的完整水果。
----@param uid integer
----@param temporary boolean
----@param events GameEvent[]
----@return boolean
-function Game:_Destroy(uid, temporary, events)
-    local item = self:Get(uid)
-    if not item or item.location ~= "bottle" then return false end
-    if item.id == "banana" then
-        -- 香蕉虽然转化为皮留瓶内，仍算水果被消耗，不能漏掉遗物判定。
-        self:_Transform(item, "banana_peel", events)
-        if Relics.Has(self, "gm_fruit") and self:_RandomInt(10) == 1 then
-            local pool = { "apple", "banana", "orange", "cherry" }
-            self:_SpawnTop(pool[self:_RandomInt(#pool)], events)
-        end
-        return true
-    end
-    if item.id == "tomato_egg" then
-        item.counter = item.counter + 1
-        if item.counter < RelicEffects.TomatoEggLimit(self) then
-            self:_RespawnTop(item, events)
-        else
-            item.location = "discard"
-            RemoveReference(self.deck, uid)
-            AddReference(self.discard, item)
-            Emit(events, "remove", item)
-        end
-        self.revision = self.revision + 1
-        return true
-    end
-    if item.id == "enoki" then
-        if Relics.Has(self, "see_you_tomorrow") then
-            item.permBonus = item.permBonus + 1
-            events[#events + 1] = {
-                kind = "buff", uid = item.uid, id = item.id, value = 1,
-            }
-        end
-        self:_RespawnTop(item, events)
-        return true
-    end
-    if item.id == "ghost" then
-        self:_Score(events, item, self:_Value(item), nil)
-    end
-    item.location = "discard"
-    item.temporary = item.temporary or temporary
-    if item.temporary then AddReference(self.deck, item)
-    else RemoveReference(self.deck, uid) end
-    AddReference(self.discard, item)
-    Emit(events, "remove", item)
-    -- 遗物 gm_fruit（转基因水果）：水果被消耗时10%几率瓶顶生成完整水果。
-    if Relics.Has(self, "gm_fruit") and Items.HasTag(item.id, "水果")
-        and self:_RandomInt(10) == 1 then
-        local pool = { "apple", "banana", "orange", "cherry" }
-        self:_SpawnTop(pool[self:_RandomInt(#pool)], events)
-    end
-    self.revision = self.revision + 1
-    RelicEffects.MaintainHuntTarget(self)
-    return true
-end
+--- 消耗生命周期独立模块；新增消费者上下文供草、便便、果汁、保镖共用。
+Game._Destroy = Lifecycle.Destroy
 
 --- 普通消耗永久移出牌库，临时消耗在回合末恢复；均记录在本回合弃牌堆。
 --- running/settle 之外拒绝。
@@ -752,7 +784,7 @@ function Game:Consume(uid, temporary)
     ---@type GameEvent[]
     local events = {}
     if self.phase == "running" or self.phase == "settle" then
-        self:_Destroy(uid, temporary == true, events)
+        if self:_Destroy(uid, temporary == true, events) then self:_DrainQueue(events) end
     end
     return events
 end
@@ -762,7 +794,12 @@ end
 ---@return BottleStepContacts
 function Game:_ContactSnapshot(contacts)
     ---@type BottleStepContacts
-    local state = { pairs = {}, bottom = {}, top = {}, wall = {}, positions = {} }
+    local state = { pairs = {}, bottom = {}, top = {}, wall = {}, positions = {},
+        side = {}, angles = {}, rotateOffsets = {}, angularTravel = {},
+        flightHits = {}, flightArrived = {} }
+    if IsFinite(contacts.shakeStrength) and contacts.shakeStrength >= 0 then
+        state.shakeStrength = contacts.shakeStrength
+    end
     ---@type table<number, boolean>
     local present = {}
     for _, item in ipairs(self:BottleItems()) do
@@ -771,35 +808,48 @@ function Game:_ContactSnapshot(contacts)
         state.bottom[uid] = contacts.bottom and contacts.bottom[uid] == true or nil
         state.top[uid] = contacts.top and contacts.top[uid] == true or nil
         state.wall[uid] = contacts.wall and contacts.wall[uid] == true or nil
+        state.side[uid] = contacts.side and contacts.side[uid] == true or nil
+        state.flightArrived[uid] = contacts.flightArrived and contacts.flightArrived[uid] == true or nil
+        for _, field in ipairs({"angles", "rotateOffsets", "angularTravel"}) do
+            local values = contacts[field]
+            local value = values and values[uid]
+            if IsFinite(value) then state[field][uid] = value end
+        end
+        local hitUid = contacts.flightHits and contacts.flightHits[uid]
+        if IsInteger(hitUid) then state.flightHits[uid] = hitUid end
         local position = contacts.positions and contacts.positions[uid] or nil
         if position and IsFinite(position.x) and IsFinite(position.y) then
             state.positions[uid] = {x = position.x, y = position.y}
         end
     end
-    for _, pair in ipairs(contacts.pairs or {}) do
+    for _, pair in ipairs(contacts.rawPairs or contacts.pairs or {}) do
         local a, b = pair[1], pair[2]
         if IsInteger(a) and IsInteger(b) and a ~= b and present[a] and present[b] then
             state.pairs[#state.pairs + 1] = { a, b }
         end
     end
+    RelicExpansion.ExpandContacts(self, state)
     return state
 end
 
 -- fixture 被销毁或重建后，相同 uid 也不能沿用旧接触。
+---@param game BottleGame
 ---@param contacts BottleStepContacts
 ---@param events GameEvent[]
 ---@param first integer
-local function InvalidateContacts(contacts, events, first)
+local function InvalidateContacts(game, contacts, events, first)
     ---@type table<number, boolean>
     local removed = {}
     for i = first, #events do
         local event = events[i]
         if event.kind == "remove" or event.kind == "spawn" or event.kind == "transform"
-            or event.kind == "merge" or event.kind == "respawn" or event.kind == "resize" then
+            or event.kind == "merge" or event.kind == "respawn" or event.kind == "resize"
+            or event.kind == "teleport" or event.kind == "rotate" then
             removed[event.uid] = true
             contacts.bottom[event.uid] = nil
             contacts.top[event.uid] = nil
             contacts.wall[event.uid] = nil
+            if contacts.side then contacts.side[event.uid] = nil end
         end
         -- 合成事件同时移除两份材料的接触（材料 uid 记在 a/b）。
         if event.kind == "merge" then
@@ -813,10 +863,13 @@ local function InvalidateContacts(contacts, events, first)
             end
         end
     end
-    for i = #contacts.pairs, 1, -1 do
-        local pair = contacts.pairs[i]
-        if removed[pair[1]] or removed[pair[2]] then table.remove(contacts.pairs, i) end
+    for _, pairsToClean in ipairs({ contacts.pairs, contacts.rawPairs or {} }) do
+        for i = #pairsToClean, 1, -1 do
+            local pair = pairsToClean[i]
+            if removed[pair[1]] or removed[pair[2]] then table.remove(pairsToClean, i) end
+        end
     end
+    RelicExpansion.ExpandContacts(game, contacts)
 end
 
 --- 位移累计（大胃王#8：位移10m体积-10%，下限100%）。
@@ -832,7 +885,10 @@ function Game:_TrackDistances(state, events)
             local dx, dy = position.x - record.x, position.y - record.y
             local stepDistance = math.sqrt(dx * dx + dy * dy)
             -- 过滤物理重建/传送造成的跳变（respawn、resize 重建后首帧）。
-            if stepDistance < 1.0 then item.distance = item.distance + stepDistance end
+            if stepDistance < 1.0 then
+                item.distance = item.distance + stepDistance
+                RelicExpansion.TrackDistance(self, item, stepDistance, events)
+            end
         end
         if position then
             self._lastPositions[item.uid] = { x = position.x, y = position.y }
@@ -858,7 +914,7 @@ end
 function Game:_Resolve(contacts, events)
     local firstMerge = #events + 1
     Effects.Merge(self, contacts, events)
-    if #events >= firstMerge then InvalidateContacts(contacts, events, firstMerge) end
+    if #events >= firstMerge then InvalidateContacts(self, contacts, events, firstMerge) end
     Effects.Continuous(self, contacts, events)
     ---@type ItemInstance[]
     local ready = {}
@@ -874,13 +930,17 @@ function Game:_Resolve(contacts, events)
             Effects.Apply(self, item, contacts, events)
             RelicEffects.Maintain(self, events)
             if item.location == "bottle" then item.remaining = self:CooldownOf(item.id) end
-            InvalidateContacts(contacts, events, firstEvent)
+            InvalidateContacts(self, contacts, events, firstEvent)
             Effects.Continuous(self, contacts, events)
+            local firstMaintain = #events + 1
+            Expansion.Maintain(self, events)
+            InvalidateContacts(self, contacts, events, firstMaintain)
         end
     end
+    self:_DrainQueue(events)
     local firstRelic = #events + 1
     RelicEffects.Maintain(self, events)
-    InvalidateContacts(contacts, events, firstRelic)
+    InvalidateContacts(self, contacts, events, firstRelic)
 end
 
 ---@param delta number
@@ -905,7 +965,10 @@ function Game:Step(dt, contacts)
     local duration = self:Duration()
     local state = self:_ContactSnapshot(contacts or {})
     self:_TrackDistances(state, events)
-    InvalidateContacts(state, events, 1)
+    local activeDt = math.min(dt, math.max(0, duration - self.elapsed))
+    RelicExpansion.Step(self, activeDt, state, events)
+    Expansion.Step(self, activeDt, state, events)
+    InvalidateContacts(self, state, events, 1)
     local endpoint = math.min(duration, self.elapsed + dt)
     while self.elapsed < endpoint - EPSILON do
         local wait = endpoint - self.elapsed
@@ -966,31 +1029,31 @@ function Game:_Settle(state)
     if self.phase ~= "settle" then return events end
     -- 结算前奏（产金币前）：种子转化、气球膨胀/爆炸、学生计数成长、桂冠锁定。
     -- 结算前奏的邻接倍率只在最终真实接触上计算一次。
+    Expansion.BeforeSettle(self, state, events)
     ExtraEffects.BeforeSettle(self, state, events)
     Effects.SettleEffects(self, events)
+    Expansion.Maintain(self, events)
     RelicEffects.Maintain(self, events)
-    -- 逐个弹出队列的件数：只有正收益物品会产生浮字（View 也只入队正数）。
-    local popCount = 0
+    -- 浮字按每条正收益事件入队，不是按物品件数；含樱桃／壁虎多重与此前即时收益。
     for _, item in ipairs(self:BottleItems()) do
-        if self:_Value(item) > 0 then popCount = popCount + 1 end
-    end
-    self._revealPopCount = popCount
-    for _, item in ipairs(self:BottleItems()) do
-        Effects.SettleItem(self, item, events, state.positions[item.uid])
+        Effects.SettleItem(self, item, events, state.positions[item.uid], state)
     end
     -- 结算尾声（全体产金币后）：信用卡永久-1。
     Effects.PostSettle(self, events)
     ExtraEffects.AfterSettle(self, events)
     RelicEffects.AfterSettle(self, events)
+    Expansion.AfterSettle(self, events)
     -- 香蕉入瓶满3回合，结算完成后变为腐烂的香蕉（用户确认：入瓶才记录回合）。
     for _, item in ipairs(self:BottleItems()) do
         if item.id == "banana" and item.bottleRounds >= 3 then
             self:_Transform(item, "rotten_banana", events)
         end
     end
+    self._revealPopCount = self._roundPopCount
     self.lastRoundScore = self.roundScore
     self.bestRound = math.max(self.bestRound, self.round)
     self.bestRoundScore = math.max(self.bestRoundScore, self.roundScore)
+    if self.round % 2 == 0 then self.refreshes = self.refreshes + 1 end
     self:_CleanupRound()
     self.options = {}
     self.refreshUsed = false
@@ -1050,11 +1113,20 @@ function Game:_FinishReveal()
     self.revision = self.revision + 1
 end
 
+--- 考核当回合的物品和遗物候选均排除普通，不修改共享概率表。
+---@param game BottleGame
+---@return integer[]
+local function RoundDraftWeights(game)
+    local weights = Copy(Items.DraftWeights(game.stage))
+    if game.round % 5 == 0 then weights[1] = 0 end
+    return weights
+end
+
 --- 遗物三选一候选：按考核次数概率表抽稀有度，排除已拥有；
 --- 所抽稀有度无可用候选时顺延抽其他稀有度（与物品三选一同一机制）。
 ---@return string[]
 function Game:_RelicDraftOptions()
-    local weights = Items.DraftWeights(self.stage)
+    local weights = RoundDraftWeights(self)
     ---@type table<string, boolean>
     local chosen = {}
     ---@type string[]
@@ -1064,7 +1136,8 @@ function Game:_RelicDraftOptions()
         local buckets = {}
         for rarity = 1, 5 do buckets[rarity] = {} end
         for _, def in ipairs(Relics.list) do
-            if def.pool and def.implemented and not self.relics[def.id] and not chosen[def.id] then
+            if def.pool and def.implemented and not self.relics[def.id] and not chosen[def.id]
+                and (self.round % 5 ~= 0 or def.rarity > 1) then
                 local bucket = buckets[def.rarity]
                 bucket[#bucket + 1] = def
             end
@@ -1072,6 +1145,15 @@ function Game:_RelicDraftOptions()
         local weight = 0
         for rarity = 1, 5 do
             if #buckets[rarity] > 0 then weight = weight + weights[rarity] end
+        end
+        if weight == 0 and self.round % 5 == 0 then
+            -- 禁普通优先于概率表；剩余档均为零权重时才回退最高可用非普通档。
+            for rarity = 5, 2, -1 do
+                if #buckets[rarity] > 0 then
+                    weights[rarity], weight = 10000, 10000
+                    break
+                end
+            end
         end
         if weight == 0 then break end
         local ticket = self:_RandomInt(weight)
@@ -1141,7 +1223,7 @@ end
 ---@return string[]
 function Game:_DraftOptions()
     local owned = OwnedTypes(self.deck)
-    local weights = Items.DraftWeights(self.stage)
+    local weights = RoundDraftWeights(self)
     ---@type table<string, boolean>
     local chosen = {}
     ---@type string[]
@@ -1151,7 +1233,8 @@ function Game:_DraftOptions()
         local buckets = {}
         for rarity = 1, 5 do buckets[rarity] = {} end
         for _, def in ipairs(Items.list) do
-            if not chosen[def.id] and DraftEligible(def, owned) then
+            if not chosen[def.id] and DraftEligible(def, owned)
+                and (self.round % 5 ~= 0 or def.rarity > 1) then
                 local bucket = buckets[def.rarity]
                 bucket[#bucket + 1] = def
             end
@@ -1159,6 +1242,15 @@ function Game:_DraftOptions()
         local weight = 0
         for rarity = 1, 5 do
             if #buckets[rarity] > 0 then weight = weight + weights[rarity] end
+        end
+        if weight == 0 and self.round % 5 == 0 then
+            -- 禁普通优先于概率表；剩余档均为零权重时才回退最高可用非普通档。
+            for rarity = 5, 2, -1 do
+                if #buckets[rarity] > 0 then
+                    weights[rarity], weight = 10000, 10000
+                    break
+                end
+            end
         end
         if weight == 0 then break end
         local ticket = self:_RandomInt(weight)
@@ -1184,7 +1276,12 @@ function Game:_CleanupRound()
         -- 弃牌也会入档：所有位置统一去掉临时状态，保留永久状态供返还。
         item.bonus, item.mult = 0, 1
         ExtraEffects.ResetRound(item)
-        if item.location == "consumed" then
+        Expansion.ResetRound(item)
+        if item.generatedTemporary then
+            RemoveReference(self.deck, item.uid)
+            RemoveReference(self.discard, item.uid)
+            self._instances[item.uid] = nil
+        elseif item.location == "consumed" then
             RemoveReference(self.deck, item.uid)
             RemoveReference(self.discard, item.uid)
             self._instances[item.uid] = nil
@@ -1201,6 +1298,7 @@ function Game:_CleanupRound()
             RemoveReference(self.discard, item.uid)
         end
     end
+    self.spawnQueue, self._queueOrigins = {}, {}
     table.sort(self.deck, ByUid)
     self.drawn = {}
     RelicEffects.Maintain(self)
@@ -1225,7 +1323,9 @@ end
 
 ---@return boolean
 function Game:DraftRefresh()
-    if self.phase ~= "draft" or self.refreshUsed then return false end
+    if self.phase ~= "draft" or self.refreshes <= 0 then return false end
+    self.refreshes = self.refreshes - 1
+    Expansion.OnRefresh(self)
     self.refreshUsed = true
     -- 不排除上一组，允许刷新得到以前的 id。
     self.options = self.relicDraft and self:_RelicDraftOptions() or self:_DraftOptions()
@@ -1250,13 +1350,16 @@ function Game:Choose(index)
     if not id then return false end
     if self.relicDraft then
         local def = Relics.byId[id]
-        if not def or not def.pool or not def.implemented or self.relics[id] then return false end
+        if not def or not def.pool or not def.implemented or self.relics[id]
+            or (self.round % 5 == 0 and def.rarity == 1) then return false end
         self.relics[id] = true
         RelicEffects.OnAcquire(self, id)
         self:_AdvanceRound()
         return true
     end
-    if not DraftEligible(Items.byId[id], OwnedTypes(self.deck)) then return false end
+    local def = Items.byId[id]
+    if not DraftEligible(def, OwnedTypes(self.deck))
+        or (self.round % 5 == 0 and def.rarity == 1) then return false end
     self:_Create(id)
     self:_FinishItemDraft()
     return true
@@ -1303,195 +1406,20 @@ function Game:GmAddItem(id)
     return true, string.format("已添加 %s（#%d）到牌库，当前牌库 %d 件", def.name, item.uid, #self.deck)
 end
 
+local snapshotImpl, restoreImpl = require("Bottle.GamePersistence").Install(Game, {
+    Copy = Copy, IsFinite = IsFinite, IsInteger = IsInteger,
+    OwnedTypes = OwnedTypes, DraftEligible = DraftEligible,
+})
+
 ---@return BottleSnapshot
 function Game:Snapshot()
-    if self.phase == "running" or self.phase == "settle" or self.phase == "reveal" then
-        return Copy(assert(self._rollback, "running/settle/reveal 缺少回合前快照"))
-    end
-    ---@type number[]
-    local deck = {}
-    ---@type number[]
-    local discard = {}
-    for _, item in ipairs(self.deck) do deck[#deck + 1] = item.uid end
-    for _, item in ipairs(self.discard) do discard[#discard + 1] = item.uid end
-    return {
-        version = 2, phase = self.phase, round = self.round, stage = self.stage,
-        score = self.score, totalScore = self.totalScore, roundScore = self.roundScore,
-        elapsed = self.elapsed, target = self.target,
-        bestRound = self.bestRound, bestRoundScore = self.bestRoundScore,
-        lastRoundScore = self.lastRoundScore, lastResult = self.lastResult,
-        drawn = Copy(self.drawn), options = Copy(self.options),
-        rerollUsed = self.rerollUsed, refreshUsed = self.refreshUsed,
-        revision = self.revision, rngState = self._rngState, nextUid = self._nextUid,
-        instances = Copy(self:AllInstances()), deck = deck, discard = discard,
-        relics = Copy(self.relics), relicDraft = self.relicDraft,
-        pendingRelicDraft = self.pendingRelicDraft,
-        juicerValue = self.juicerValue, huntTargetUid = self.huntTargetUid,
-    }
-end
-
--- 存档数组必须是无额外键的连续1-based数组；避免 ipairs 静默丢掉损坏数据。
----@param value any
----@param name string
----@return integer
-local function ArrayLength(value, name)
-    assert(type(value) == "table" and getmetatable(value) == nil, "无效存档数组: " .. name)
-    local count = 0
-    for key in pairs(value) do
-        assert(IsInteger(key) and key >= 1, "无效存档数组键: " .. name)
-        count = count + 1
-    end
-    assert(count == #value, "存档数组不连续: " .. name)
-    for index = 1, count do assert(value[index] ~= nil, "存档数组缺项: " .. name) end
-    return count
+    return snapshotImpl(self)
 end
 
 ---@param snapshot BottleSnapshot
 ---@return BottleGame
 function Game.Restore(snapshot)
-    assert(type(snapshot) == "table" and getmetatable(snapshot) == nil and snapshot.version == 2,
-        "存档版本不兼容（V0.3 新表需要 version=2；旧档作废）")
-    assert(snapshot.phase == "prepare" or snapshot.phase == "draft" or snapshot.phase == "over",
-        "存档必须是 prepare/draft/over；运行/结算中应保存回合前快照")
-    assert(IsInteger(snapshot.round) and snapshot.round >= 1 and snapshot.round <= MAX_COUNTER, "无效回合")
-    -- 先验上限，再调用 GetTarget；损坏的超大 stage 不会进入长循环。
-    assert(IsInteger(snapshot.stage) and snapshot.stage >= 1 and snapshot.stage <= MAX_STAGE, "无效阶段")
-    local completed = snapshot.phase == "draft" and snapshot.round or snapshot.round - 1
-    local expectedStage = math.floor(completed / 5) + 1
-    assert(snapshot.stage == expectedStage, "阶段与回合不符")
-    assert(snapshot.phase ~= "over" or snapshot.round % 5 == 0, "终局回合不是考核回合")
-    assert(IsInteger(snapshot.rngState) and snapshot.rngState >= 1 and snapshot.rngState < RNG_MODULUS,
-        "无效 PRNG 状态")
-    assert(IsInteger(snapshot.nextUid) and snapshot.nextUid >= 1 and snapshot.nextUid <= MAX_COUNTER,
-        "无效 uid 分配器")
-    assert(type(snapshot.rerollUsed) == "boolean" and type(snapshot.refreshUsed) == "boolean", "无效次数状态")
-    assert(type(snapshot.lastResult) == "string", "无效回合结果")
-    local scalarNames = {
-        "score", "totalScore", "roundScore", "elapsed", "target", "bestRound",
-        "bestRoundScore", "lastRoundScore", "revision",
-    }
-    for _, key in ipairs(scalarNames) do assert(IsFinite(snapshot[key]), "无效存档字段: " .. key) end
-    assert(snapshot.elapsed >= 0 and snapshot.elapsed <= DURATION + 1, "无效运行时间")
-    assert(IsInteger(snapshot.bestRound) and snapshot.bestRound >= 0 and snapshot.bestRound <= snapshot.round,
-        "无效最佳回合")
-    assert(IsInteger(snapshot.revision) and snapshot.revision >= 0 and snapshot.revision <= 9007199254740991,
-        "无效状态版本")
-    assert(snapshot.target == Game.GetTarget(snapshot.stage), "目标与阶段不符")
-    ArrayLength(snapshot.instances, "instances")
-    ArrayLength(snapshot.deck, "deck")
-    ArrayLength(snapshot.discard, "discard")
-    assert(snapshot.phase ~= "prepare" or #snapshot.discard == 0, "准备阶段弃牌必须为空")
-    assert(ArrayLength(snapshot.drawn, "drawn") <= DRAW_LIMIT, "准备抽取超过20个")
-    assert(ArrayLength(snapshot.options, "options") <= 3, "三选一数量无效")
-    if snapshot.phase == "prepare" then
-        assert(snapshot.elapsed == 0 and snapshot.roundScore == 0 and #snapshot.options == 0
-            and not snapshot.refreshUsed, "准备阶段数据不一致")
-    else
-        assert(#snapshot.drawn == 0, "非准备阶段不能残留抽取列表")
-        assert(snapshot.phase ~= "over" or #snapshot.options == 0, "终局不能残留三选一")
-    end
-    local self = setmetatable({}, Game)
-    self:_Init(1) -- 只初始化字段，不抽取，不消耗随机状态。
-    self.phase, self.round, self.stage = snapshot.phase, math.floor(snapshot.round), math.floor(snapshot.stage)
-    self.score, self.totalScore, self.roundScore = snapshot.score, snapshot.totalScore, snapshot.roundScore
-    self.elapsed, self.target = snapshot.elapsed, snapshot.target
-    self.bestRound, self.bestRoundScore = snapshot.bestRound, snapshot.bestRoundScore
-    self.lastRoundScore, self.lastResult = snapshot.lastRoundScore, snapshot.lastResult
-    self.rerollUsed, self.refreshUsed, self.revision = snapshot.rerollUsed, snapshot.refreshUsed, snapshot.revision
-    self._rngState, self._nextUid = math.floor(snapshot.rngState), math.floor(snapshot.nextUid)
-    self.juicerValue, self.huntTargetUid = RelicState.ReadGame(snapshot)
-    -- 遗物字段（V0.4 新增；旧档缺省为无遗物）。
-    if snapshot.relics ~= nil then
-        assert(type(snapshot.relics) == "table" and getmetatable(snapshot.relics) == nil, "无效遗物集合")
-        for id, owned in pairs(snapshot.relics) do
-            assert(type(id) == "string" and Relics.byId[id], "存档包含未知遗物")
-            assert(owned == true, "遗物集合值必须为 true")
-            self.relics[id] = true
-        end
-    end
-    self.relicDraft = snapshot.relicDraft == true
-    self.pendingRelicDraft = snapshot.pendingRelicDraft == true
-    if self.relicDraft then
-        assert(self.phase == "draft", "遗物三选一必须处于 draft 阶段")
-    end
-    for _, saved in ipairs(snapshot.instances) do
-        assert(type(saved) == "table" and getmetatable(saved) == nil, "无效存档实例")
-        assert(IsInteger(saved.uid) and saved.uid > 0 and saved.uid < self._nextUid, "无效实例 uid")
-        assert(not self._instances[saved.uid], "存档实例 uid 重复")
-        assert(type(saved.id) == "string" and Items.byId[saved.id], "存档包含未知物品")
-        assert(IsFinite(saved.bonus) and IsFinite(saved.permBonus) and IsFinite(saved.mult)
-            and IsFinite(saved.remaining) and saved.remaining >= 0
-            and saved.temporary == false, "无效实例属性或临时状态残留")
-        assert(saved.bonus == 0 and saved.mult == 1, "可持久化阶段残留临时价值或倍率")
-        assert(IsInteger(saved.bottleRounds) and saved.bottleRounds >= 0, "无效入瓶回合计数")
-        -- 跨回合实例状态（V0.4）：体积倍率/通用计数/结算计数；旧档缺省补默认值。
-        local savedScale = saved.scale == nil and 1 or saved.scale
-        local savedCounter = saved.counter == nil and 0 or saved.counter
-        local savedSettleCount = saved.settleCount == nil and 0 or saved.settleCount
-        assert(IsFinite(savedScale) and savedScale >= 1 and savedScale <= 2, "无效体积倍率")
-        assert(IsInteger(savedCounter) and savedCounter >= 0, "无效计数器")
-        assert(IsInteger(savedSettleCount) and savedSettleCount >= 0, "无效结算计数")
-        assert(saved.location == "deck" or (self.phase == "prepare" and saved.location == "bottle")
-            or (self.phase ~= "prepare" and saved.location == "discard"), "可持久化阶段实例位置不合法")
-        local permMult, tokenAttempted = RelicState.ReadItem(saved)
-        -- 白名单字段拷贝：不把损坏存档的额外 table/function 导入运行状态。
-        self._instances[saved.uid] = {
-            uid = math.floor(saved.uid), id = saved.id, bonus = 0, permBonus = saved.permBonus,
-            mult = 1, remaining = saved.remaining, bottleRounds = math.floor(saved.bottleRounds),
-            location = saved.location, temporary = false,
-            scale = savedScale, counter = savedCounter, settleCount = savedSettleCount,
-            distance = 0, permMult = permMult, tokenAttempted = tokenAttempted,
-        }
-    end
-    ---@type table<number, boolean>
-    local deckSeen = {}
-    for _, uid in ipairs(snapshot.deck) do
-        assert(IsInteger(uid) and self:Get(uid), "持有实例索引不存在")
-        assert(not deckSeen[uid], "持有实例索引重复")
-        assert(assert(self:Get(uid)).location ~= "discard", "弃牌不能同时属于持有牌库")
-        deckSeen[uid] = true
-        self.deck[#self.deck + 1] = assert(self:Get(uid))
-    end
-    ---@type table<number, boolean>
-    local discardSeen = {}
-    for _, uid in ipairs(snapshot.discard) do
-        assert(IsInteger(uid), "弃牌 uid 不是整数")
-        local item = assert(self:Get(uid), "弃牌索引不存在")
-        assert(not discardSeen[uid] and not deckSeen[uid] and item.location == "discard",
-            "弃牌重复、位置错误或仍在牌库")
-        discardSeen[uid] = true
-        self.discard[#self.discard + 1] = item
-    end
-    assert(#self.deck + #self.discard == #snapshot.instances, "实例必须唯一归属牌库或弃牌堆")
-    ---@type table<number, boolean>
-    local drawnSeen = {}
-    for _, uid in ipairs(snapshot.drawn) do
-        assert(IsInteger(uid), "抽取 uid 不是整数")
-        local item = assert(self:Get(uid), "抽取实例不存在")
-        assert(not drawnSeen[uid] and item.location == "bottle", "抽取实例重复或不在瓶中")
-        drawnSeen[uid] = true
-        self.drawn[#self.drawn + 1] = uid
-    end
-    for _, item in ipairs(self.deck) do
-        assert(item.location ~= "bottle" or drawnSeen[item.uid], "瓶中实例未列入抽取列表")
-    end
-    ---@type table<string, boolean>
-    local optionSeen = {}
-    local owned = OwnedTypes(self.deck)
-    for _, id in ipairs(snapshot.options) do
-        if self.relicDraft then
-            local relic = Relics.byId[id]
-            assert(type(id) == "string" and not optionSeen[id]
-                and relic and relic.pool and not self.relics[id], "无效或已拥有的遗物三选一选项")
-        else
-            assert(type(id) == "string" and not optionSeen[id]
-                and DraftEligible(Items.byId[id], owned), "无效或已不符合资格的三选一选项")
-        end
-        optionSeen[id] = true
-        self.options[#self.options + 1] = id
-    end
-    RelicState.ValidateTarget(self)
-    return self
+    return restoreImpl(snapshot)
 end
 
 return Game
