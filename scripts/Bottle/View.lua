@@ -7,6 +7,7 @@ local Storage = require("Bottle.Storage")
 local Description = require("Bottle.Description")
 local DeckBoard = require("Bottle.DeckBoard")
 local ItemText = require("Bottle.ItemText")
+local ItemDetail = require("Bottle.ItemDetail")
 local MachineSkin = require("Machine.LayeredSkin")
 local Atmosphere=require("Machine.Atmosphere")
 local GameAudio = require("Bottle.Audio")
@@ -725,32 +726,17 @@ function View:BuildDeckSandbox(body, s)
     self.deckBoard = board
 end
 
--- 牌库物品详情：与三选一详情同构（大图标、名称、品质铭牌、属性、可滚动说明）。
+-- 牌库与三选一共用详情版式；实例数值与编号仍来自当前持有物品。
 function View:BuildDeckDetail(body, item, s)
     local def = Items.byId[item.id]
-    local content = UI.Panel {width = "100%", flexGrow = 1, flexBasis = 0,
-        paddingHorizontal = 12 * s, paddingTop = 8 * s, paddingBottom = 8 * s, gap = 8 * s}
-    content:AddChild(UI.Label {id = "deckDetailTitle", text = "物品详情", fontSize = 18 * s,
-        fontColor = C.text, textMotionDisabled = true})
-    local name = UI.Label {id = "deckDetailName", text = def.name .. "  #" .. item.uid,
-        fontSize = 20 * s, fontWeight = "bold", whiteSpace = "normal", width = "100%", fontColor = C.text}
-    name:SetStyle({textReveal = true})
-    local quality = UI.Label {id = "deckQuality", text = Items.rarityNames[def.rarity],
-        fontSize = 11 * s, fontColor = QUALITY_INK[def.rarity] or C.text,
-        backgroundColor = {20, 24, 24, 245}, textMotionDisabled = true,
-        textAlign = "center", verticalAlign = "middle",
-        paddingHorizontal = 8 * s, paddingVertical = 2 * s, alignSelf = "flex-start"}
-    local stats = ItemStats(self.game:_Value(item), Items.TagsText(def))
-    content:AddChild(UI.Panel {width = "100%", flexDirection = "row", alignItems = "center", gap = 10 * s,
-        children = {
-            Icon {itemId = item.id, rollValue = item.rollValue, width = 76 * s, height = 76 * s,
-                pointerEvents = "none", flexShrink = 0},
-            UI.Panel {flexGrow = 1, flexBasis = 0, gap = 4 * s, children = {name, quality, stats}},
-        }})
-    local prose = Description {id = "deckDescription", text = ItemText.Effect(self.game, item.id, item), fontSize = 13 * s,
+    local content = ItemDetail.Create {prefix = "deck", scale = s, def = def,
+        caption = "物品详情", meta = "持有编号 #" .. item.uid,
+        gold = self.game:_Value(item),
+        icon = Icon {itemId = item.id, rollValue = item.rollValue,
+            width = 88 * s, height = 88 * s, pointerEvents = "none"},
+        descriptionId = "deckDescription", effect = ItemText.Effect(self.game, item.id, item),
         onInspect = function(id) self:InspectDefinition(id) end}
-    content:AddChild(UI.ScrollView {id = "deckEffectScroll", width = "100%", flexGrow = 1, flexBasis = 0,
-        bounces = false, padding = 0, children = {prose}})
+    content:SetStyle({height = "auto", flexGrow = 1, flexBasis = 0})
     body:AddChild(content)
 end
 

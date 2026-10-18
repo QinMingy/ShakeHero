@@ -8,6 +8,7 @@ local LitScene=require("Machine.LitSpriteScene")
 local Clock=require("Machine.Clock")
 local Items=require("Bottle.Items")
 local ItemText=require("Bottle.ItemText")
+local ItemDetail=require("Bottle.ItemDetail")
 local Art=require("Bottle.Art")
 local Atmosphere=require("Machine.Atmosphere")
 local Storage=require("Bottle.Storage")
@@ -266,6 +267,13 @@ function Skin.Apply(view,title,help,save,gm)
     spriteButton(view,view.deckBackButton,"wood",18)
     view.container:AddChild(view.deckBackButton)
     m.pageMotion:Attach(view.deckBackButton,"deck-back","deckpage",L.deckBack,"bottom",.03)
+    -- 左上角返回主菜单：与牌库/重抽同一套 wood 九宫格按钮风格。
+    view.mainMenuButton=GameAudio.Button{id="mainMenu",text="主菜单",onClick=function()
+        if view.startScreen and view.startScreen.Open then view.startScreen:Open() end
+    end}
+    view.mainMenuButton:SetStyle({zIndex=9})
+    spriteButton(view,view.mainMenuButton,"wood",15)
+    view.container:AddChild(view.mainMenuButton)
     local bg=UI.Widget{position="absolute",left=0,top=0,width="100%",height="100%",pointerEvents="none"} --[[@as any]]
     function bg:Render(vg)
         local b=self:GetAbsoluteLayout()
@@ -473,7 +481,9 @@ function Skin.Layout(view)
     for _,entry in ipairs(m.placements) do place(entry.widget,entry.rect,s) end
     place(view.board,L.board,s)
     view.board:SetStyle({minHeight=0,backgroundColor=clear})
-    place(view.roundLabel,{24,34,142,34},s);labelStyle(view.roundLabel,20,s)
+    place(view.roundLabel,{102,34,74,32},s);labelStyle(view.roundLabel,14,s)
+    place(view.mainMenuButton,{20,32,76,36},s)
+    view.mainMenuButton:SetStyle({fontSize=15*s})
     place(m.targetCaption,{270,144,44,26},s);labelStyle(m.targetCaption,16,s)
     place(view.goalLabel,{316,142,62,30},s);labelStyle(view.goalLabel,22,s)
     place(view.deckButton,L.deck,s);spriteButton(view,view.deckButton,"wood",15,deckButtonDecor)
@@ -578,19 +588,23 @@ function Skin.SyncPages(view)
         if deck.rect[2]~=deckRect[2] then
             deck.pose.y=deck.pose.y+deck.rect[2]-deckRect[2]
             deck.interactive=false
+            deck.settled=false
             -- 跨页换位也要作废旧按下，不能等动画停稳后触发上页点击／音效。
             deck.presses={};deck.inputVersion=deck.inputVersion+1
             if deck.widget.state then deck.widget.state.pressed=false end
         end
         deck.rect=deckRect
     end
-    m.pageMotion:Targets(drafting,deckOpen)
     view.footer:SetVisible(not draftPage and not deckOpen)
     view.board:SetVisible(not draftPage)
     m.clockPlate:SetVisible(not draftPage)
     m.meterPlate:SetVisible(not draftPage)
     m.meterWidget:SetVisible(not draftPage)
-    place(view.deckButton,deckRect,m.scale)
+    local props=view.deckButton.props
+    if props.left~=deckRect[1]*m.scale or props.top~=deckRect[2]*m.scale
+        or props.width~=deckRect[3]*m.scale or props.height~=deckRect[4]*m.scale then
+        place(view.deckButton,deckRect,m.scale)
+    end
     m.pageMotion:Attach(view.deckButton,"deck","deck",deckRect,"screen",.02)
     m.pageMotion:Targets(drafting,deckOpen)
 end
@@ -601,7 +615,8 @@ function Skin.SetDraftOpen(view,open)
 end
 
 function Skin.FitNumbers(view)
-    view.goalLabel:SetStyle({fontSize=math.min(22,92/math.max(2,#Reels.Literal(view.game.target)))*view.machineSkin.scale})
+    local size=math.min(22,92/math.max(2,#Reels.Literal(view.game.target)))*view.machineSkin.scale
+    if view.goalLabel.props.fontSize~=size then view.goalLabel:SetStyle({fontSize=size}) end
 end
 
 -- The three choices are separate trays below the CRT; the selected description
@@ -625,31 +640,19 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
     prepareDraftMotion(view,DraftValue)
     local screen=UI.Panel{id="draftDisplay",padding=0,backgroundColor={12,32,25,255},overflow="hidden"}
     place(screen,L.board,s)
-    local title=UI.Label{id="draftTitle",text=relicDraft and "挑选下一件遗物" or "挑选下一件物品",
-        fontSize=18*s,fontColor=ink,pointerEvents="none"}
-    place(title,{18,14,334,32},s);screen:AddChild(title)
     local icon=Icon{id="draftPreviewIcon",itemId=id,isRelic=relicDraft,
-        rollValue=type(option)=="table" and option.rollValue or nil,pointerEvents="none"}
+        rollValue=type(option)=="table" and option.rollValue or nil,
+        width=88*s,height=88*s,pointerEvents="none"}
     animateDraftIcon(view,icon,m.draftMotion[selected],true)
-    place(icon,{20,64,76,76},s);screen:AddChild(icon)
-    local name=UI.Label{text=def.name,fontSize=20*s,fontColor=ink,whiteSpace="normal",pointerEvents="none"}
-    name:SetStyle({textReveal=true})
-    place(name,{112,58,238,40},s);screen:AddChild(name)
-    local quality=qualityLabel(def.rarity,12,s,"draftQuality")
-    place(quality,{112,102,64,24},s);screen:AddChild(quality)
-    local stats=relicDraft and UI.Label{id="draftRelicInfo",text="遗物 · 永久生效",
-        fontSize=12*s,fontColor=muted,pointerEvents="none"}
-        or ItemStats(gold,Items.TagsText(def))
-    place(stats,{112,132,238,48},s);screen:AddChild(stats)
-    local summary=UI.Label{text="本回合 +"..Reels.Literal(view.game.lastRoundScore or 0).." · 候选 "..selected.."/"..#view.game.options,
-        textMotionDisabled=true,fontSize=11*s,fontColor=muted,pointerEvents="none"}
-    place(summary,{18,184,334,28},s);screen:AddChild(summary)
-    local prose=Description{id="draftDescription_"..selected,
-        text=relicDraft and def.effect or ItemText.Effect(view.game,id),fontSize=13*s,
+    local detail=ItemDetail.Create{prefix="draft",scale=s,def=def,isRelic=relicDraft,icon=icon,
+        caption=relicDraft and "挑选下一件遗物" or "挑选下一件物品",
+        meta="候选 "..selected.." / "..#view.game.options,
+        valueCaption=type(option)=="table" and "当前收益" or "初始收益",
+        gold=gold,
+        descriptionId="draftDescription_"..selected,
+        effect=relicDraft and def.effect or ItemText.Effect(view.game,id),
         onInspect=function(itemId) view:InspectDefinition(itemId) end}
-    -- An explicit viewport avoids the previous zero-height flex allocation.
-    local scroll=UI.ScrollView{id="draftEffectScroll",bounces=false,padding=0,children={prose}}
-    place(scroll,{18,224,334,218},s);screen:AddChild(scroll)
+    screen:AddChild(detail)
     view.draft:AddChild(screen)
     for index,choice in ipairs(view.game.options) do
         local itemId,_,itemDef=DraftValue(view.game,choice)
@@ -798,6 +801,5 @@ function Skin.Update(view)
     if view.game.phase=="draft" and view.currentPhase=="draft" and c.flashElapsed<0
         and not view.choiceHidden and not view.inventoryOpen
         and not view.draft:IsVisible() then view.draft:Show() end
-    Skin.SyncPages(view)
 end
 return Skin

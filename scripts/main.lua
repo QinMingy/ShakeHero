@@ -332,9 +332,9 @@ function HandleUpdate(eventType, eventData)
             local step = math.min(STEP, cap)
             if step <= .0000001 then break end
             physics:Step(step)
-            -- 碰撞音：本步内新接触（Begin）的相对速度，交给 Audio 做阈值/节流/音量。
+            -- 本步真实新接触交给Audio同帧择强；不按全局固定间隔放行声音。
             for _, impact in ipairs(physics:TakeImpacts()) do
-                GameAudio.Impact(impact.speed, impact.pair)
+                GameAudio.Impact(impact.speed, impact.pair, impact.key)
             end
             local events = settling
                 and game:SettleStep(step, physics:Contacts() --[[@as BottleContacts]])

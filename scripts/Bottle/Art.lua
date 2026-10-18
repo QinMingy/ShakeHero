@@ -3,6 +3,8 @@
 local Art = {}
 local Palette = require("Machine.Palette")
 local SoftBacon = require("Bottle.SoftBacon")
+local PixelCache = require("Bottle.PixelCache")
+local GainIcon = require("Bottle.GainIcon")
 -- Native NanoVG RTT has no usable compound-path stencil. Draw the identical
 -- cached sprite rectangles separately only in registered offscreen contexts.
 local offscreenContexts = setmetatable({}, {__mode = "k"})
@@ -11,6 +13,12 @@ local offscreenContexts = setmetatable({}, {__mode = "k"})
 function Art.SetOffscreenContext(vg, enabled)
     offscreenContexts[vg] = enabled or nil
 end
+
+function Art.ReleaseContext(vg)
+    PixelCache.Release(vg)
+    GainIcon.Release(vg)
+    offscreenContexts[vg]=nil
+end
 local INK = { 10, 10, 26, 255 }
 
 ---@class BottlePixelGroup
@@ -18,8 +26,8 @@ local INK = { 10, 10, 26, 255 }
 ---@field rects number[] 整数网格矩形，按 x、y、宽、高连续存储
 
 ---@class BottlePixelSprite
----@field width number
----@field height number
+---@field width integer
+---@field height integer
 ---@field groups BottlePixelGroup[]
 ---@field mirror boolean
 
@@ -118,6 +126,9 @@ local function DrawSprite(vg, sprite, size, cooling, original, sizeY)
     if sizeY then pixelY = sizeY * 2 / sprite.height end
     local left, top = -sprite.width * pixel / 2, -sprite.height * pixelY / 2
     if sprite.mirror then nvgScale(vg, -1, 1) end
+    if original and PixelCache.Draw(vg,sprite,left,top,sprite.width*pixel,sprite.height*pixelY,cooling) then
+        return
+    end
     for _, group in ipairs(sprite.groups) do
         if #group.rects > 0 then
             local rects = group.rects
@@ -476,34 +487,8 @@ function Art.Eye(vg, x, y, size)
     nvgRestore(vg)
 end
 
--- 属性图标：托币的手表示金币收益，秒表表示冷却；与物品共用缓存像素绘制。
+-- 收益图标统一使用用户提供的贴图；秒表沿用缓存像素绘制。
 local STAT_ICONS = {
-    gain = Sprite({
-        "....................",
-        ".........oooo.......",
-        "........ohhhho......",
-        ".......ohbyybho.....",
-        ".......ohbyybdo.....",
-        ".......ohbyybdo.....",
-        "........obbbdo......",
-        ".........oooo.......",
-        "....................",
-        "......oooooo........",
-        ".....ollllllo..oo...",
-        ".....ollllllloollo..",
-        "..ooooohhhhhlllllo..",
-        "..occolhhhhhhhllo...",
-        "..occollhhhhlllo....",
-        "..occoolllllloo.....",
-        "..occoooooooo.......",
-        "..oooo..............",
-        "....................",
-        "....................",
-    }, {
-        o = INK, h = {255, 244, 160, 255}, b = {255, 217, 61, 255},
-        d = {166, 110, 33, 255}, y = {207, 149, 40, 255},
-        l = {255, 206, 153, 255}, c = {33, 189, 174, 255},
-    }),
     cooldown = Sprite({
         "....................",
         "........oooo........",
@@ -537,6 +522,7 @@ local STAT_ICONS = {
 ---@param y number
 ---@param size number
 function Art.StatIcon(vg, kind, x, y, size)
+    if kind == "gain" then GainIcon.Draw(vg, x, y, size); return end
     local sprite = STAT_ICONS[kind]
     if not sprite then return end
     nvgSave(vg)

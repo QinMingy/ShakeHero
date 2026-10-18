@@ -639,6 +639,7 @@ Test("物理fixture导出全部内壁/底/顶且引用计数独立", function()
     local physics = setmetatable({
         world = world, bodies = {[1] = {node = itemA}, [2] = {node = itemB}},
         _walls = walls, _pairs = {}, _bottom = {}, _top = {}, _wall = {}, _disposed = false,
+        _impactContacts = {}, _impacts = {}, clock = 0,
     }, Physics) --[[@as any]]
     local function contact(a, b, begin, eventWorld)
         local function pointer(value)

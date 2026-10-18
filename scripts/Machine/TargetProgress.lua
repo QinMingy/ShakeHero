@@ -27,10 +27,10 @@ end
 function Progress.Segment(b,s,index,value)
     local width=(b.w-18*s-2*s*(Progress.count-1))/Progress.count
     local x=b.x+8*s+(index-1)*(width+2*s)
-    local right=b.x+b.w-10*s
-    local edge=right-(b.w-18*s)*value
-    local start=math.max(x,edge)
-    return {x=x,y=b.y+7*s,w=width,h=12*s,fillX=start,fillW=math.max(0,x+width-start)}
+    local left=b.x+8*s
+    local filled=left+(b.w-18*s)*value
+    local endX=math.min(x+width,filled)
+    return {x=x,y=b.y+7*s,w=width,h=12*s,fillX=x,fillW=math.max(0,endX-x)}
 end
 
 -- 在进度条前沿迸发一小簇像素粒子；颜色跟随当前黄/绿状态。
@@ -110,7 +110,7 @@ function Progress.Attach(view)
         -- 每件收益弹出使暂显值增加一次：前沿粒子 + 轻微屏幕震动。
         if display~=nil and score>lastScore+.000001 then
             local s=m.scale
-            local edge=b.x+b.w-10*s-(b.w-18*s)*value
+            local edge=b.x+8*s+(b.w-18*s)*value
             Progress.Burst(view,edge,b.y+13*s,complete,score-lastScore)
             local scene=m.litScene
             if scene and scene.AddShake then

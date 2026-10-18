@@ -1,0 +1,58 @@
+{
+  "scope": "isolated Lua behavior replay and CPU pixel data; no GPU or browser performance measurement",
+  "page_motion": {
+    "matched_snapshots": 685,
+    "baseline_stable_style_calls": 2160,
+    "optimized_stable_style_calls": 0,
+    "stable_frames": 120,
+    "baseline_total_style_calls": 11438,
+    "optimized_total_style_calls": 751,
+    "stale_click_rejected": true,
+    "active_click_preserved": true,
+    "retired_entries_released": true
+  },
+  "pixel_cache": {
+    "sprites": 118,
+    "normal_and_cooling_pixel_variants_matched": 236,
+    "warm_draws_reupload": false,
+    "nearest_filter_checked": true,
+    "release_idempotent": true,
+    "zero_sized_pop_skipped": true,
+    "palette_gamma_conversion_disabled": true,
+    "unsupported_upload_or_import_falls_back_without_per_frame_retry": true
+  },
+  "dust": {
+    "matched_frames": 7,
+    "particles": 500,
+    "geometry_and_motion_match": true,
+    "baseline_vector_constructors": 24300,
+    "optimized_vector_constructors": 7
+  },
+  "lua_syntax_files": 70,
+  "rule_suite_reported_cases": 120,
+  "optional_cjson_case_executed": false,
+  "unrelated_user_files_preserved": {
+    "scripts/Bottle/StartScreen.lua": true,
+    "scripts/Machine/DeveloperOverlay.lua": true,
+    "scripts/Machine/TargetProgress.lua": true
+  },
+  "lsp": {
+    "changed_files_checked": 6,
+    "current_errors": 13,
+    "baseline_errors": 13,
+    "new_errors": []
+  },
+  "repository_state": {
+    "head": "dd75b1fbdf82de3ffabbcdb061fbf5afb7c427e9",
+    "origin_main": "dd75b1fbdf82de3ffabbcdb061fbf5afb7c427e9",
+    "agent_commit_or_push_executed": false,
+    "concurrent_commit_contains_layered_skin_optimization": "dd75b1f",
+    "remaining_local_implementation_files": [
+      "scripts/Bottle/Art.lua",
+      "scripts/Bottle/PixelCache.lua",
+      "scripts/Machine/CinematicPost.lua",
+      "scripts/Machine/DustField.lua",
+      "scripts/Machine/PageMotion.lua"
+    ]
+  }
+}

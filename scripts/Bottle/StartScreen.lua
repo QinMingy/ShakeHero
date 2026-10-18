@@ -181,7 +181,8 @@ function StartScreen:Build()
     local screen = self
     self.root = UI.Panel {
         position = "absolute", left = 0, top = 0, width = "100%", height = "100%",
-        zIndex = 80, pointerEvents = "auto", backgroundColor = {0, 0, 0, 0},
+        -- z34：必须排在机台后效合成节点（z35）之前，否则不会进入本帧 UI 捕获。
+        zIndex = 34, pointerEvents = "auto", backgroundColor = {0, 0, 0, 0},
         onClick = function() end,
     }
     -- 天空渐变背景：上浅下深，给道具雨留出纵深。
@@ -238,7 +239,6 @@ function StartScreen:Build()
     self.root:AddChild(self.startButton)
     self.root:AddChild(self.exitButton)
     self.view.container:AddChild(self.root)
-    self.view.machineSkin.startScreen = self.root
 end
 
 function StartScreen:InitFalling()
@@ -337,6 +337,7 @@ function StartScreen:MaskGameUi()
     if not m then return end
     if #self.masked == 0 then
         for _, widget in ipairs({self.view.footer, self.view.deckButton, self.view.physicsButton,
+            self.view.mainMenuButton,
             m.help, m.save, m.gm, m.presentationButton}) do
             if widget then self.masked[#self.masked + 1] = widget end
         end
@@ -356,6 +357,27 @@ function StartScreen:Close()
     self.startButton:SetDisabled(true)
     self.exitButton:SetDisabled(true)
     print("[开始页] 开始游戏")
+end
+
+-- 从游戏内返回主菜单：重新显示开始页并暂停回合，游戏状态保留。
+-- 再次点击“开始游戏”即从原阶段继续。
+function StartScreen:Open()
+    if self.active then return end
+    self.active = true
+    self.closing = false
+    self.exitElapsed = 0
+    self.pulseTimer = 0
+    self.titleScale, self.titleVel = 1, 0
+    self.titleAngle, self.titleAngVel = 0, 0
+    self.root:SetStyle({opacity = 1})
+    self.root:Show()
+    self.startButton:SetDisabled(false)
+    self.exitButton:SetDisabled(false)
+    self.masked = {}
+    self:Layout()
+    self.view:Update(true)
+    self:MaskGameUi()
+    print("[开始页] 返回主菜单")
 end
 
 function StartScreen:Exit()

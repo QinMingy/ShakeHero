@@ -1,0 +1,866 @@
+{
+  "date": "2026-10-18",
+  "generated_at": "2026-10-18T14:54:13.516867+08:00",
+  "head": "0e8bd5155ce08fc7b288421cff1706f98a1d4b71",
+  "origin_main": "0e8bd5155ce08fc7b288421cff1706f98a1d4b71",
+  "project_version": "1.0.21",
+  "tracked_local_modifications": [
+    "assets/Shaders/BLGL/TargetProgress.shader",
+    "docs/game-design.md",
+    "scripts/Bottle/StartScreen.lua",
+    "scripts/Machine/DeveloperOverlay.lua",
+    "scripts/Machine/LayeredSkin.lua",
+    "scripts/Machine/TargetProgress.lua"
+  ],
+  "audited_file_sha256": {
+    "scripts/Bottle/Art.lua": "44595c273179b47ae03074f76ea7dc4b3d7d71d9c2dde8c099998a7555803703",
+    "scripts/Bottle/Audio.lua": "78e63241194ba8cb6a07f1a01472bd97f8ee4dc0dafedcd2edb125561a796277",
+    "scripts/Bottle/ButtonMotion.lua": "5d031bb9058f88df6e0874e3a4df978a8678f7de258842bb1ae0f6f5389dfd14",
+    "scripts/Bottle/DeckBoard.lua": "64d1b54eae20498ab13a314edc0fcddf57eaafc543c9d73f2e8ad3fe68df3a60",
+    "scripts/Bottle/Description.lua": "8799bdabff85ef1bd30ec59e74bb4540d87a6a44ad36321229f5b3b98a909651",
+    "scripts/Bottle/Effects.lua": "091e519a2f3a8063f26b5f5cda146cc286a7cc279cb69f7f3cdcc17cb666bd6d",
+    "scripts/Bottle/ExtraEffects.lua": "e0c543aa1ce311ef6592760ddcb08a777ec168f2d1582ad186a3bdbe31c62317",
+    "scripts/Bottle/ExtraSprites.lua": "1bd81b1edb752c0b0249cd490d5fa739a5ac05274da90a395338b617a93541b7",
+    "scripts/Bottle/ExtraTests.lua": "b4421c8d07d16e8186d732d73fd3289374ed98a9299cdad776ea4d1d9b6a710f",
+    "scripts/Bottle/Game.lua": "0b78e1ea130453f340b1ac65f0613bdc38ad2f6e935877ab266b19688fe817d6",
+    "scripts/Bottle/Items.lua": "1ec6eb3e78d6799d069072722d31aeaa8c721f0f60f5e2c30b8b2a10dcf310a3",
+    "scripts/Bottle/ItemSprites.lua": "a98c0c7e724b4473db9cb2f8e63372aa6fb994dda18ccdc035575ef962d6858e",
+    "scripts/Bottle/ItemText.lua": "16ee55e5603897bb9f0288c2c487b7ca6fe2a22ebd2f0dfb7f8876608a1233bb",
+    "scripts/Bottle/Physics.lua": "bcced49f9023b023510fa94ba7463dedb2dbd9b29a2a788e4615bad990b582f0",
+    "scripts/Bottle/PopIn.lua": "cdd6d58d482e90795225a70f57b11c3929062e15d989b98afb78df9e9e7e037b",
+    "scripts/Bottle/RelicEffects.lua": "62b0b638b092c2b6db2ede6ce92d9d83151485191794c5f0169383c6c0decd62",
+    "scripts/Bottle/Relics.lua": "a4990fd7200a2f248aa1835df1ada6e542c7bddf107025b29ca03fff26b8400a",
+    "scripts/Bottle/RelicSprites.lua": "dfd2f10971533b8c09e527da0ac798e85b8e0cab55698bae82b24eddb95cca4b",
+    "scripts/Bottle/RelicState.lua": "a4462fa8d1131a4123c2b8bc082343aa60ce0225b6173cce82a0453c33610c3a",
+    "scripts/Bottle/RelicTests.lua": "6deb7ea09fce12b46e4b68c35c8cddd4ad2c0fe22a56aee485ae5d4655fd5757",
+    "scripts/Bottle/RelicView.lua": "ee733f4a3410020d3fdd4c28077ed1cee37d1f0c2caa5ab5088c3435a9b48514",
+    "scripts/Bottle/ShakeMotion.lua": "f07c09b8b7c078b5d1782d47972a53dfb437432ca853f79df47726d707585352",
+    "scripts/Bottle/Shapes.lua": "e30a4bf11f61773a68b9d6a888ff57b7d11af6c116713c07649e2068f8c81384",
+    "scripts/Bottle/SoftBacon.lua": "987be39fe0760b52333df4203a3dc52de03cb729a698e267fa2649ab83168c60",
+    "scripts/Bottle/SoftView.lua": "71c5070047ab04085e5a003aef054ffb135e35d3d0985116a48887500d526cef",
+    "scripts/Bottle/Sprites.lua": "bd9dc7f90db364455a1d03d0484914eb5e0254246e8d2978fb7e81db56a23071",
+    "scripts/Bottle/StartScreen.lua": "cb19fa9cb00c4d3540d785dc600149d685040cddcd8ed8b4eac6a17b15ef97ae",
+    "scripts/Bottle/Storage.lua": "25695cd2a336ce9cec69715f7c4dfac14dbb4d58bf906f68068939f96482dd6f",
+    "scripts/Bottle/Tests.lua": "b8790a99b4d64e0e19f8a4dd7bfeca3c07135cb4552b7a6c7d054e0c4373896d",
+    "scripts/Bottle/TextMotion.lua": "001e2a62e29c55fd6e30d26a180f86419a3546fb409d37eca96a9cd4facfd2f8",
+    "scripts/Bottle/Theme.lua": "fe1b70f0c5ce5774d156e1b3f444a2d7855ea47b97751171a6543d175c289a84",
+    "scripts/Bottle/Validate.lua": "1c26c6915b827c6e5db1f513bc5e4943a13a27a60b409a33ecf36f407cfe9b42",
+    "scripts/Bottle/View.lua": "634eed1eda8bc4d47f1100c937882d1991fb0ce19c0369e848b5bc6af726b590",
+    "scripts/Machine/AmbientMotion.lua": "fe25da1010b50701731fc74efda7ff31404da9f83276a8451e9fff75e17cc092",
+    "scripts/Machine/Atmosphere.lua": "0a40a769eedf3634de3e95bf8c3f83852ed829cfc9285702e920f6f51081633d",
+    "scripts/Machine/BodySprite.lua": "f08cb16348628d5fb278db4eba41fa8e56aaac1ff63030b96a0b37aef7f0ba49",
+    "scripts/Machine/Cabinet.lua": "cc426479c8efc655703783aafdb2cd566255eb67ec0f67b55cc9d93c0c2be481",
+    "scripts/Machine/CinematicPost.lua": "c2cea318a7e2bd44d03d2767168ec2ada8754f256a45613ca7f51814b083f7d7",
+    "scripts/Machine/Clock.lua": "9f5d669a308b29ffda6ade832e1436d9f9228e578eacd32f895b7faaa536e72d",
+    "scripts/Machine/DeveloperOverlay.lua": "3fd022b004fc654e4040c1f11c0fd2e359f19426ee39dc7982547fcf1902b491",
+    "scripts/Machine/DustField.lua": "38b52cc91a543f01543585ada3d1640375bab77c23979580738fd4cd6f1e2ce9",
+    "scripts/Machine/EngravedLabels.lua": "2f7fb82cbeb4156e4c2aaeaa84238f324a8bb803b9cfe8a695584751fe2bad16",
+    "scripts/Machine/FlatReelState.lua": "7d3e8a75a68d26ad059ce05adb024844f25c5928a377d12d21d21ec6647c9d74",
+    "scripts/Machine/Keys.lua": "29a469c0e234e780445a446084d33b1aaa26fa89ff32e745c6e17a89982ddb51",
+    "scripts/Machine/LampBloomMask.lua": "316ae3e353a9470e4ea9cd702d22faa52313a378549622401e70f72b1f75d803",
+    "scripts/Machine/LayeredLayout.lua": "639825a93870580ebe898725359b9c59915566e595dc7631cc21e7cb2fa92ffd",
+    "scripts/Machine/LayeredSkin.lua": "024c681652e817158fa9ad9a236b78274d730dfd7d54a7d142b1af9286db027f",
+    "scripts/Machine/LayeredSprites.lua": "d65187158ed73319a69ba0d83d0ce6fd634f5a15d64235405108a31fc79301f9",
+    "scripts/Machine/Lighting.lua": "7188c42ae48313af32471e1a1d0711732b5573ecd1c194b7697c310bbaeb3510",
+    "scripts/Machine/LitSpriteScene.lua": "fb47951b24ae1c5f5dc933a15194ae6eaf840f6cc5565f3c07bf9de1de1f47fc",
+    "scripts/Machine/LowerReadout.lua": "62624b9e205e544a95fe1f16f6878697315c60176d2ecc4bd402d1e40299d3c5",
+    "scripts/Machine/MeshData.lua": "cb3f2b03d7ca974f2cd30e97b567500818c8aba3bc4eb72c6c8beae77ac1ad74",
+    "scripts/Machine/PageMotion.lua": "50ff302d02aa89e852cfcaf600443506cc17c22a06d6e4b2e7b14ae7e556e5b6",
+    "scripts/Machine/Palette.lua": "9e9598ebcf934c5e0fc8c03bbad1308aa6829273d016fbf93ff39ce938c226f9",
+    "scripts/Machine/PaperSway.lua": "e8cebad1b538777d463d20cb952d7dc4baf37d025abc110e4d0af1a3945e6f63",
+    "scripts/Machine/Parts.lua": "0c3db8ef2c4c896ad809db3fccd790abac82c9faeaa64fe98f661544a54af54d",
+    "scripts/Machine/ProgressLamps.lua": "5af91c22ec008c098a697d2e471cdea640c1793884c66b64d5fa514bdaf68abe",
+    "scripts/Machine/Projection.lua": "173d185682058199964016c4ed2539313f91267e9af4e028c632e25a9a66575c",
+    "scripts/Machine/RenderOrientation.lua": "09c1e09eef1a0517786dcf1d3646a539b0a72e454afd407c946affe17a924cba",
+    "scripts/Machine/SceneLayers.lua": "3ff04329b7a0d2f1286eb7d002e4fb524ee53967fcc22d8c86d5519eeda58d15",
+    "scripts/Machine/ScoreReels.lua": "9829f1c3c147e736aa556d75ac179dbe49a0571a3b8c041f90d68f93a8d35b11",
+    "scripts/Machine/Screen.lua": "0f5ea5235157281eb3da870e53787db234062818a58a878461a9e4f2402d7ace",
+    "scripts/Machine/ScreenAssembly.lua": "9d3873ddb0be5ff9568c252ef6680450da53b48403855912592cccf139c74ba2",
+    "scripts/Machine/ScreenMapping.lua": "6db67fd357a18a51ca21eec144821ecb47a4abd16597d1422fba244bc325331c",
+    "scripts/Machine/Skin.lua": "b1a8a352f44c19651cbe5db4ce1fe4738548a28ec2d1b95ea8e9688181946942",
+    "scripts/Machine/SpriteOrientation.lua": "fd1212ef5d67d828b0465fdbca2cd777edba0bdaa6e6f122b45f664e2123acc4",
+    "scripts/Machine/TargetProgress.lua": "4d99d258b0fcdcf7aa5fed6078bea9f1b53c0cc5c75549d3051c0932ec897c28",
+    "scripts/Machine/TimeMeter.lua": "de41e325902550ea3e73c0e42fffbda4419ddb7816a47395be9a5cdc5af3fdb5",
+    "scripts/main.lua": "e660b9a746979b01c8eae98396ab6a3623de4a4f8dc613f2ec4e83f8bdc0b678"
+  },
+  "resources_policy": {
+    "$schema": "../schemas/resources.schema.json",
+    "preload_groups": [
+      "audio"
+    ],
+    "groups": {
+      "default": [
+        "**"
+      ],
+      "audio": [
+        "audio/**"
+      ]
+    }
+  },
+  "assets": {
+    "file_count_excluding_meta": 121,
+    "source_bytes": 39940062,
+    "by_extension": {
+      ".wav": {
+        "count": 21,
+        "bytes": 29829948
+      },
+      ".ogg": {
+        "count": 2,
+        "bytes": 1066702
+      },
+      ".mp3": {
+        "count": 4,
+        "bytes": 3594993
+      },
+      ".ttf": {
+        "count": 2,
+        "bytes": 2642832
+      },
+      ".txt": {
+        "count": 1,
+        "bytes": 4422
+      },
+      ".png": {
+        "count": 75,
+        "bytes": 2038309
+      },
+      ".glb": {
+        "count": 1,
+        "bytes": 742444
+      },
+      ".shader": {
+        "count": 15,
+        "bytes": 20412
+      }
+    },
+    "largest": [
+      {
+        "path": "assets/audio/SynthStuff.wav",
+        "bytes": 28662700,
+        "seconds": 162.48557823129252,
+        "channels": 2,
+        "sample_rate": 44100,
+        "sample_width_bytes": 2
+      },
+      {
+        "path": "assets/audio/onehorsetown.mp3",
+        "bytes": 3475818
+      },
+      {
+        "path": "assets/Fonts/SmileySans-Oblique.ttf",
+        "bytes": 2629764
+      },
+      {
+        "path": "assets/image/machine-foreground-leaf.png",
+        "bytes": 952621,
+        "width": 1024,
+        "height": 1536,
+        "rgba8_base_bytes": 6291456
+      },
+      {
+        "path": "assets/model/machine/machine.glb",
+        "bytes": 742444
+      },
+      {
+        "path": "assets/audio/choice-clockwork.ogg",
+        "bytes": 648666
+      },
+      {
+        "path": "assets/model/machine/model-preview.png",
+        "bytes": 422150,
+        "width": 420,
+        "height": 840,
+        "rgba8_base_bytes": 1411200
+      },
+      {
+        "path": "assets/audio/shake-mechanism.ogg",
+        "bytes": 418036
+      },
+      {
+        "path": "assets/image/machine-light-cookie-wide.png",
+        "bytes": 169923,
+        "width": 1024,
+        "height": 1024,
+        "rgba8_base_bytes": 4194304
+      },
+      {
+        "path": "assets/image/slots-light-cookie-01-alpha.png",
+        "bytes": 169923,
+        "width": 1024,
+        "height": 1024,
+        "rgba8_base_bytes": 4194304
+      },
+      {
+        "path": "assets/audio/sfx/sd_ratchet_slow.wav",
+        "bytes": 156006,
+        "seconds": 1.767891156462585,
+        "channels": 1,
+        "sample_rate": 44100,
+        "sample_width_bytes": 2
+      },
+      {
+        "path": "assets/model/machine/metal-patina.png",
+        "bytes": 127391,
+        "width": 256,
+        "height": 256,
+        "rgba8_base_bytes": 262144
+      },
+      {
+        "path": "assets/audio/button-bolt.wav",
+        "bytes": 106178,
+        "seconds": 0.5526041666666667,
+        "channels": 2,
+        "sample_rate": 48000,
+        "sample_width_bytes": 2
+      },
+      {
+        "path": "assets/audio/sfx/sd_reel_loop.wav",
+        "bytes": 105678,
+        "seconds": 1.1,
+        "channels": 1,
+        "sample_rate": 48000,
+        "sample_width_bytes": 2
+      }
+    ],
+    "png_rgba8_base_bytes_if_all_resident": 22151552
+  },
+  "sprite_rectangles": {
+    "die_d4": {
+      "rectangles": 69,
+      "color_groups": 3,
+      "width": 16,
+      "height": 16
+    },
+    "miner": {
+      "rectangles": 92,
+      "color_groups": 8,
+      "width": 16,
+      "height": 16
+    },
+    "trash_can": {
+      "rectangles": 60,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "bomb": {
+      "rectangles": 59,
+      "color_groups": 8,
+      "width": 16,
+      "height": 16
+    },
+    "cherry": {
+      "rectangles": 65,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "apple": {
+      "rectangles": 59,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "ghost": {
+      "rectangles": 84,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "laurel": {
+      "rectangles": 67,
+      "color_groups": 2,
+      "width": 16,
+      "height": 16
+    },
+    "tomato": {
+      "rectangles": 55,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "cloud": {
+      "rectangles": 46,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "egg": {
+      "rectangles": 48,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "ore_merchant": {
+      "rectangles": 75,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "copper_ore": {
+      "rectangles": 62,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "scraper": {
+      "rectangles": 58,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "cherry_half": {
+      "rectangles": 39,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "slipper_left": {
+      "rectangles": 43,
+      "color_groups": 7,
+      "width": 16,
+      "height": 16
+    },
+    "coin_two": {
+      "rectangles": 105,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "rabbit": {
+      "rectangles": 91,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "soldier": {
+      "rectangles": 63,
+      "color_groups": 9,
+      "width": 16,
+      "height": 16
+    },
+    "apple_half": {
+      "rectangles": 59,
+      "color_groups": 7,
+      "width": 16,
+      "height": 16
+    },
+    "rotten_banana": {
+      "rectangles": 55,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "orange": {
+      "rectangles": 67,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "coin_64": {
+      "rectangles": 131,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "basketball": {
+      "rectangles": 116,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "glutton": {
+      "rectangles": 62,
+      "color_groups": 3,
+      "width": 16,
+      "height": 16
+    },
+    "spark": {
+      "rectangles": 69,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "fruit_merchant": {
+      "rectangles": 101,
+      "color_groups": 11,
+      "width": 16,
+      "height": 16
+    },
+    "counter": {
+      "rectangles": 85,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "diner": {
+      "rectangles": 73,
+      "color_groups": 8,
+      "width": 16,
+      "height": 16
+    },
+    "fruit_tree": {
+      "rectangles": 79,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "stone": {
+      "rectangles": 57,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "thief": {
+      "rectangles": 91,
+      "color_groups": 7,
+      "width": 16,
+      "height": 16
+    },
+    "chef": {
+      "rectangles": 68,
+      "color_groups": 7,
+      "width": 16,
+      "height": 16
+    },
+    "necromancer": {
+      "rectangles": 92,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "coin_2048": {
+      "rectangles": 159,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "bacon": {
+      "rectangles": 34,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "credit_card": {
+      "rectangles": 39,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "diamond": {
+      "rectangles": 64,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "ninja": {
+      "rectangles": 71,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "soul_stone": {
+      "rectangles": 62,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "doctor": {
+      "rectangles": 67,
+      "color_groups": 9,
+      "width": 16,
+      "height": 16
+    },
+    "seed": {
+      "rectangles": 36,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "coin_1024": {
+      "rectangles": 155,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "banana_peel": {
+      "rectangles": 39,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "slipper_right": {
+      "rectangles": 43,
+      "color_groups": 7,
+      "width": 16,
+      "height": 16
+    },
+    "coin_8": {
+      "rectangles": 119,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "coin_512": {
+      "rectangles": 135,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "coin_half": {
+      "rectangles": 103,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "coin_machine": {
+      "rectangles": 91,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "coin_one": {
+      "rectangles": 104,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "orange_half": {
+      "rectangles": 72,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "banana_half": {
+      "rectangles": 35,
+      "color_groups": 3,
+      "width": 16,
+      "height": 16
+    },
+    "coin_32": {
+      "rectangles": 125,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "coin_16": {
+      "rectangles": 127,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "coin_4": {
+      "rectangles": 119,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "soul_jar": {
+      "rectangles": 90,
+      "color_groups": 7,
+      "width": 16,
+      "height": 16
+    },
+    "coffin": {
+      "rectangles": 83,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "silver_ore": {
+      "rectangles": 63,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "tomato_egg": {
+      "rectangles": 59,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "quarry": {
+      "rectangles": 107,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "juice": {
+      "rectangles": 57,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "pebble": {
+      "rectangles": 43,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "coin_128": {
+      "rectangles": 139,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "fruit_farmer": {
+      "rectangles": 76,
+      "color_groups": 8,
+      "width": 16,
+      "height": 16
+    },
+    "droplet": {
+      "rectangles": 66,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "student": {
+      "rectangles": 67,
+      "color_groups": 8,
+      "width": 16,
+      "height": 16
+    },
+    "teacher": {
+      "rectangles": 69,
+      "color_groups": 9,
+      "width": 16,
+      "height": 16
+    },
+    "returner": {
+      "rectangles": 82,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "fruit_ninja": {
+      "rectangles": 71,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "farmer": {
+      "rectangles": 80,
+      "color_groups": 10,
+      "width": 16,
+      "height": 16
+    },
+    "fitness_coach": {
+      "rectangles": 76,
+      "color_groups": 10,
+      "width": 16,
+      "height": 16
+    },
+    "ball": {
+      "rectangles": 71,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "gambler": {
+      "rectangles": 80,
+      "color_groups": 9,
+      "width": 16,
+      "height": 16
+    },
+    "die_d6": {
+      "rectangles": 73,
+      "color_groups": 3,
+      "width": 16,
+      "height": 16
+    },
+    "tombstone": {
+      "rectangles": 85,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "star": {
+      "rectangles": 65,
+      "color_groups": 3,
+      "width": 16,
+      "height": 16
+    },
+    "claw": {
+      "rectangles": 101,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "coin_1": {
+      "rectangles": 115,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "gambling_god": {
+      "rectangles": 81,
+      "color_groups": 9,
+      "width": 16,
+      "height": 16
+    },
+    "coin_quarter": {
+      "rectangles": 102,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "iron_ore": {
+      "rectangles": 59,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "balloon": {
+      "rectangles": 48,
+      "color_groups": 4,
+      "width": 16,
+      "height": 16
+    },
+    "enoki": {
+      "rectangles": 59,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "police": {
+      "rectangles": 63,
+      "color_groups": 8,
+      "width": 16,
+      "height": 16
+    },
+    "boulder": {
+      "rectangles": 62,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "coin_2": {
+      "rectangles": 115,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "lucky_coin": {
+      "rectangles": 91,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "gold_ore": {
+      "rectangles": 65,
+      "color_groups": 7,
+      "width": 16,
+      "height": 16
+    },
+    "killer": {
+      "rectangles": 68,
+      "color_groups": 7,
+      "width": 16,
+      "height": 16
+    },
+    "knife": {
+      "rectangles": 47,
+      "color_groups": 3,
+      "width": 16,
+      "height": 16
+    },
+    "monkey": {
+      "rectangles": 88,
+      "color_groups": 6,
+      "width": 16,
+      "height": 16
+    },
+    "banana": {
+      "rectangles": 61,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    },
+    "coin_256": {
+      "rectangles": 137,
+      "color_groups": 5,
+      "width": 24,
+      "height": 24
+    },
+    "flint": {
+      "rectangles": 58,
+      "color_groups": 5,
+      "width": 16,
+      "height": 16
+    }
+  },
+  "start_screen": {
+    "fall_count": 22,
+    "candidate_ids": [
+      "apple",
+      "banana",
+      "orange",
+      "cherry",
+      "ball",
+      "seed",
+      "tomato",
+      "egg",
+      "balloon",
+      "knife",
+      "credit_card",
+      "star",
+      "coin_one",
+      "coin_two",
+      "die_d6",
+      "droplet"
+    ],
+    "candidate_rectangle_min": 36,
+    "candidate_rectangle_max": 105,
+    "uniform_candidate_mean": 63.0625,
+    "expected_fill_submissions_for_22_if_all_visible": 1387.375,
+    "scope": "logical nvgFill submissions from DrawSprite offscreen branch; not GPU draw-call measurements"
+  },
+  "post_shader_source_expansion": {
+    "composed_texture_calls": 4,
+    "generic_bloom_composed_calls": 27,
+    "nominal_calls_with_base_markers_noise": 115,
+    "lamp_bright_calls": 162,
+    "lamp_texture_calls_additional": 325,
+    "scope": "source-level expansion before compiler optimization, only in applicable branches"
+  },
+  "color_target_memory_examples": [
+    {
+      "physical_width": 402,
+      "physical_height": 874,
+      "five_fullscreen_rgba8_bytes": 7026960,
+      "two_fixed_rgba8_bytes": 11325056,
+      "color_targets_mib": 17.5
+    },
+    {
+      "physical_width": 804,
+      "physical_height": 1748,
+      "five_fullscreen_rgba8_bytes": 28107840,
+      "two_fixed_rgba8_bytes": 11325056,
+      "color_targets_mib": 37.61
+    },
+    {
+      "physical_width": 1080,
+      "physical_height": 1920,
+      "five_fullscreen_rgba8_bytes": 41472000,
+      "two_fixed_rgba8_bytes": 11325056,
+      "color_targets_mib": 50.35
+    },
+    {
+      "physical_width": 1206,
+      "physical_height": 2622,
+      "five_fullscreen_rgba8_bytes": 63242640,
+      "two_fixed_rgba8_bytes": 11325056,
+      "color_targets_mib": 71.11
+    },
+    {
+      "physical_width": 1920,
+      "physical_height": 1080,
+      "five_fullscreen_rgba8_bytes": 41472000,
+      "two_fixed_rgba8_bytes": 11325056,
+      "color_targets_mib": 50.35
+    }
+  ],
+  "scope": "Static code and local source inventory. Source bytes are not network transfer or resident memory measurements."
+}

@@ -4,7 +4,7 @@ local TextMotion = require("Bottle.TextMotion")
 ---@type any
 local Music = {current = "", tracks = {}, clicks = {}, pops = {}, impacts = {}, nextClick = 1,
     nextPop = 1, nextImpact = 1, clickCount = 0, popCount = 0, popPitchStep = 0,
-    lastImpactTime = -1, time = 0, reelSpinning = false, reelLoopSource = nil,
+    pendingImpacts = {}, reelSpinning = false, reelLoopSource = nil,
     reelStartSource = nil, reelStopSource = nil}
 ---@type Scene?
 local audioScene = nil
@@ -23,13 +23,16 @@ local reelStopSound = nil
 local FADE_SECONDS = 1.2
 local MUSIC_GAIN = .36
 local CLICK_GAIN = .55
+-- 三选一阶段的按键在原混音上衰减3dB；这是局部平衡，不是整游戏LUFS校准。
+local DRAFT_CLICK_GAIN = CLICK_GAIN * 10 ^ (-3 / 20)
+local clickGain = CLICK_GAIN
 local POP_GAIN = .7
--- 碰撞音：按碰撞强度过滤 + 全局节流 + 固定声源池 + 音量随强度。
+-- 碰撞音：真实接触触发，同帧择强 + 固定声源池，不用全局定时门限制造节拍。
 local IMPACT_GAIN = .5
 local IMPACT_MIN_SPEED = .7   -- 米/秒，低于此相对速度的轻碰静音
 local IMPACT_MAX_SPEED = 6.0  -- 音量归一上限，超过按满音量
-local IMPACT_THROTTLE = .05   -- 秒，两次碰撞音之间的最短间隔
 local IMPACT_POOL = 4         -- 固定声源数，超出抢占
+local IMPACTS_PER_FRAME = 2   -- 只裁掉同帧弱碰撞；不限制相邻帧的连撞，不排队补播
 -- 转轮音：循环棘轮较低，开始/停止稍突出。
 local REEL_LOOP_GAIN = .38
 local REEL_START_GAIN = .7
@@ -76,6 +79,20 @@ local function Load(path, looped)
     sound:SetLooped(looped)
     print(string.format("[音频] 已加载 %s，%.2f秒", path, sound:GetLength()))
     return sound
+end
+
+-- 本帧物理步全部结束后立即播放；声源满时轮转抢占，不等待音频结束再放行。
+local function FlushImpacts()
+    local pending = Music.pendingImpacts
+    Music.pendingImpacts = {}
+    if not impactSound then return end
+    for _, impact in ipairs(pending) do
+        local source = Music.impacts[Music.nextImpact] --[[@as SoundSource?]]
+        if source then
+            source:Play(impactSound, 0, impact.gain)
+            Music.nextImpact = Music.nextImpact % #Music.impacts + 1
+        end
+    end
 end
 
 function Music.Init()
@@ -137,6 +154,8 @@ function Music.Init()
 end
 
 function Music.SetPhase(phase)
+    -- 先更新按键混音：prepare/draft共用calm BGM，不能被音乐相同的早退跳过。
+    clickGain = phase == "draft" and DRAFT_CLICK_GAIN or CLICK_GAIN
     if not audioScene then return end
     local wanted = phase == "running" and "running" or "calm"
     if Music.current == wanted then return end
@@ -154,7 +173,7 @@ end
 
 function Music.Update(dt)
     if not audioScene then return end
-    Music.time = Music.time + math.max(0, dt)
+    FlushImpacts()
     for _, track in pairs(Music.tracks) do
         track.elapsed = math.min(FADE_SECONDS, track.elapsed + math.max(0, dt))
         local progress = track.elapsed / FADE_SECONDS
@@ -170,7 +189,7 @@ function Music.Click()
     if not audioScene or not clickSound then return end
     local source = Music.clicks[Music.nextClick] --[[@as SoundSource?]]
     if not source then return end
-    source:Play(clickSound, 0, CLICK_GAIN)
+    source:Play(clickSound, 0, clickGain)
     Music.nextClick = Music.nextClick % #Music.clicks + 1
     Music.clickCount = Music.clickCount + 1
 end
@@ -194,24 +213,37 @@ function Music.ResetPopPitch()
     Music.popPitchStep = 0
 end
 
--- 瓶内碰撞音：由 Physics 每物理步上报一次 Begin 接触的相对速度。
--- 低于阈值的轻碰静音；全局节流吞掉密集接触；音量随速度归一，强碰更响。
--- 固定声源池轮转，超出抢占最早的声源，避免几十件物体同时响成噪音。
+-- 瓶内碰撞音：只收集本帧真实新接触，Update 在同帧内播放最强的两次。
+-- 接触对由 Physics 去重；这里合并低帧率下同一对的多个物理步上报。
+-- 不用时间冷却、不随机延迟，也不把舍弃的声音排到后续帧。
 ---@param speed number 相对速度（米/秒）
 ---@param pair boolean 是否物品互撞；false 为撞瓶壁
-function Music.Impact(speed, pair)
+---@param key string? 物品对／物品与具体瓶壁的接触标识
+function Music.Impact(speed, pair, key)
     if not audioScene or not impactSound then return end
-    if speed ~= speed or speed < IMPACT_MIN_SPEED then return end
-    if Music.time - Music.lastImpactTime < IMPACT_THROTTLE then return end
-    Music.lastImpactTime = Music.time
-    local source = Music.impacts[Music.nextImpact] --[[@as SoundSource?]]
-    if not source then return end
+    if speed ~= speed or speed < IMPACT_MIN_SPEED or speed == math.huge then return end
     local t = math.min(1, speed / IMPACT_MAX_SPEED)
     local strength = 0.35 + 0.65 * t
     if not pair then strength = strength * 1.25 end -- 撞瓶壁比物品互撞稍响，强化摇晃反馈
     local gain = IMPACT_GAIN * math.min(1.25, strength)
-    source:Play(impactSound, 0, gain)
-    Music.nextImpact = Music.nextImpact % #Music.impacts + 1
+    local pending = Music.pendingImpacts
+    if key then
+        for i, impact in ipairs(pending) do
+            if impact.key == key then
+                if impact.gain >= gain then return end
+                table.remove(pending, i)
+                break
+            end
+        end
+    end
+    local candidate = {gain = gain, key = key}
+    local index = #pending + 1
+    for i, impact in ipairs(pending) do
+        if gain > impact.gain then index = i; break end
+    end
+    if index > IMPACTS_PER_FRAME then return end
+    table.insert(pending, index, candidate)
+    if #pending > IMPACTS_PER_FRAME then table.remove(pending) end
 end
 
 -- 转轮动画状态：开始旋转时播放机械启动音并起循环棘轮，停稳时停止循环并播放收尾。
@@ -257,6 +289,7 @@ function Music.Button(props)
 end
 
 function Music.Shutdown()
+    clickGain = CLICK_GAIN
     -- Lua仍持有组件时，仅Dispose父Scene不会立即注销声源；逐个显式释放。
     for _, track in pairs(Music.tracks) do track.source:Stop(); track.source:Dispose() end
     for _, source in ipairs(Music.clicks) do source:Stop(); source:Dispose() end
@@ -268,7 +301,7 @@ function Music.Shutdown()
     if audioScene then audioScene:Dispose(); audioScene = nil end
     Music.current, Music.tracks, Music.clicks, Music.pops, Music.impacts = "", {}, {}, {}, {}
     Music.nextClick, Music.nextPop, Music.clickCount, Music.popCount = 1, 1, 0, 0
-    Music.nextImpact, Music.lastImpactTime = 1, -1
+    Music.nextImpact, Music.pendingImpacts = 1, {}
     Music.reelSpinning = false
     Music.reelLoopSource, Music.reelStartSource, Music.reelStopSource = nil, nil, nil
     Music.popPitchStep = 0

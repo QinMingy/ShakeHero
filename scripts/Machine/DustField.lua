@@ -29,6 +29,10 @@ function Dust.New(scene,cookieTexture)
     assert(material:SetSurfaceShader("Shaders/BLGL/LayeredDust.shader"))
     assert(material:SetSurfaceTexture("cookie_map",cookieTexture))
     set.material=material;self.set=set;self.material=material
+    self.normal=Vector3(0,0,-1)
+    self.uvs={Vector2(0,0),Vector2(1,0),Vector2(0,1),Vector2(1,0),Vector2(1,1),Vector2(0,1)}
+    self.quad={}
+    for i=1,6 do self.quad[i]=Vector3.ZERO end
     for i=1,500 do self:Spawn(i,(i-1)/50) end
     self:Tick(0)
     return self
@@ -73,11 +77,13 @@ function Dust:Tick(dt,cookieTime)
         end
         if math.abs(p.x)<2.3 and math.abs(p.y)<4.7 then
             local color=Color(p.color[1],p.color[2],p.color[3],math.max(0,alpha))
-            for _,uv in ipairs({{0,0},{1,0},{0,1},{1,0},{1,1},{0,1}}) do
-                self.set:DefineVertex(Vector3(p.x+(uv[1]-.5)*p.size,p.y+(uv[2]-.5)*p.size,p.z))
-                self.set:DefineNormal(Vector3(0,0,-1))
+            for j,uv in ipairs(self.uvs) do
+                local vertex=self.quad[j]
+                vertex.x,vertex.y,vertex.z=p.x+(uv.x-.5)*p.size,p.y+(uv.y-.5)*p.size,p.z
+                self.set:DefineVertex(vertex)
+                self.set:DefineNormal(self.normal)
                 self.set:DefineColor(color)
-                self.set:DefineTexCoord(Vector2(uv[1],uv[2]))
+                self.set:DefineTexCoord(uv)
             end
         end
     end

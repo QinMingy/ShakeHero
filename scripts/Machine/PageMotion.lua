@@ -47,6 +47,7 @@ function Motion:Clear(section)
             e.parent=nil
             e.resumeInteractive=e.interactive
             e.interactive=false
+            e.settled=false
             if e.widget.state then e.widget.state.pressed=false end
         end
     end
@@ -123,12 +124,24 @@ function Motion:Apply(e)
     local s=self.view.machineSkin.scale
     local r,p=e.rect,e.pose
     e.widget.pageScale=s
-    local top=e.route=="screen" and 670 or 650
-    e.clip:SetStyle({left=-r[1]*s,top=(top-r[2])*s,width=L.width*s,height=(L.height-top)*s})
-    e.carrier:SetStyle({left=r[1]*s,top=(r[2]-top)*s,width=r[3]*s,height=r[4]*s,translateY=p.y*s})
-    e.tilt:SetStyle({rotate=math.deg(p.angle),scale=p.scale})
-    if e.parked then e.widget:SetStyle(L.Style(r,s)) end
-    e.widget:SetStyle({pointerEvents=e.interactive and "auto" or "none"})
+    -- The clipping window is static while the spring moves. Avoid dirtying Yoga
+    -- for every entry on every frame, especially after all springs have settled.
+    local a=e.applied or {};e.applied=a
+    if a.s~=s or a.x~=r[1] or a.y~=r[2] or a.w~=r[3] or a.h~=r[4] or a.route~=e.route then
+        local top=e.route=="screen" and 670 or 650
+        e.clip:SetStyle({left=-r[1]*s,top=(top-r[2])*s,width=L.width*s,height=(L.height-top)*s})
+        e.carrier:SetStyle({left=r[1]*s,top=(r[2]-top)*s,width=r[3]*s,height=r[4]*s})
+        if e.parked then e.widget:SetStyle(L.Style(r,s)) end
+        a.s,a.x,a.y,a.w,a.h,a.route=s,r[1],r[2],r[3],r[4],e.route
+    end
+    local y=p.y*s
+    if e.carrier.props.translateY~=y then e.carrier:SetStyle({translateY=y}) end
+    local angle=math.deg(p.angle)
+    if e.tilt.props.rotate~=angle or e.tilt.props.scale~=p.scale then
+        e.tilt:SetStyle({rotate=angle,scale=p.scale})
+    end
+    local pointer=e.interactive and "auto" or "none"
+    if e.widget.props.pointerEvents~=pointer then e.widget:SetStyle({pointerEvents=pointer}) end
 end
 
 function Motion:Targets(drafting, deckOpen)
@@ -142,6 +155,7 @@ function Motion:Targets(drafting, deckOpen)
             or e.section=="deckpage" and deckOpen)
         if wanted~=e.wanted then
             e.wanted=wanted
+            e.settled=false
             self.serial=self.serial+1
             e.wait=wanted and e.delay or e.delay*.55
             -- 快速反向沿用位置和速度；只补一次轻角冲量，不跳回起点。
@@ -172,7 +186,7 @@ function Motion:Tick(dt)
         e.wait=e.wait-waiting;step=step-waiting
         local p=e.pose
         local target=e.wanted and 0 or hiddenY(e)
-        if step>0 then
+        if step>0 and (not e.settled or p.y~=target) then
             p.y,p.velocity=spring(p.y,p.velocity,target,step)
             p.angle,p.angularVelocity=spring(p.angle,p.angularVelocity,0,step)
             p.scale,p.scaleVelocity=spring(p.scale,p.scaleVelocity,e.wanted and 1 or .94,step)
@@ -183,6 +197,7 @@ function Motion:Tick(dt)
         if settled and e.wait==0 then
             p.y=target;p.velocity=0;p.angle=0;p.angularVelocity=0
             p.scale=e.wanted and 1 or .94;p.scaleVelocity=0
+            e.settled=true
             if not e.wanted then
                 if e.retired then remove[#remove+1]=key else e.widget:Hide() end
             end
@@ -202,6 +217,7 @@ function Motion:Reset()
         if e.section=="deck" or e.section=="deckpage" then
             e.pose={y=hiddenY(e),velocity=0,angle=0,angularVelocity=0,scale=.94,scaleVelocity=0}
             e.wanted=false;e.wait=0;e.interactive=false
+            e.settled=false
             e.presses={};e.inputVersion=e.inputVersion+1
             keep[key]=e
         else e.widget:Destroy() end

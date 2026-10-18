@@ -95,6 +95,8 @@ function Post:Dispose()
     self.disposed=true
     if self.layers then self.layers:Dispose() end
     UnsubscribeFromEvent(self.vg,'NanoVGRender')
+    Art.ReleaseContext(self.vg)
+    Art.ReleaseContext(self.uiContext)
     Art.SetOffscreenContext(self.uiContext,false)
     nvgSetRenderTarget(self.uiContext,nil)
     if self.image then nvgDeleteVideo(self.vg,self.image) end

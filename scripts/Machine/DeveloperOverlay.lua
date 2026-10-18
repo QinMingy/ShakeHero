@@ -14,8 +14,7 @@ function Overlay.Attach(view,gm)
     local exempt={[gm]=true,[m.presentationButton]=true,[m.presentationMenu]=true,
         [view.physicsButton]=true,[view.physicsMenu]=true}
     local function isExempt(child)
-        return exempt[child] or child==m.startScreen
-            or (child==view.modal and view.modalDeveloperUi==true)
+        return exempt[child] or (child==view.modal and view.modalDeveloperUi==true)
     end
     view.container.CustomRenderChildren=function(container,vg,render)
         for _,child in ipairs(container:GetRenderChildren()) do

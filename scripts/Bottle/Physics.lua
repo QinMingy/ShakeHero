@@ -62,6 +62,17 @@ local SoftBacon = require "Bottle.SoftBacon"
 ---@field b number
 ---@field count number
 
+---@class BottleImpactContact
+---@field a number
+---@field b number?
+---@field count number
+---@field endedAt number?
+
+---@class BottleImpact
+---@field speed number
+---@field pair boolean
+---@field key string
+
 ---@class BottlePhysicsContacts : BottleContacts
 ---@field pairs number[][] 每项为 {uidA, uidB}，且 uidA < uidB。
 ---@field bottom table<number, boolean>
@@ -83,6 +94,8 @@ local SoftBacon = require "Bottle.SoftBacon"
 ---@field _bottom table<number, number>
 ---@field _top table<number, number>
 ---@field _wall table<number, number>
+---@field _impactContacts table<string, BottleImpactContact> 独立的声音接触状态，不参与玩法接触判定
+---@field _impacts BottleImpact[]
 ---@field _retired BottleBody[]
 ---@field _mergeSpawns table<number, BottlePhysicsSpawn>
 ---@field _nearSpawns table<number, BottlePhysicsSpawn>
@@ -120,6 +133,7 @@ local RNG_DOMAIN = RNG_MODULUS - 1
 local WALL_CATEGORY = 1
 local ITEM_CATEGORY = 2
 local ITEM_MASK = WALL_CATEGORY | ITEM_CATEGORY
+local IMPACT_SEPARATION = .025 -- 同一对必须真正分开至少25ms才重新发声；不限制其他接触
 
 ---@param name string
 ---@param fallback number
@@ -334,6 +348,7 @@ function Physics:_Init()
     self._bottom = {}
     self._top = {}
     self._wall = {}
+    self._impactContacts = {}
     self._impacts = {}
     self._retired = {}
     self._mergeSpawns = {}
@@ -395,6 +410,9 @@ function Physics:_ForgetContacts(uid)
     self._wall[uid] = nil
     for key, pair in pairs(self._pairs) do
         if pair.a == uid or pair.b == uid then self._pairs[key] = nil end
+    end
+    for key, contact in pairs(self._impactContacts) do
+        if contact.a == uid or contact.b == uid then self._impactContacts[key] = nil end
     end
 end
 
@@ -689,6 +707,8 @@ function Physics:Sync(items, reset, seed)
         self._bottom = {}
         self._top = {}
         self._wall = {}
+        self._impactContacts = {}
+        self._impacts = {}
         self._mergeSpawns = {}
         self._nearSpawns = {}
         self._eventRemoved = {}
@@ -784,6 +804,32 @@ local function changeContactCount(counts, uid, delta)
     counts[uid] = count > 0 and count or nil
 end
 
+-- 复合fixture/软体多段属于同一物品；持续接触只响一次，极短的分离抖动仍视作同次接触。
+-- 只过滤声音，原有 _pairs/_wall 等玩法计数照常逐fixture维护。
+---@param key string
+---@param a number
+---@param b number?
+---@param begin boolean
+---@return boolean
+function Physics:_ImpactContact(key, a, b, begin)
+    local contact = self._impactContacts[key]
+    if begin then
+        if not contact then
+            self._impactContacts[key] = {a = a, b = b, count = 1}
+            return true
+        end
+        local fresh = contact.count == 0
+            and (not contact.endedAt or self.clock - contact.endedAt >= IMPACT_SEPARATION)
+        contact.count = contact.count + 1
+        return fresh
+    end
+    if contact and contact.count > 0 then
+        contact.count = contact.count - 1
+        if contact.count == 0 then contact.endedAt = self.clock end
+    end
+    return false
+end
+
 ---由主程序转发全局 PhysicsBeginContact2D / PhysicsEndContact2D 事件。
 ---回调只修改 fixture 接触计数，不生成、不更新场景、不删除任何物体。
 ---@param eventData PhysicsBeginContact2DEventData|PhysicsEndContact2DEventData
@@ -813,7 +859,10 @@ function Physics:Contact(eventData, begin)
         else
             self._pairs[key] = { a = a, b = b, count = count }
         end
-        if begin then self:_EmitImpact(recordA, recordB) end
+        local impactKey = "pair:" .. key
+        if self:_ImpactContact(impactKey, a, b, begin) then
+            self:_EmitImpact(recordA, recordB, impactKey)
+        end
     else
         local uid = uidA or uidB
         local wallNode = uidA and nodeB or nodeA
@@ -827,7 +876,11 @@ function Physics:Contact(eventData, begin)
         changeContactCount(self._wall, uid, delta)
         if wallNode.name == "floor" then changeContactCount(self._bottom, uid, delta) end
         if wallNode.name == "top" then changeContactCount(self._top, uid, delta) end
-        if begin then self:_EmitImpact(uidA and recordA or recordB) end
+        -- 各段瓶壁分别计数：沿侧壁下滑再撞瓶底仍然能响，不被侧壁接触吞掉。
+        local impactKey = "wall:" .. tostring(uid) .. ":" .. wallNode.name
+        if self:_ImpactContact(impactKey, uid, nil, begin) then
+            self:_EmitImpact(uidA and recordA or recordB, nil, impactKey)
+        end
     end
 end
 
@@ -835,7 +888,8 @@ end
 -- 不在此做阈值／节流／音量等表现决策；速度单位米/秒。
 ---@param recordA BottleBody?
 ---@param recordB BottleBody?
-function Physics:_EmitImpact(recordA, recordB)
+---@param key string
+function Physics:_EmitImpact(recordA, recordB, key)
     -- sensor 穿透是玩法接触，不是实体撞击；任一方为幽灵都不得发碰撞音。
     if (recordA and recordA.kind == "ghost") or (recordB and recordB.kind == "ghost") then return end
     local va = recordA and recordA.body and recordA.body.linearVelocity or nil
@@ -849,11 +903,11 @@ function Physics:_EmitImpact(recordA, recordB)
         speed = math.sqrt(va.x * va.x + va.y * va.y)
     end
     if not speed or speed ~= speed then return end
-    self._impacts[#self._impacts + 1] = { speed = speed, pair = vb ~= nil }
+    self._impacts[#self._impacts + 1] = { speed = speed, pair = vb ~= nil, key = key }
 end
 
 -- 取出并清空本步累积的碰撞事件；由主循环每物理步调用一次。
----@return {speed:number,pair:boolean}[]
+---@return BottleImpact[]
 function Physics:TakeImpacts()
     local impacts = self._impacts
     self._impacts = {}
@@ -1091,6 +1145,7 @@ function Physics:_ClearBodies()
     self._bottom = {}
     self._top = {}
     self._wall = {}
+    self._impactContacts = {}
     self._impacts = {}
     self._mergeSpawns = {}
     self._nearSpawns = {}
