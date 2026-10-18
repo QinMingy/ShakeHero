@@ -135,10 +135,10 @@ local function Test(name, run)
     cases[#cases + 1] = { name = name, run = run }
 end
 
-Test("98件全实装、26件屏蔽与硬币配方", function()
+Test("98件全实装、27件屏蔽与硬币配方", function()
     assert(#Items.list == 98)
     local blocked = {
-        banana_peel = true, apple_half = true, banana_half = true,
+        rotten_banana = true, banana_peel = true, apple_half = true, banana_half = true,
         orange_half = true, cherry_half = true, fruit_ninja = true, tomato_egg = true,
         coin_4 = true, coin_8 = true, coin_16 = true, coin_32 = true, coin_64 = true,
         coin_128 = true, coin_256 = true, coin_512 = true, coin_1024 = true, coin_2048 = true,
@@ -151,7 +151,7 @@ Test("98件全实装、26件屏蔽与硬币配方", function()
         assert(def.pool == (not blocked[def.id]), "卡池与源表及追加果汁约定不一致：" .. def.id)
         if def.pool then normalCount = normalCount + 1 else blockedCount = blockedCount + 1 end
     end
-    assert(blockedCount == 26 and normalCount == 72, "源表98件中26件屏蔽、72件入池")
+    assert(blockedCount == 27 and normalCount == 71, "源表98件中27件屏蔽、71件入池")
     for _, value in ipairs({ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 }) do
         local id = "coin_" .. value
         assert(Items.Recipe(id, id) == "coin_" .. (value * 2), "硬币配方缺失：" .. id)

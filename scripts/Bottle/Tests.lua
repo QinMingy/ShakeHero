@@ -178,12 +178,12 @@ Test("98件物品表与数据一致性", function()
         "apple_half", "banana_half", "orange_half", "fruit_ninja", "cherry_half",
         "tomato_egg", "coin_4", "coin_8", "coin_16", "coin_32", "coin_64", "coin_128",
         "coin_256", "coin_512", "coin_1024", "coin_2048",
-        "banana_peel", "juice", "poop", "golden_poop", "diamond_poop", "rainbow_poop",
+        "rotten_banana", "banana_peel", "juice", "poop", "golden_poop", "diamond_poop", "rainbow_poop",
         "discus_athlete", "discus", "wool", "sweater",
     }) do
         assert(Items.byId[id].pool == false, "屏蔽物品不应进卡池：" .. id)
     end
-    assert(Items.byId.laurel.pool and Items.byId.rotten_banana.pool, "最新源表桂冠和腐烂香蕉应进入卡池")
+    assert(Items.byId.laurel.pool, "桂冠仍进入卡池")
     assert(Items.byId.apple.base == 2 and Items.byId.banana.base == 6
         and Items.byId.orange.base == 2 and Items.byId.ball.base == 1)
     assert(Items.byId.glutton.rarity == 2 and Items.byId.diner.rarity == 1, "大胃王优秀、食客普通")
@@ -458,6 +458,25 @@ Test("三选一按考核阶段概率且候选不重复", function()
                     "普通概率及考核排除规则：" .. id)
             end
             if not g:Skip() then break end
+        end
+    end
+end)
+
+Test("腐烂香蕉屏蔽新候选但保留GM与已有实例", function()
+    for seed = 1, 100 do
+        local game = Game.New(seed)
+        assert(game:GmAddItem(4) and game:GmAddItem("rotten_banana"), "屏蔽不限制GM添加")
+        local restored = Game.Restore(game:Snapshot())
+        assert(Item(restored, 5).id == "rotten_banana" and Item(restored, 6).id == "rotten_banana",
+            "屏蔽不删除已有实例或阻止其读档")
+        for _, id in ipairs(game:_DraftOptions()) do
+            assert(id ~= "rotten_banana", "新候选不出腐烂香蕉")
+        end
+        game.phase = "draft"
+        game.refreshes = 1
+        assert(game:DraftRefresh())
+        for _, id in ipairs(game.options) do
+            assert(id ~= "rotten_banana", "刷新候选不出腐烂香蕉")
         end
     end
 end)

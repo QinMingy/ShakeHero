@@ -17,7 +17,7 @@ function Tests.Run(report)
     local function Contains(text, fragment) return text:find(fragment, 1, true) ~= nil end
     Check(#Items.list == 98, "目录共98件")
     local blocked = {
-        banana_peel=true, apple_half=true, banana_half=true, orange_half=true,
+        rotten_banana=true, banana_peel=true, apple_half=true, banana_half=true, orange_half=true,
         fruit_ninja=true, cherry_half=true, tomato_egg=true, coin_4=true, coin_8=true,
         coin_16=true, coin_32=true, coin_64=true, coin_128=true, coin_256=true, coin_512=true,
         coin_1024=true, coin_2048=true, poop=true, golden_poop=true, diamond_poop=true,
@@ -31,8 +31,8 @@ function Tests.Run(report)
         Check(def.pool == (blocked[def.id] ~= true), def.id .. "仅按源表屏蔽列控制pool")
         if def.pool then poolCount = poolCount + 1 end
     end
-    Check(poolCount == 72, "72开放/26屏蔽，飞盘运动员屏蔽，桂冠及腐烂香蕉仍开放")
-    Check(Items.byId.banana.base==6 and Items.byId.rotten_banana.pool, "香蕉基础6、腐烂香蕉解除卡池屏蔽")
+    Check(poolCount == 71, "71开放/27屏蔽，腐烂香蕉及飞盘运动员屏蔽，桂冠仍开放")
+    Check(Items.byId.banana.base==6 and not Items.byId.rotten_banana.pool, "香蕉基础6、腐烂香蕉屏蔽卡池")
     Check(Items.byId.glutton.rarity==2 and Items.byId.diner.rarity==1, "大胃王优秀品质、食客普通品质")
     local appended = {
         "chick", "sheep", "pig", "calf", "grass", "hay", "poop", "golden_poop", "diamond_poop",

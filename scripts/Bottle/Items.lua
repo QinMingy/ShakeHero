@@ -142,7 +142,7 @@ Add {
 }
 Add {
     id = "rotten_banana", name = "腐烂的香蕉", base = 0, cooldown = 0, rarity = 1,
-    unique = false, pool = true, implemented = true, trigger = "none", shape = "banana",
+    unique = false, pool = false, implemented = true, trigger = "none", shape = "banana",
     radius = 0.28, color = { 122, 96, 48, 255 }, tags = { "垃圾" },
     effect = "没有特殊效果",
 }
@@ -493,9 +493,9 @@ Register("removal_coin", "移除币", 4, 2, "结算后：消耗自身，给予�
 Items.byId.die_d4.scaleMax = 3
 Items.byId.die_d6.scaleMax = 3
 
--- 源表第8列=1，且仅这一列决定屏蔽；桂冠、腐烂香蕉在最新表不再屏蔽。
+-- 源表第8列=1，且仅这一列决定屏蔽；腐烂香蕉屏蔽，桂冠仍开放。
 for _, id in ipairs({
-    "banana_peel", "apple_half", "banana_half", "orange_half",
+    "rotten_banana", "banana_peel", "apple_half", "banana_half", "orange_half",
     "fruit_ninja", "cherry_half", "tomato_egg", "coin_4", "coin_8", "coin_16", "coin_32",
     "coin_64", "coin_128", "coin_256", "coin_512", "coin_1024", "coin_2048",
     "poop", "golden_poop", "diamond_poop", "rainbow_poop", "juice", "discus_athlete", "discus", "wool", "sweater",
