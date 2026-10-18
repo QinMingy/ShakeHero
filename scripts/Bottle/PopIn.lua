@@ -21,6 +21,35 @@ local FLOOR = .06         -- 瓶底反弹高度（米）
 local RESTITUTION = .45   -- 反弹速度损耗
 
 PopIn.STAGGER, PopIn.POP_WINDOW = STAGGER, POP_WINDOW
+PopIn.INFLATION_DURATION, PopIn.EXPLOSION_LIFETIME = .55, .65
+
+---@class BottleInflation
+---@field fromRadius number
+---@field targetRadius number
+---@field radius number
+---@field age number
+---@field duration number
+
+-- 气球膨胀是单调的尺寸过渡，不使用会回摆的出现弹簧；终点永久来自实例 scale。
+---@param fromRadius number
+---@param targetRadius number
+---@return BottleInflation
+function PopIn.NewInflation(fromRadius, targetRadius)
+    return {fromRadius = fromRadius, targetRadius = targetRadius, radius = fromRadius,
+        age = 0, duration = PopIn.INFLATION_DURATION}
+end
+
+---@param pose BottleInflation
+---@param dt number
+---@return boolean finished
+function PopIn.StepInflation(pose, dt)
+    pose.age = math.min(pose.duration, pose.age + math.max(0, dt))
+    local t = pose.age / pose.duration
+    local ease = t * t * (3 - 2 * t)
+    pose.radius = pose.fromRadius + (pose.targetRadius - pose.fromRadius) * ease
+    if pose.age >= pose.duration then pose.radius = pose.targetRadius; return true end
+    return false
+end
 
 ---@param seed number 种子可为浮点（存档恢复的 revision 不保证整数子类型）
 ---@param index integer
@@ -118,24 +147,39 @@ end
 ---@param y number
 ---@param id string
 ---@param seed number
+---@param explosionRadius number? 仅气球爆炸使用；nil 保持原出现粒子参数
 ---@return BottlePopParticle[]
-function PopIn.Burst(x, y, id, seed)
+function PopIn.Burst(x, y, id, seed, explosionRadius)
     local colors = Art.ItemColors(id)
     local particles = {}
-    for index = 1, BURST_COUNT do
+    local count = explosionRadius and 32 or BURST_COUNT
+    local minSpeed, maxSpeed = explosionRadius and 2.6 or MIN_SPEED, explosionRadius and 5.5 or MAX_SPEED
+    for index = 1, count do
         local angle = seededRandom(seed, index) * math.pi * 2
-        local speed = MIN_SPEED + (MAX_SPEED - MIN_SPEED) * seededRandom(seed, index + 101)
+        local speed = minSpeed + (maxSpeed - minSpeed) * seededRandom(seed, index + 101)
+        local offset = (explosionRadius or 0) * (.35 + .5 * seededRandom(seed, index + 401))
         particles[#particles + 1] = {
-            x = x, y = y,
+            x = x + math.cos(angle) * offset, y = y + math.sin(angle) * offset,
             vx = math.cos(angle) * speed,
             vy = math.sin(angle) * speed + UP_BIAS,
             age = 0,
-            life = .5 + .35 * seededRandom(seed, index + 211),
-            size = 2 + math.floor(seededRandom(seed, index + 311) * 3),
+            life = (explosionRadius and .65 or .5) + .35 * seededRandom(seed, index + 211),
+            size = (explosionRadius and 3 or 2) + math.floor(seededRandom(seed, index + 311) * 3),
             color = colors[1 + index % #colors],
         }
     end
     return particles
+end
+
+-- 独立于入场粒子的气球碎片：同种子可重现，绝不调用玩法随机或施加物理冲量。
+---@param x number
+---@param y number
+---@param id string
+---@param seed number
+---@param radius number
+---@return BottlePopParticle[]
+function PopIn.Explosion(x, y, id, seed, radius)
+    return PopIn.Burst(x, y, id, seed, radius)
 end
 
 -- 重力步进：瓶底/瓶壁反弹并损耗，到期粒子就地移除。

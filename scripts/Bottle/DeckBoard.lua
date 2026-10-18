@@ -4,6 +4,12 @@ local UI = require("urhox-libs/UI")
 local Items = require("Bottle.Items")
 local Shapes = require("Bottle.Shapes")
 local Art = require("Bottle.Art")
+local SoftBacon = require("Bottle.SoftBacon")
+local SoftView = require("Bottle.SoftView")
+-- 碰撞设计（米）：培根 [1]-o-[2]-o-[3]-o-[4]-o-[5]，与瓶中同一5段4关节。
+-- 任意段均可撞墙/物品；弯曲后逐段拾取，所有段仍只返回一个实例 uid。
+-- 缩窄面板时整条等量平移，不只移动中心破坏关节；释放先关节后所有段。
+-- 幽灵在此仍按牌库既有规则受重力/实体碰撞：沙盒不模拟瓶内特殊效果。
 
 local WORLD_WIDTH = 4.8
 local WORLD_HEIGHT = 5.4
@@ -40,6 +46,10 @@ local function setSurface(shape, category, mask)
 end
 
 -- 与瓶内物理相同的图案碰撞体；牌库沙盒只负责展示，不改动该数据。
+---@param node Node
+---@param profile BottleCollisionProfile
+---@param radius number
+---@param mirror boolean
 local function createProfile(node, profile, radius, mirror)
     for _, points in ipairs(profile.polygons or {}) do
         local polygon = node:CreateComponent("CollisionPolygon2D")
@@ -67,9 +77,11 @@ end
 ---@field uid number
 ---@field id string
 ---@field scale number
+---@field rollValue number? 骰子实际点数，仅供绘制
 ---@field radius number?
 ---@field node Node?
 ---@field body RigidBody2D?
+---@field soft BottleSoftBacon?
 
 ---@class BottleDeckSim
 ---@field scene Scene
@@ -127,9 +139,27 @@ function Sim:SetBounds(width)
     for _, record in ipairs(self.order) do
         if record.node then
             local position = record.node.position2D
-            local half = (record.radius or .27)
-            local x = clamp(position.x, -limit + half, limit - half)
-            if x ~= position.x then record.node:SetPosition2D(x, position.y) end
+            if record.soft then
+                local minX, maxX = math.huge, -math.huge
+                for _, pose in ipairs(record.soft:GetPose()) do
+                    local extent = math.abs(math.cos(pose.angle)) * pose.halfLength
+                        + math.abs(math.sin(pose.angle)) * pose.halfWidth
+                    minX, maxX = math.min(minX, pose.x - extent), math.max(maxX, pose.x + extent)
+                end
+                local low, high = -limit + .01 - minX, limit - .01 - maxX
+                local shift = low <= high and clamp(0, low, high) or -(minX + maxX) * .5
+                if math.abs(shift) > 1e-7 then
+                    -- 等量平移全部段，保留相对姿态与关节本地锚点。
+                    for _, segment in ipairs(record.soft.segments) do
+                        local point = segment.node.position2D
+                        segment.node:SetPosition2D(point.x + shift, point.y)
+                    end
+                end
+            else
+                local half = record.radius or .27
+                local x = clamp(position.x, -limit + half, limit - half)
+                if x ~= position.x then record.node:SetPosition2D(x, position.y) end
+            end
         end
     end
 end
@@ -140,6 +170,13 @@ end
 function Sim:_CreateBody(item, x, y)
     local def = Items.byId[item.id]
     local radius = def.radius * item.scale
+    if item.id == "bacon" then
+        local soft = SoftBacon.New(self.scene, item.uid, radius, x, y,
+            (item.uid * 137.507764) % 360, setSurface)
+        local center = assert(soft.segments[SoftBacon.CENTER_SEGMENT])
+        item.node, item.body, item.radius, item.soft = center.node, center.body, radius, soft
+        return
+    end
     local node = self.scene:CreateChild("deck_item_" .. item.uid)
     node:SetPosition2D(x, y)
     node.rotation2D = (item.uid * 137.507764) % 360
@@ -196,7 +233,7 @@ function Sim.New(entries)
             local source = item
             local scale = source.scale
             if type(scale) ~= "number" or scale ~= scale or scale <= 0 then scale = 1 end
-            local record = {uid = item.uid, id = item.id, scale = scale}
+            local record = {uid = item.uid, id = item.id, scale = scale, rollValue = item.rollValue}
             self.records[item.uid] = record
             self.order[#self.order + 1] = record
         end
@@ -207,7 +244,9 @@ function Sim.New(entries)
     local maxExtent = .1
     for _, record in ipairs(self.order) do
         local def = Items.byId[record.id]
-        maxExtent = math.max(maxExtent, Shapes.Envelope(def.shape, def.radius * record.scale))
+        local radius = def.radius * record.scale
+        local extent = record.id == "bacon" and SoftBacon.Envelope(radius) or Shapes.Envelope(def.shape, radius)
+        maxExtent = math.max(maxExtent, extent)
     end
     local margin = math.max(.24, maxExtent * .8)
     local unit = math.max(.5, maxExtent * 2 + .12)
@@ -243,7 +282,30 @@ end
 ---@param dt number
 function Sim:Step(dt)
     if self.disposed or not finite(dt) or dt <= 0 then return end
+    for _, record in ipairs(self.order) do
+        if record.soft then record.soft:Step(dt) end
+    end
     self.scene:Update(dt)
+end
+
+---@param uid number
+---@return BottleSoftPose[]?
+function Sim:GetSoftPose(uid)
+    local record = self.records[uid]
+    return not self.disposed and record and record.soft and record.soft:GetPose() or nil
+end
+
+---@param uid number
+---@param x number 世界米坐标
+---@param y number
+---@return boolean
+function Sim:ContainsPoint(uid, x, y)
+    local record = self.records[uid]
+    if self.disposed or not record or not record.node or not finite(x) or not finite(y) then return false end
+    if record.soft then return record.soft:ContainsPoint(x, y) end
+    local position = record.node.position2D
+    return Art.HitItem(record.id, x - position.x, position.y - y,
+        record.radius or .27, -record.node.rotation2D * math.pi / 180)
 end
 
 ---@param uid number
@@ -263,7 +325,9 @@ function Sim:Dispose()
     self.disposed = true
     self.world.updateEnabled = false
     for _, record in pairs(self.records) do
-        if record.node then
+        if record.soft then
+            record.soft:Dispose()
+        elseif record.node then
             record.node:Remove()
             record.node:Dispose()
         end
@@ -311,6 +375,19 @@ end
 ---@return {x:number,y:number,w:number,h:number}
 function Board:GetItemBounds(uid)
     local x, y, ppu = self:GetTransform()
+    local poses = self.sim:GetSoftPose(uid)
+    if poses then
+        local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
+        for _, pose in ipairs(poses) do
+            local cosine, sine = math.abs(math.cos(pose.angle)), math.abs(math.sin(pose.angle))
+            local ex = cosine * pose.halfLength + sine * pose.halfWidth
+            local ey = sine * pose.halfLength + cosine * pose.halfWidth
+            minX, maxX = math.min(minX, pose.x - ex), math.max(maxX, pose.x + ex)
+            minY, maxY = math.min(minY, pose.y - ey), math.max(maxY, pose.y + ey)
+        end
+        return {x = x + minX * ppu - 4, y = y - maxY * ppu - 4,
+            w = (maxX - minX) * ppu + 8, h = (maxY - minY) * ppu + 8}
+    end
     local px, py, angle, radius = self.sim:GetPose(uid)
     local record = self.sim.records[uid]
     local extent = Art.ItemExtent(record and record.id or "apple", radius * ppu, -angle) + 4
@@ -326,8 +403,7 @@ function Board:PickItem(x, y)
     local originX, originY, ppu = self:GetTransform()
     for index = #self.sim.order, 1, -1 do
         local record = self.sim.order[index]
-        local px, py, angle, radius = self.sim:GetPose(record.uid)
-        if Art.HitItem(record.id, x - originX - px * ppu, y - originY + py * ppu, radius * ppu, -angle) then
+        if self.sim:ContainsPoint(record.uid, (x - originX) / ppu, (originY - y) / ppu) then
             return record.uid
         end
     end
@@ -383,8 +459,14 @@ function Board:Render(vg)
     nvgSave(vg)
     nvgIntersectScissor(vg, layout.x, layout.y, layout.w, layout.h)
     for _, record in ipairs(self.sim.order) do
-        local px, py, angle, radius = self.sim:GetPose(record.uid)
-        Art.Item(vg, record.id, originX + px * ppu, originY - py * ppu, radius * ppu, -angle)
+        local poses = self.sim:GetSoftPose(record.uid)
+        if poses then
+            SoftView.Draw(vg, poses, originX, originY, ppu)
+        else
+            local px, py, angle, radius = self.sim:GetPose(record.uid)
+            Art.Item(vg, record.id, originX + px * ppu, originY - py * ppu,
+                radius * ppu, -angle, false, record.rollValue)
+        end
     end
     nvgRestore(vg)
 end

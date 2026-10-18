@@ -2,6 +2,7 @@
 -- 配色遵循 PixelForge：深蓝紫底、青绿主色、紫色辅色与硬边高光。
 local Art = {}
 local Palette = require("Machine.Palette")
+local SoftBacon = require("Bottle.SoftBacon")
 -- Native NanoVG RTT has no usable compound-path stencil. Draw the identical
 -- cached sprite rectangles separately only in registered offscreen contexts.
 local offscreenContexts = setmetatable({}, {__mode = "k"})
@@ -177,6 +178,17 @@ function Art.Box(vg, x, y, w, h, r, color, cooling)
     nvgRestore(vg)
 end
 
+-- 仅规范显示输入，不回写实例、不抽随机，点数与价值加成严格分离。
+---@param id string
+---@param rollValue number?
+---@return integer?
+function Art.DiceValue(id, rollValue)
+    local maximum = id == "die_d4" and 4 or (id == "die_d6" and 6 or nil)
+    if not maximum then return nil end
+    if type(rollValue) ~= "number" or rollValue ~= rollValue then return 1 end
+    return math.max(1, math.min(maximum, math.floor(rollValue)))
+end
+
 -- 保留物品位置、半径、弧度旋转及冷却接口，不量化物理位置或修改碰撞尺寸。
 ---@param vg NVGContextWrapper
 ---@param id string
@@ -185,12 +197,16 @@ end
 ---@param r number
 ---@param angle? number
 ---@param cooling? boolean
-function Art.Item(vg, id, x, y, r, angle, cooling)
+---@param rollValue? number 骰子实例点数；缺省显示1点，不使用加成后的有效价值
+function Art.Item(vg, id, x, y, r, angle, cooling, rollValue)
     nvgSave(vg)
     nvgShapeAntiAlias(vg, 0)
     nvgTranslate(vg, x, y)
     nvgRotate(vg, angle or 0)
-    DrawSprite(vg, SPRITES[id] or SPRITES.coin_one, r, cooling, true)
+    if id == "bacon" then nvgScale(vg, SoftBacon.LENGTH_SCALE, 1) end
+    local diceValue = Art.DiceValue(id, rollValue)
+    local spriteId = diceValue and (id .. "_" .. diceValue) or id
+    DrawSprite(vg, SPRITES[spriteId] or SPRITES.coin_one, r, cooling, true)
     nvgRestore(vg)
 end
 
@@ -293,6 +309,7 @@ function Art.HitItem(id, dx, dy, r, angle)
     local sprite = SPRITES[id] or SPRITES.coin_one
     local cosine, sine = math.cos(angle), math.sin(angle)
     local localX, localY = dx * cosine + dy * sine, -dx * sine + dy * cosine
+    if id == "bacon" then localX = localX / SoftBacon.LENGTH_SCALE end
     if sprite.mirror then localX = -localX end
     local pixel = r * 2 / sprite.width
     local column = localX / pixel + sprite.width / 2
@@ -315,9 +332,12 @@ end
 ---@return number
 function Art.ItemExtent(id, r, angle)
     local sprite = SPRITES[id] or SPRITES.coin_one
-    local halfHeight = r * sprite.height / sprite.width
+    local halfWidth = id == "bacon" and r * SoftBacon.LENGTH_SCALE or r
+    -- 培根只有原图第5..11行有像素，横向拉长不改变厚度/透明留白。
+    local halfHeight = id == "bacon" and r * SoftBacon.HALF_WIDTH_RATIO
+        or r * sprite.height / sprite.width
     local cosine, sine = math.abs(math.cos(angle)), math.abs(math.sin(angle))
-    return math.max(r * cosine + halfHeight * sine, r * sine + halfHeight * cosine)
+    return math.max(halfWidth * cosine + halfHeight * sine, halfWidth * sine + halfHeight * cosine)
 end
 
 -- 出现粒子的取色来源：物品像素色板中除描边外的颜色，按色板顺序循环使用；

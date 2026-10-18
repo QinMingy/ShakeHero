@@ -1,8 +1,8 @@
 -- 瓶内局部坐标的 Box2D 世界，基于 templates/scaffold-2d-physics.lua。
 -- 主程序负责绘制、全局事件订阅与固定步长时钟；本模块不创建相机或 UI。
 -- 所有长度单位为米，+Y 向上；视觉偏移只能在主程序/Render 中处理。
--- V0.3：移除篮筐设施、幽灵穿透物理与爆炸冲量；保留瓶体、接触计数、
--- 随机散布、近源生成搜索、两种摇晃物理与体感接入。
+-- V0.4：幽灵使用真实动态 sensor 接触，自主漂移，不接受碰撞或摇瓶冲量；
+-- 保留瓶体、接触计数、随机散布、近源生成搜索、两种摇晃物理与体感接入。
 --
 -- 碰撞设计（实现碰撞体前先画图）：
 --                        x=-1.15       x=1.15
@@ -19,6 +19,10 @@
 -- 擦边只有 Box2D 报告才算接触；生成位置的净空计算不参与接触判定。
 -- 不规则硬物由凸片/偏移圆组成，同一刚体见 Bottle.Shapes；培根用5段关节软体。
 -- 复合碰撞体逐次计数：结束其中一个 fixture 接触不清除其他有效接触。
+-- 幽灵：  实体A [  <ghost sensor>  ] 实体B   （穿透，不输出冲量/碰撞音）
+-- sensor 保持 ITEM_CATEGORY/ITEM_MASK + BT_DYNAMIC，真实Begin/End用于灵魂联动。
+-- 瓶壁不再实体挡幽灵；有限轮廓近壁转向 + 下一步安全点限速 + 解锁后几何兜底。
+-- 边界包含底/封口、肩颈接缝与凹角：整个旋转包络留在瓶中，不以几何距离伪造接触。
 -- 墙体内表面沿瓶子轮廓，厚度向外，相邻接缝重叠；瓶肩/瓶颈凹角不延长。
 -- 全局 CCD 与各物品 bullet 均开启。
 -- 新物品零初速度并有短时 CCD/速度缓冲，拥挤位置由真实物理解算排开。
@@ -174,7 +178,8 @@ end
 ---@param profile BottleCollisionProfile
 ---@param radius number
 ---@param mirror boolean
-local function createProfile(node, profile, radius, mirror)
+---@param sensor boolean?
+local function createProfile(node, profile, radius, mirror, sensor)
     for _, points in ipairs(profile.polygons or {}) do
         local polygon = node:CreateComponent("CollisionPolygon2D")
         polygon:SetVertexCount(#points // 2)
@@ -190,6 +195,7 @@ local function createProfile(node, profile, radius, mirror)
             polygon:SetVertex(index, Vector2(mirror and -x or x, y))
         end
         setSurface(polygon)
+        polygon.trigger = sensor == true
     end
     for _, spec in ipairs(profile.circles or {}) do
         local x = (spec.x - 8) * radius / 8
@@ -197,6 +203,7 @@ local function createProfile(node, profile, radius, mirror)
         circle.radius = spec.radius * radius / 8
         circle.center = Vector2(mirror and -x or x, (8 - spec.y) * radius / 8)
         setSurface(circle)
+        circle.trigger = sensor == true
     end
 end
 
@@ -540,7 +547,7 @@ function Physics:_CreateItem(item, x, y)
     local angle = (item.uid * 137.507764) % 360
     if item.id == "bacon" then
         local soft = SoftBacon.New(self.scene, item.uid, radius, x, y, angle, setSurface)
-        local center = assert(soft.segments[3])
+        local center = assert(soft.segments[SoftBacon.CENTER_SEGMENT])
         ---@type BottleBodyPart[]
         local parts = {}
         for _, segment in ipairs(soft.segments) do
@@ -558,28 +565,31 @@ function Physics:_CreateItem(item, x, y)
     node:SetPosition2D(x, y)
     -- 旋转也由 uid 确定；生成净空包络对所有角度均安全。
     node.rotation2D = angle
+    local ghost = item.id == "ghost"
     local body = node:CreateComponent("RigidBody2D")
-    body.bodyType = BT_DYNAMIC
+    body.bodyType = BT_DYNAMIC -- sensor 仍必须是动态体，保留与静态/动态体的真实接触。
     body.useFixtureMass = true
-    body.fixedRotation = false
-    body.linearDamping = 0.25
-    body.angularDamping = 0.8
-    body.gravityScale = item.id == "ghost" and 0 or 1
+    body.fixedRotation = ghost
+    body.linearDamping = ghost and 0 or 0.25
+    body.angularDamping = ghost and 0 or 0.8
+    body.gravityScale = ghost and 0 or 1
     body.bullet = true
-    body.allowSleep = item.id ~= "ghost"
+    body.allowSleep = not ghost
     local profile = Shapes.profiles[shape]
     if profile then
-        createProfile(node, profile, radius, item.id == "slipper_right")
+        createProfile(node, profile, radius, item.id == "slipper_right", ghost)
     elseif shape == "box" then
         -- profile 优先；仅用于尚无专用轮廓的 box 定义。
         local box = node:CreateComponent("CollisionBox2D")
         local halfSize = radius / math.sqrt(2)
         box:SetSize(halfSize * 2, halfSize * 2)
         setSurface(box)
+        box.trigger = ghost
     else
         local circle = node:CreateComponent("CollisionCircle2D")
         circle.radius = radius
         setSurface(circle)
+        circle.trigger = ghost
     end
     body.linearVelocity = Vector2(0, 0)
     body.angularVelocity = 0
@@ -826,6 +836,8 @@ end
 ---@param recordA BottleBody?
 ---@param recordB BottleBody?
 function Physics:_EmitImpact(recordA, recordB)
+    -- sensor 穿透是玩法接触，不是实体撞击；任一方为幽灵都不得发碰撞音。
+    if (recordA and recordA.kind == "ghost") or (recordB and recordB.kind == "ghost") then return end
     local va = recordA and recordA.body and recordA.body.linearVelocity or nil
     local vb = recordB and recordB.body and recordB.body.linearVelocity or nil
     if not va then return end
@@ -922,26 +934,71 @@ function Physics:Shake(dx, dy)
     if length == 0 or length == math.huge then return end
     local scale = math.min(1, MAX_SHAKE_DELTA / length) * SHAKE_GAIN
     for _, record in pairs(self.bodies) do
-        for _, part in ipairs(record.parts) do
-            local mass = part.body.mass
-            part.body:ApplyLinearImpulseToCenter(Vector2(dx * scale * mass, dy * scale * mass), true)
+        if record.kind ~= "ghost" then
+            for _, part in ipairs(record.parts) do
+                local mass = part.body.mass
+                part.body:ApplyLinearImpulseToCenter(Vector2(dx * scale * mass, dy * scale * mass), true)
+            end
         end
     end
 end
 
--- 漂浮是低速、有界的物理驱动，不覆盖碰撞解算速度，不传送、不穿透。
+-- 幽灵是穿透 sensor：速度仅由私有确定性流场和瓶轮廓决定，不读解算速度，
+-- 也不接受摇瓶/体感/碰撞冲量；仍让 Box2D 积分并产生真实 Begin/EndContact。
 -- uid 只决定流场相位，clock 只在 Step 正时间推进；不读真实时间/全局随机。
--- 近壁转向用有限内壁线段的最近点，不能把瓶肩无限延长成漏斗。
+-- 近壁转向用有限内壁线段最近点；不把瓶肩无限延长成漏斗。
+---@type number[][]
 local GHOST_EDGES = {
-    {-2.4,0, 2.4,0}, {2.4,0, 2.4,5.5}, {2.4,5.5, 1.15,6.05},
-    {1.15,6.05, 1.15,6.4}, {1.15,6.4, -1.15,6.4},
-    {-1.15,6.4, -1.15,6.05}, {-1.15,6.05, -2.4,5.5}, {-2.4,5.5, -2.4,0},
+    {-HALF_WIDTH,0, HALF_WIDTH,0}, {HALF_WIDTH,0, HALF_WIDTH,SHOULDER_Y},
+    {HALF_WIDTH,SHOULDER_Y, NECK_HALF_WIDTH,NECK_Y},
+    {NECK_HALF_WIDTH,NECK_Y, NECK_HALF_WIDTH,HEIGHT},
+    {NECK_HALF_WIDTH,HEIGHT, -NECK_HALF_WIDTH,HEIGHT},
+    {-NECK_HALF_WIDTH,HEIGHT, -NECK_HALF_WIDTH,NECK_Y},
+    {-NECK_HALF_WIDTH,NECK_Y, -HALF_WIDTH,SHOULDER_Y},
+    {-HALF_WIDTH,SHOULDER_Y, -HALF_WIDTH,0},
 }
+local GHOST_MAX_SPEED = 1.6
+
+---@param x number
+---@param y number
+---@param extent number
+---@return boolean
+local function ghostPointInside(x, y, extent)
+    if not finite(x) or not finite(y) then return false end
+    local margin = extent + SPAWN_GAP
+    if y < margin or y > HEIGHT - margin then return false end
+    local halfWidth = y >= NECK_Y and NECK_HALF_WIDTH
+        or math.min(HALF_WIDTH, HALF_WIDTH - SHOULDER_SLOPE * (y - SHOULDER_Y))
+    if math.abs(x) > halfWidth then return false end
+    -- 圆包络到每条有限边均有净空才安全，包括肩/颈凹角；无须每帧二分。
+    for _, edge in ipairs(GHOST_EDGES) do
+        if segmentDistanceSquared(x, y, edge[1], edge[2], edge[3], edge[4]) < margin * margin - 1e-9 then
+            return false
+        end
+    end
+    return true
+end
+
+---仅在 Box2D 解锁时修正失效/越界位置；正常运动由预测限速阻止越界，
+---不是每帧传送。几何只管“留在瓶内”，绝不写入玩法接触表。
+---@param record BottleBody
+local function containGhost(record)
+    local position = record.node.position2D
+    if ghostPointInside(position.x, position.y, record.envelope) then return end
+    local x, y = position.x, position.y
+    if not finite(x) or not finite(y) then x, y = 0, HEIGHT * 0.5 end
+    local safeX, safeY = clampSpawn(x, y, record.envelope)
+    if math.abs(safeX - position.x) > 1e-7 or math.abs(safeY - position.y) > 1e-7
+        or not finite(position.x) or not finite(position.y) then
+        record.node:SetPosition2D(safeX, safeY)
+    end
+end
 
 ---@param record BottleBody
 ---@param clock number
 ---@param dt number
 local function floatGhost(record, clock, dt)
+    containGhost(record)
     local phase = (record.uid % 997) * 2.399963229728653
     local targetX = 0.95 * math.cos(clock * 0.83 + phase)
         + 0.3 * math.sin(clock * 1.37 + phase * 0.7)
@@ -956,18 +1013,22 @@ local function floatGhost(record, clock, dt)
         local nx, ny = position.x - ax - along * dx, position.y - ay - along * dy
         local distance = math.sqrt(nx * nx + ny * ny)
         if distance > 1e-6 and distance < margin then
-            local strength = 1.8 * (1 - distance / margin)
+            local strength = 2.8 * (1 - distance / margin)
             targetX = targetX + nx / distance * strength
             targetY = targetY + ny / distance * strength
         end
     end
-    local velocity = record.body.linearVelocity
-    local gain = 1 - math.exp(-dt * 2.0)
-    local dvx, dvy = (targetX - velocity.x) * gain, (targetY - velocity.y) * gain
-    local length = math.sqrt(dvx * dvx + dvy * dvy)
-    local limit = length > 0 and math.min(1, 3.0 * dt / length) or 0
-    record.body:ApplyLinearImpulseToCenter(Vector2(dvx * limit * record.body.mass,
-        dvy * limit * record.body.mass), true)
+    local speed = math.sqrt(targetX * targetX + targetY * targetY)
+    local factor = speed > GHOST_MAX_SPEED and GHOST_MAX_SPEED / speed or 1
+    -- 用安全终点反推本步速度；底/顶、肩颈凹角均按整个旋转包络留内，
+    -- 不依赖 sensor 的 CCD（Box2D sensor 本身不产生实体阻挡）。
+    local nextX, nextY = position.x + targetX * factor * dt, position.y + targetY * factor * dt
+    if not ghostPointInside(nextX, nextY, record.envelope) then
+        nextX, nextY = clampSpawn(nextX, nextY, record.envelope)
+    end
+    record.body.linearVelocity = Vector2((nextX - position.x) / dt, (nextY - position.y) / dt)
+    record.body.angularVelocity = 0
+    record.body.awake = true
 end
 
 ---每次正 dt 仅手动更新一次 scene；主程序固定传 1/60。
@@ -995,10 +1056,10 @@ function Physics:Step(dt)
         if record.soft then record.soft:Step(dt) end
         for _, part in ipairs(record.parts) do
             local body = part.body
-            if dvx ~= 0 or dvy ~= 0 then
+            if record.kind ~= "ghost" and (dvx ~= 0 or dvy ~= 0) then
                 body:ApplyLinearImpulseToCenter(Vector2(dvx * body.mass, dvy * body.mass), true)
             end
-            if record.newbornRemaining > 0 then
+            if record.kind ~= "ghost" and record.newbornRemaining > 0 then
                 -- 每个柔软分段独立缓冲，不能只限制中心而放任末段高速飞散。
                 local velocity = body.linearVelocity
                 local speed = math.sqrt(velocity.x * velocity.x + velocity.y * velocity.y)
@@ -1015,6 +1076,9 @@ function Physics:Step(dt)
     self._updating = true
     self.scene:Update(dt)
     self._updating = false
+    for _, record in pairs(self.bodies) do
+        if record.kind == "ghost" then containGhost(record) end
+    end
     self:_DrainRetired()
     self:_RunDeferred()
 end

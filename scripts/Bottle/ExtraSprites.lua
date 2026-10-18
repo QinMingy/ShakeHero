@@ -28,49 +28,53 @@ sprites.juice = Sprite({
     h = {255, 224, 116, 255}, d = {214, 106, 39, 255},
 })
 
--- 四面骰：三角实体，中央刻“4”，不是缺省金币或六面骰。
-sprites.die_d4 = Sprite({
-    ".......oo.......",
-    ".......oho......",
-    "......ohhho.....",
-    "......ohhdo.....",
-    ".....ohhhddo....",
-    ".....ohhhddo....",
-    "....ohhhddddo...",
-    "....ohododddo...",
-    "...ohhododdddo..",
-    "...ohhoooodddo..",
-    "..ohhhhoddhdddo.",
-    "..ohhhhodhhdddo.",
-    ".ohhhhhhhhhddddo",
-    ".ohhhhhhhhdddddo",
-    "ohhhhhhhhddddddo",
-    "oooooooooooooooo",
-}, {
-    o = INK, h = {165, 255, 222, 255}, d = {33, 189, 174, 255},
-})
-
--- 六面骰：削角方形、六枚独立深色点。
-sprites.die_d6 = Sprite({
-    "................",
-    "...oooooooooo...",
-    "..ohhhhhhhhhdo..",
-    ".ohhhhhhhhhhddo.",
-    ".ohhoohhoohhddo.",
-    ".ohhoohhoohhddo.",
-    ".ohhhhhhhhhhddo.",
-    ".ohhoohhoohhddo.",
-    ".ohhoohhoohhddo.",
-    ".ohhhhhhhhhhddo.",
-    ".ohhoohhoohhddo.",
-    ".ohhoohhoohhddo.",
-    ".ohhhhhhhhhhddo.",
-    "..oddddddddddo..",
-    "...oooooooooo...",
-    "................",
-}, {
-    o = INK, h = {245, 253, 255, 255}, d = {167, 197, 214, 255},
-})
+-- 骰面按真实点数预烘：保留三角/削角方形轮廓与色板，不再把固定数字或六点烙在底图。
+-- 每个点为2×2源像素硬边方点；四面骰的布局收在三角面内。
+---@type table<string,string[]>
+local diceBodies = {
+    die_d4 = {
+        ".......oo.......", ".......oho......", "......ohhho.....", "......ohhdo.....",
+        ".....ohhhddo....", ".....ohhhddo....", "....ohhhddddo...", "....ohhhddddo...",
+        "...ohhhhdddddo..", "...ohhhhhddddo..", "..ohhhhdddhdddo.", "..ohhhhddhhdddo.",
+        ".ohhhhhhhhhddddo", ".ohhhhhhhhdddddo", "ohhhhhhhhddddddo", "oooooooooooooooo",
+    },
+    die_d6 = {
+        "................", "...oooooooooo...", "..ohhhhhhhhhdo..", ".ohhhhhhhhhhddo.",
+        ".ohhhhhhhhhhddo.", ".ohhhhhhhhhhddo.", ".ohhhhhhhhhhddo.", ".ohhhhhhhhhhddo.",
+        ".ohhhhhhhhhhddo.", ".ohhhhhhhhhhddo.", ".ohhhhhhhhhhddo.", ".ohhhhhhhhhhddo.",
+        ".ohhhhhhhhhhddo.", "..oddddddddddo..", "...oooooooooo...", "................",
+    },
+}
+local dicePips = {
+    die_d4 = {
+        {{7, 10}}, {{5, 11}, {9, 11}}, {{7, 7}, {5, 11}, {10, 11}},
+        {{6, 8}, {9, 8}, {5, 12}, {10, 12}},
+    },
+    die_d6 = {
+        {{7, 7}}, {{4, 4}, {9, 10}}, {{4, 4}, {7, 7}, {9, 10}},
+        {{4, 4}, {9, 4}, {4, 10}, {9, 10}},
+        {{4, 4}, {9, 4}, {7, 7}, {4, 10}, {9, 10}},
+        {{4, 4}, {9, 4}, {4, 7}, {9, 7}, {4, 10}, {9, 10}},
+    },
+}
+for _, id in ipairs({"die_d4", "die_d6"}) do
+    local palette = id == "die_d4"
+        and {o = INK, h = {165, 255, 222, 255}, d = {33, 189, 174, 255}}
+        or {o = INK, h = {245, 253, 255, 255}, d = {167, 197, 214, 255}}
+    for value, points in ipairs(dicePips[id]) do
+        ---@type string[]
+        local rows = {table.unpack(diceBodies[id])}
+        for _, point in ipairs(points) do
+            for dy = 0, 1 do
+                local row = point[2] + dy + 1
+                local source = assert(rows[row], "骰点行超出图案")
+                rows[row] = source:sub(1, point[1]) .. "oo" .. source:sub(point[1] + 3)
+            end
+        end
+        sprites[id .. "_" .. value] = Sprite(rows, palette)
+    end
+    sprites[id] = sprites[id .. "_1"] -- 无实例/未投掷只显示1点，不为显示预抽随机。
+end
 
 -- 赌徒：红马甲、偏斜黑礼帽，胸前白色扑克牌。
 sprites.gambler = Sprite({

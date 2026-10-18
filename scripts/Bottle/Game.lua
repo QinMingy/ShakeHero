@@ -66,10 +66,11 @@ local MAX_COUNTER = 2147483647
 ---@field treeBlessed boolean? 果树下一次判定的农民祝福
 
 ---@class GameEvent
----@field kind 'spawn'|'remove'|'score'|'merge'|'buff'|'transform'|'respawn'|'resize'
+---@field kind 'spawn'|'remove'|'score'|'merge'|'buff'|'transform'|'respawn'|'resize'|'burst'
 ---@field uid integer
 ---@field id string?
 ---@field value number?
+---@field rollValue number? 骰子score时的点数，仅用于结算残影显示
 ---@field a integer? 合成材料 uid（merge 事件保留）
 ---@field b integer? 合成材料 uid
 ---@field x number? 事件位置，瓶内局部米制坐标
@@ -315,7 +316,7 @@ function Game:_Create(id, temporary)
     self._nextUid = self._nextUid + 1
     self._instances[item.uid] = item
     self.deck[#self.deck + 1] = item
-    -- 遗物 small_savings（积少成多）：每次添加物品 +1 金币（默认约定，待用户确认）。
+    -- 遗物 small_savings（积少成多）：添加新实例立即获得1金币，不修改物品价值。
     if Relics.Has(self, "small_savings") then
         self.score = self.score + 1
         self.totalScore = self.totalScore + 1
@@ -501,6 +502,7 @@ function Game:_Score(events, item, value, position)
     self.totalScore = self.totalScore + value
     self.roundScore = self.roundScore + value
     Emit(events, "score", item, value)
+    events[#events].rollValue = item.rollValue
     if position then
         local event = events[#events]
         event.x, event.y = position.x, position.y

@@ -517,6 +517,7 @@ function Effects.SettleEffects(game, events)
                 for _, other in ipairs(game:BottleItems()) do
                     if other.uid ~= item.uid then other.mult = other.mult * 2 end
                 end
+                events[#events + 1] = {kind = "burst", uid = item.uid, id = item.id, value = 2}
                 game:_Destroy(item.uid, false, events)
             else
                 game:ApplyScale(item, events)

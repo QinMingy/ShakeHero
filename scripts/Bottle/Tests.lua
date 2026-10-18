@@ -1217,6 +1217,7 @@ function Tests.Run()
         passed = passed + 1
     end
     return passed + require("Bottle.ExtraTests").Run() + require("Bottle.RelicTests").Run()
+        + require("Bottle.RepairTests").Run()
 end
 
 return Tests

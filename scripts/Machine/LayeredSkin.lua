@@ -628,7 +628,8 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
     local title=UI.Label{id="draftTitle",text=relicDraft and "挑选下一件遗物" or "挑选下一件物品",
         fontSize=18*s,fontColor=ink,pointerEvents="none"}
     place(title,{18,14,334,32},s);screen:AddChild(title)
-    local icon=Icon{id="draftPreviewIcon",itemId=id,isRelic=relicDraft,pointerEvents="none"}
+    local icon=Icon{id="draftPreviewIcon",itemId=id,isRelic=relicDraft,
+        rollValue=type(option)=="table" and option.rollValue or nil,pointerEvents="none"}
     animateDraftIcon(view,icon,m.draftMotion[selected],true)
     place(icon,{20,64,76,76},s);screen:AddChild(icon)
     local name=UI.Label{text=def.name,fontSize=20*s,fontColor=ink,whiteSpace="normal",pointerEvents="none"}
@@ -638,7 +639,7 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
     place(quality,{112,102,64,24},s);screen:AddChild(quality)
     local stats=relicDraft and UI.Label{id="draftRelicInfo",text="遗物 · 永久生效",
         fontSize=12*s,fontColor=muted,pointerEvents="none"}
-        or ItemStats(gold,view.game:CooldownOf(id),Items.TagsText(def))
+        or ItemStats(gold,Items.TagsText(def))
     place(stats,{112,132,238,48},s);screen:AddChild(stats)
     local summary=UI.Label{text="本回合 +"..Reels.Literal(view.game.lastRoundScore or 0).." · 候选 "..selected.."/"..#view.game.options,
         textMotionDisabled=true,fontSize=11*s,fontColor=muted,pointerEvents="none"}
@@ -690,7 +691,8 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
             fill(vg,b.x+b.w/2-11*s,b.y+37*s,22*s,4*s,{24,24,16,115})
         end
         face:AddChild(shadow)
-        local itemIcon=Icon{id="draftIcon_"..index,itemId=itemId,isRelic=relicDraft,position="absolute",zIndex=1,
+        local itemIcon=Icon{id="draftIcon_"..index,itemId=itemId,isRelic=relicDraft,
+            rollValue=type(choice)=="table" and choice.rollValue or nil,position="absolute",zIndex=1,
             left=(width-36)*.5*s,top=9*s,width=36*s,height=36*s,pointerEvents="none"}
         animateDraftIcon(view,itemIcon,m.draftMotion[index],false)
         face:AddChild(itemIcon)

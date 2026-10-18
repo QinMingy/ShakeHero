@@ -1,10 +1,11 @@
 -- 真柔软培根：5 个独立 Box2D 刚体 + 4 个限角旋转关节，不用视觉摆动冒充软体。
--- 由 Bottle.Physics 在世界解锁时创建/释放，只有 Physics:Step 调用 Step。
+-- 由 Bottle.Physics / DeckBoard 在世界解锁时创建/释放，并在固定物理步前调用 Step。
 --
 -- 碰撞设计（长度单位米；下图为原图横向，初始姿态再统一旋转）：
---       x=-r             主 uid               x=+r
+--       x=-2r            主 uid               x=+2r
 --        [ 1 ]--o--[ 2 ]--o--[ 3 ]--o--[ 4 ]--o--[ 5 ]
---                每段长 .4r、厚 .75r，端部搭接 .0125r
+--                每段长 .8r、厚 .75r，端部搭接 .025r
+--       名义总长4r（旧2r的两倍），厚度不变；所有尺寸来自下方共享常量。
 --       相邻段通过真实转轴连接，限角 ±0.55rad，柔弱弯曲回正与阻尼。
 --       外部所有 fixture 都是实体；仅关节相邻段不自撞（Box2D 标准约定）。
 --       非相邻段可自撞，同 uid 的接触不输出为玩法相邻。
@@ -38,11 +39,19 @@ SoftBacon.__index = SoftBacon
 local COUNT = 5
 local CENTER = 3
 local LIMIT = 0.55 -- ConstraintRevolute2D lower/upperAngle 是 Box2D 弧度，不是 Node 的度。
+-- radius 仍为 Items 定义的基础尺寸；只改变横向长度，不放大厚度。
+-- 瓶内、牌库沙盒、静态图标共用，真实段绘制不得再次乘 LENGTH_SCALE。
+SoftBacon.LENGTH_SCALE = 2
+SoftBacon.HALF_WIDTH_RATIO = 0.375
+SoftBacon.OVERLAP_RATIO = 0.0125 * SoftBacon.LENGTH_SCALE
+SoftBacon.SEGMENT_COUNT = COUNT
+SoftBacon.CENTER_SEGMENT = CENTER
 
 ---@param radius number
 ---@return number
 function SoftBacon.Envelope(radius)
-    return radius * math.sqrt(1.0125 ^ 2 + 0.375 ^ 2)
+    local halfLength = SoftBacon.LENGTH_SCALE + SoftBacon.OVERLAP_RATIO
+    return radius * math.sqrt(halfLength ^ 2 + SoftBacon.HALF_WIDTH_RATIO ^ 2)
 end
 
 ---@param scene Scene
@@ -71,7 +80,8 @@ function SoftBacon:_Init(scene, uid, radius, x, y, angle, setSurface)
     self.joints = {}
     self.disposed = false
     local cosine, sine = math.cos(angle * math.pi / 180), math.sin(angle * math.pi / 180)
-    local length, halfWidth = radius * 0.4, radius * 0.375
+    local length = radius * 2 * SoftBacon.LENGTH_SCALE / COUNT
+    local halfWidth = radius * SoftBacon.HALF_WIDTH_RATIO
     for i = 1, COUNT do
         local offset = (i - CENTER) * length
         local name = i == CENTER and string.format("item_%d", uid)
@@ -87,7 +97,7 @@ function SoftBacon:_Init(scene, uid, radius, x, y, angle, setSurface)
         body.angularDamping = 0.8
         body.gravityScale = 1
         body.allowSleep = true
-        local halfLength = length * 0.5 + radius * 0.0125
+        local halfLength = length * 0.5 + radius * SoftBacon.OVERLAP_RATIO
         local box = node:CreateComponent("CollisionBox2D")
         box:SetSize(halfLength * 2, halfWidth * 2)
         setSurface(box)

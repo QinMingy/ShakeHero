@@ -48,7 +48,7 @@ function SoftView.Item(vg, physics, item, x, y, ppu, cooling)
     if poses then SoftView.Draw(vg, poses, x, y, ppu, cooling)
     else
         local px, py, angle, radius = physics:GetPose(item.uid)
-        Art.Item(vg, item.id, x + px * ppu, y - py * ppu, radius * ppu, -angle, cooling)
+        Art.Item(vg, item.id, x + px * ppu, y - py * ppu, radius * ppu, -angle, cooling, item.rollValue)
     end
 end
 

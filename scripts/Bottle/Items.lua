@@ -356,7 +356,7 @@ Add {
 
 ---------------------------------------------------------------- 49..67 灵魂系与硬币链
 
-Register("ghost", "幽灵", 2, 1, "在瓶子内自由飘动\n被消耗时：进行一次结算（不受重力影响）",
+Register("ghost", "幽灵", 2, 1, "在瓶子内自由飘动，穿透其他物品，不受重力、碰撞和摇晃影响\n被消耗时：进行一次结算",
     { shape = "ghost" })
 Register("soul_jar", "灵魂罐", 3, 2, "碰撞瓶子时：消耗自身，随机位置生成1-3个[[ghost]]",
     { shape = "jar", trigger = "wall", color = { 137, 194, 200, 255 } })
@@ -431,6 +431,18 @@ for power = 0, 10 do
     Items.recipes[id .. "+" .. id] = "coin_" .. string.format("%.0f", value * 2)
 end
 Items.byId.coin_2048.cooldown = 0
+
+--- 只有效果声明的触发冷却才使用置灰/进度环；周期计时和内部防抖不是冷却提示。
+--- 保留原 remaining 调度与数值，避免显示修正改变果树周期或星星传送频率。
+---@param id string
+---@return boolean
+function Items.HasCooldown(id)
+    local def = Items.byId[id]
+    if not def or def.cooldown <= 0 or def.trigger == "none" or def.trigger == "timer" then
+        return false
+    end
+    return id ~= "star" and id ~= "soul_jar" and id ~= "soul_stone"
+end
 
 ---@param id string|number
 ---@param tag string

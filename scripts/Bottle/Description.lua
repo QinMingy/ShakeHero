@@ -225,8 +225,11 @@ function Description:Render(vg)
             if run.kind == "gain" then
                 Art.StatIcon(vg, "gain", x + run.w / 2, y + run.h / 2, run.w / 2)
             elseif run.kind == "item" then
-                -- 保留整个 32px 方框的点击范围，不额外绘制链接横线。
-                Art.Item(vg, run.itemId, x + run.w / 2, y + run.h / 2, run.w * .38)
+                -- 保留整个 32px 方框的点击范围；长条培根内收绘制，避免压住相邻正文。
+                local radius = run.w * .38
+                local extent = Art.ItemExtent(run.itemId, radius, 0)
+                local fittedRadius = extent > radius and radius * radius / extent or radius
+                Art.Item(vg, run.itemId, x + run.w / 2, y + run.h / 2, fittedRadius)
             else
                 local r, g, b = TextMotion.Ink(color, age, run.tone or "text")
                 nvgFillColor(vg, nvgRGBA(r, g, b, color[4] or 255))

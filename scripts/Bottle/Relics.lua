@@ -42,7 +42,7 @@ Add {
 }
 Add {
     numberId = 3, id = "small_savings", name = "积少成多", rarity = 1, pool = true, implemented = true,
-    effect = "每次添加物品，+1 @",
+    effect = "每次添加物品，立即获得1金币（不增加物品价值）",
 }
 Add {
     numberId = 4, id = "coin_rain", name = "硬币雨", rarity = 2, pool = true, implemented = true,
