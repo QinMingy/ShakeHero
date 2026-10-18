@@ -123,14 +123,89 @@ Test("Touches不抢旧规则并区分便便合法touch与纯被动类型", funct
     for uid = 3, 4 do assert(Expansion.Touches(game, Item(game, uid), contacts) == false) end
 end)
 
-Test("小鸡每5秒生成永久鸡蛋、不在零时刻生成", function()
+Test("小鸡每5秒判定30%产永久鸡蛋、不在零时刻生成", function()
     local game = Fixture({ "chick" })
+    Constant(game, 30)
     Item(game, 1).remaining = 5
     game:Step(4.9, Contacts())
     assert(#Find(game, "egg") == 0)
     game:Step(0.1, Contacts())
     local eggs = Find(game, "egg")
-    assert(#eggs == 1 and not eggs[1].temporary and eggs[1].location == "bottle")
+    assert(#eggs == 1 and not eggs[1].temporary and not eggs[1].generatedTemporary
+        and eggs[1].location == "bottle")
+    Close(Item(game, 1).remaining, 5)
+end)
+
+Test("小鸡百分签完整覆盖恰好30个成功签，其余不产蛋", function()
+    local successes = 0
+    for ticket = 1, 100 do
+        local game = Fixture({ "chick" })
+        Sequence(game, { ticket })
+        local events = {}
+        local applied = Expansion.Apply(game, Item(game, 1), Contacts(), events)
+        local expected = ticket <= 30
+        assert(applied == expected, "小鸡概率边界错误：" .. ticket)
+        assert(#Find(game, "egg") == (expected and 1 or 0))
+        assert(#Events(events, "spawn") == (expected and 1 or 0))
+        if applied then successes = successes + 1 end
+    end
+    assert(successes == 30)
+end)
+
+Test("小鸡判定失败仍续5秒，不在零步或期间逐帧重抽", function()
+    local game = Fixture({ "chick" })
+    local calls = 0
+    rawset(game, "_RandomInt", function(_, maximum)
+        assert(maximum == 100 and calls < 2, "小鸡只应在5秒与10秒各判定一次")
+        calls = calls + 1
+        return calls == 1 and 31 or 30
+    end)
+    Item(game, 1).remaining = 5
+    game:Step(5, Contacts())
+    assert(calls == 1 and #Find(game, "egg") == 0)
+    Close(Item(game, 1).remaining, 5)
+    for _ = 1, 10 do game:Step(0, Contacts()) end
+    for _ = 1, 49 do game:Step(.1, Contacts()) end
+    game:Step(.09, Contacts())
+    assert(calls == 1 and #Find(game, "egg") == 0)
+    game:Step(.01, Contacts())
+    assert(calls == 2 and #Find(game, "egg", "bottle") == 1)
+    assert(game.phase == "settle", "10秒端点仍应判定产蛋")
+end)
+
+Test("运行中新生小鸡从实际入瓶后完整等待5秒", function()
+    local game = Fixture({ "apple" })
+    game:Step(4, Contacts())
+    local chick = game:_Spawn("chick", {}, false, {x=.2,y=3})
+    assert(chick.location == "bottle")
+    Close(chick.remaining, 5)
+    Sequence(game, { 1 })
+    game:Step(4.99, Contacts())
+    assert(#Find(game, "egg") == 0)
+    local events = game:Step(.01, Contacts())
+    assert(#Find(game, "egg", "bottle") == 1 and #Events(events, "spawn") == 1)
+end)
+
+Test("小鸡成功产蛋保持近源永久生成，满瓶按FIFO排队不丢失", function()
+    local ids = { "chick" }
+    for _ = 2, 100 do ids[#ids + 1] = "apple" end
+    local game = Fixture(ids)
+    local chick = Item(game, 1)
+    local contacts = Contacts()
+    contacts.positions[1] = {x=.2,y=3}
+    Sequence(game, { 1 })
+    chick.remaining = 5
+    local events = game:Step(5, contacts)
+    local eggs = Find(game, "egg")
+    assert(#eggs == 1 and eggs[1].location == "queued" and #game:BottleItems() == 100)
+    assert(not eggs[1].temporary and not eggs[1].generatedTemporary)
+    assert(#game.spawnQueue == 1 and game.spawnQueue[1] == eggs[1].uid)
+    assert(#Events(events, "spawn") == 0, "排队期间不提前生成物理实体")
+    Close(chick.remaining, 5, "进入队列也属于成功产蛋")
+    assert(game:_Destroy(2, false, {}, nil, "self"))
+    local entered = Events(game:Step(0, Contacts()), "spawn")
+    assert(eggs[1].location == "bottle" and #game.spawnQueue == 0 and #entered == 1)
+    Close(entered[1].x, .2); Close(entered[1].y, 3)
 end)
 
 Test("草只选相邻最早uid动物，不选人类或远处动物", function()
@@ -616,6 +691,7 @@ Test("果冻对全部实体邻居发中心连线冲量，豁免穿透物", funct
     assert(Expansion.Apply(game, Item(game, 1), contacts, events))
     local impulses = Events(events, "impulse")
     assert(#impulses == 2 and impulses[1].uid == 2 and impulses[2].uid == 3)
+    Close(impulses[1].strength, 6); Close(impulses[2].strength, 6)
     Close(impulses[1].dx, 1); Close(impulses[1].dy, 2); Close(impulses[2].dx, -2)
 end)
 

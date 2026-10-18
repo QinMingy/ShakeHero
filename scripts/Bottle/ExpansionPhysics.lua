@@ -58,7 +58,9 @@ local Expansion = {}
 Expansion.__index = Expansion
 local PI, RAD = math.pi, math.pi / 180
 local DISC_SPEED = 3.0
-local DASH_SPEED = 4.0
+local DASH_SPEED = 6.0 -- 冲刺速度（米/秒）；时长与奖励仍由规则层保持原约定。
+---@type fun(record:BottleBody)
+local containSolid
 
 local function finite(value)
     return type(value) == "number" and value == value and math.abs(value) < math.huge
@@ -289,6 +291,9 @@ function Expansion:Apply(sim, event)
             -- 不带duration的指南针保持旧语义：在解锁屏障立刻完成。
             rotateWhole(record, delta)
             state.rotateOffset = state.rotateOffset + delta
+            -- 指南针在步进后的Sync执行；贴墙软体原地转动后也要在此解锁屏障
+            -- 收回真实越界段，不能等下一物理帧才修正而让画面短暂穿瓶。
+            containSolid(record)
         end
         -- 强制姿态从采样基线排除，不计指南针/转圈圈的自然角路程。
         state.angle = record.node.rotation2D * RAD
@@ -506,7 +511,7 @@ local function containSoftSegments(record)
 end
 
 ---@param record BottleBody
-local function containSolid(record)
+containSolid = function(record)
     local center = record.node.position2D
     if not record.soft and math.abs(center.x) < 2.4-record.envelope and center.y > record.envelope
         and center.y < 5.5-record.envelope then return end

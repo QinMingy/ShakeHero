@@ -58,6 +58,11 @@ function Tests.Run(report)
             id .. "图案与物理统一尺寸")
     end
     Check(Items.HasTag("soldier", "人类") and Items.HasTag("doctor", "人类"), "保留士兵医生人类tag")
+    local chickGame = {relics={}} --[[@as any]]
+    for _, text in ipairs({Items.byId.chick.effect, ItemText.Effect(chickGame, "chick"),
+        ItemText.Effect(chickGame, "chick", {id="chick"} --[[@as any]])}) do
+        Check(text == "每5秒：30%概率产生一个[[egg]]", "小鸡定义、候选及实例说明统一30%产蛋")
+    end
     Check(Items.byId.ghost.piercing == true and Items.byId.discus.piercing == true, "幽灵飞盘穿透标记")
     Check(Items.byId.apple_half.name == "半个苹果", "半个苹果更名")
     Check(Contains(Items.byId.teacher.effect, "自身价值永久+3"), "老师说明+3")

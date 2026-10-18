@@ -9,6 +9,7 @@ local Expansion = {}
 local EPSILON = 1e-9
 local TURN = math.pi * 2
 local DASH_DURATION = 0.35 -- 短冲刺表现参数，不是额外玩法冷却。
+local JELLY_PUSH_SPEED = 6 -- 弹开速度增量（米/秒），不改变接触范围或2.5秒冷却。
 local VIOLENT_SHAKE = 4 -- 输入速度增量阈值（米/秒），表现实现参数。
 
 local HANDLED = {
@@ -383,6 +384,8 @@ function Expansion.Apply(game, item, contacts, events)
     if Expansion.Touches(game, item, contacts) ~= true then return false end
     local id = item.id
     if id == "chick" then
+        -- 周期到点仅判定一次；失败仍由调度器等待下一个完整5秒。
+        if game:_RandomInt(100) > 30 then return false end
         return game:_Spawn("egg", events, false, Position(game, item.uid, contacts)) ~= nil
     elseif id == "grass" or id == "poop" or id == "golden_poop"
         or id == "diamond_poop" or id == "rainbow_poop" then
@@ -470,7 +473,7 @@ function Expansion.Apply(game, item, contacts, events)
                 local dy = origin and position and position.y - origin.y or 0
                 if dx * dx + dy * dy < EPSILON then dx = other.uid > item.uid and 1 or -1 end
                 events[#events + 1] = { kind = "impulse", uid = other.uid,
-                    sourceUid = item.uid, dx = dx, dy = dy, strength = 3 }
+                    sourceUid = item.uid, dx = dx, dy = dy, strength = JELLY_PUSH_SPEED }
                 hit = true
             end
         end

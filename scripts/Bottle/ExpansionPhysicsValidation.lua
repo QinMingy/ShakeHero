@@ -21,6 +21,25 @@ local function make(ids)
     sim:Sync(items, true, 337)
     return sim, items
 end
+-- 规则夹具走真实Start/Step与真实Box2D快照；只隔离初始牌库，不替换规则或伪造运动事件。
+local function ruleWorld(ids, options)
+    local Game=require("Bottle.Game")
+    local game=Game.New(337) --[[@as any]]
+    game._instances,game.deck,game.discard,game.drawn={},{},{},{}
+    game._lastPositions,game._nextUid={},1
+    game.relics={accelerator=options and options.accelerator==true,
+        ghost_poop=options and options.ghostPoop==true}
+    for _,id in ipairs(ids) do
+        local item=game:_Create(id)
+        item.location="bottle"
+        game.drawn[#game.drawn+1]=item.uid
+    end
+    assert(game:Start())
+    local sim=Physics.New();worlds[#worlds+1]=sim
+    sim:Sync(game:BottleItems(),true,337,options)
+    sim:RememberEvents(game.startEvents);sim:Sync(game:BottleItems())
+    return sim,game
+end
 local function clean()
     for _, sim in ipairs(worlds) do sim:Dispose() end
     worlds = {}
@@ -247,16 +266,165 @@ case("冲量弹开与小牛短冲刺遵循实体CCD", function(check)
     place(sim,1,0,3);place(sim,2,-1,3);place(sim,3,-1.5,4)
     for _,record in pairs(sim.bodies) do record.body.gravityScale=0 end
     local before=sim.bodies[1].body.linearVelocity
+    -- 旧strength=3仅保留适配器兼容回归；生产果冻强度另由下方真实Game事件验证。
     sim:RememberEvents({{kind="impulse",uid=1,sourceUid=2,dx=1,dy=0,strength=3},
         {kind="dash",uid=3,dx=1,dy=0,duration=.35}});sim:Sync(items)
     check(math.abs(sim.bodies[1].body.linearVelocity.x-before.x-3)<1e-5,"方向冲量产生3米每秒速度增量")
     for _=1,21 do sim:Step(1/60) end
     local x,y=sim:GetPose(3)
-    check(x>-.3 and x<.1 and math.abs(y-4)<.01,"0.35秒短冲刺约1.4米，非3秒")
+    check(math.abs(x-.6)<.02 and math.abs(y-4)<.01,"0.35秒短冲刺约2.1米，非3秒")
     check(sim.expansion.states[3].dashRemaining<1e-7,"冲刺到期停止主动速度覆盖")
     sim:RememberEvents({{kind="dash",uid=3,dx=1,dy=0,duration=.35}})
-    for _=1,90 do sim:Step(1/60) end
+    local wall,bounded=false,true
+    for _=1,90 do
+        sim:Step(1/60)
+        local xx,yy=sim:GetPose(3)
+        wall=wall or sim:Contacts().side[3]==true
+        bounded=bounded and math.abs(xx)<2.4 and yy>0 and yy<6.4
+    end
     check(select(1,sim:GetPose(3))<2.4,"实体短冲刺不会穿出瓶壁")
+    check(wall and bounded and sim.world.continuousPhysics and sim.bodies[3].body.bullet
+        and not sim.bodies[3].sensor and not assert(sim.bodies[3].shapes[1]).trigger,
+        "6米每秒冲刺实际撞侧壁并由实体CCD阻挡，全程不穿瓶")
+end)
+
+-- 果冻夹具（米，+Y向上）：轻苹果(-.4,2.8) <- 果冻(0,3) -> 重苹果(.4,3.2)。
+-- 两苹果各与果冻真fixture重叠、彼此不接触；采解算后的中心线，事件前后不步进以隔离碰撞/阻尼。
+-- 检测：真实pairs -> Game调度 -> 生产impulse -> Physics；比较dv而非绝对速度，质量不参与速度增量。
+case("果冻真实规则到物理全邻居向外6米每秒且质量不变", function(check)
+    local sim,game=ruleWorld({"jelly","apple","apple"})
+    game:Get(2).weight=.5;game:Get(3).weight=2
+    sim:Sync(game:BottleItems())
+    place(sim,1,0,3);place(sim,2,-.4,2.8);place(sim,3,.4,3.2)
+    for _,rec in pairs(sim.bodies) do rec.body.gravityScale=0;rec.body.linearDamping=0 end
+    sim:Step(1/60)
+    check(pair(sim,1,2) and pair(sim,1,3) and not pair(sim,2,3),"两个不同重量苹果均是真实果冻邻居且彼此分离")
+    local contacts=sim:Contacts()
+    local before={}
+    for _,uid in ipairs({2,3}) do
+        local rec=sim.bodies[uid]
+        rec.body.linearVelocity=Vector2(.7,-.2)
+        local origin,target=contacts.positions[1],contacts.positions[uid]
+        local dx,dy=target.x-origin.x,target.y-origin.y
+        local length=math.sqrt(dx*dx+dy*dy)
+        before[uid]={mass=rec.body.mass,vx=.7,vy=-.2,dx=dx/length,dy=dy/length,node=rec.node}
+    end
+    local events=game:Step(0,contacts)
+    local targets,count={},0
+    for _,event in ipairs(events) do
+        if event.kind=="impulse" then
+            count=count+1;targets[event.uid]=true
+            check(event.sourceUid==1 and event.strength==6,"真实果冻规则发6米每秒而非手工payload")
+        end
+    end
+    check(count==2 and targets[2] and targets[3],"一次果冻调度覆盖全部两个实体邻居且各一条")
+    check(math.abs(game:Get(1).remaining-2.5)<1e-8,"更强弹开仍成功后冷却2.5秒")
+    sim:RememberEvents(events);sim:Sync(game:BottleItems())
+    for _,uid in ipairs({2,3}) do
+        local rec,saved=sim.bodies[uid],assert(before[uid])
+        local velocity=rec.body.linearVelocity
+        local dx,dy=velocity.x-saved.vx,velocity.y-saved.vy
+        check(math.abs(dx-saved.dx*6)<1e-5 and math.abs(dy-saved.dy*6)<1e-5,
+            "苹果"..uid.."沿解算后中心连线向外增速6米每秒并保留原速度")
+        check(rec.node==saved.node and math.abs(rec.body.mass-saved.mass)<1e-7
+            and rec.weight==game:Get(uid).weight,"苹果"..uid.."弹开不重建也不改变质量重量")
+    end
+    check(math.abs(before[3].mass/before[2].mass-4)<1e-5,"真实质量相差4倍仍各增速6米每秒")
+    check(#game:Step(0,sim:Contacts())==0 and math.abs(game:Get(1).remaining-2.5)<1e-8,
+        "重复零时间快照不重发弹开且不偷跑冷却")
+end)
+
+-- 穿透夹具：无植物tag的移除币(-.4,2.8)与sensor(.2,3.2)同时真接触果冻(0,3)。
+-- 移除币仅结算时自耗，不触发便便植物消费；飞盘设3秒owner_wait，隔离非果冻投掷生命周期。
+-- sensor有真实Begin但不受力；对照同种子世界不执行规则，60步自主路径须完全相同。
+case("果冻生产弹开豁免幽灵飞盘及四幽灵便便", function(check)
+    for _,id in ipairs({"ghost","discus","poop","golden_poop","diamond_poop","rainbow_poop"}) do
+        local sim,game=ruleWorld({"jelly","removal_coin",id},{ghostPoop=true})
+        if id=="discus" then
+            game:Get(3).discusState,game:Get(3).discusWait="owner_wait",3
+        end
+        local control=make({"jelly","removal_coin",id})
+        local controlItems=game:BottleItems()
+        control:Sync(controlItems,false,nil,{ghostPoop=true})
+        for _,world in ipairs({sim,control}) do
+            place(world,1,0,3);place(world,2,-.4,2.8);place(world,3,.2,3.2)
+            for _,rec in pairs(world.bodies) do rec.body.gravityScale=0 end
+            world:Step(1/60)
+        end
+        check(pair(sim,1,2) and pair(sim,1,3),id.."与实体邻居同时真实接触果冻")
+        local sensor=sim.bodies[3]
+        local velocity,mass=sensor.body.linearVelocity,sensor.body.mass
+        local events=game:Step(0,sim:Contacts())
+        local count,exempt,isolated=0,true,true
+        local eventKinds={}
+        for _,event in ipairs(events) do
+            eventKinds[#eventKinds+1]=event.kind..":"..tostring(event.uid)
+            if event.kind=="impulse" then
+                count=count+1
+                exempt=exempt and event.uid==2 and event.strength==6
+            else isolated=false end
+        end
+        if not isolated then
+            print("[ExpansionPhysics] jellyExempt 非果冻事件 id="..id.." events="..table.concat(eventKinds,","))
+        end
+        check(count==1 and exempt,id.."不在生产impulse目标内，实体仍正常弹开")
+        check(isolated and #game:BottleItems()==3 and game:Get(3).location=="bottle",
+            id.."夹具只产生果冻事件且不消费/投掷穿透物")
+        sim:RememberEvents(events);sim:Sync(game:BottleItems())
+        local after=sensor.body.linearVelocity
+        check(sensor.sensor and assert(sensor.shapes[1]).trigger and math.abs(after.x-velocity.x)<1e-7
+            and math.abs(after.y-velocity.y)<1e-7 and math.abs(sensor.body.mass-mass)<1e-7,
+            id.."规则事件执行后sensor速度质量不变")
+        local same=true
+        for _=1,60 do
+            sim:Step(1/60);control:Step(1/60)
+            local x,y=sim:GetPose(3);local cx,cy=control:GetPose(3)
+            same=same and math.abs(x-cx)<1e-6 and math.abs(y-cy)<1e-6
+        end
+        check(same,id.."弹开后60步自主路径与无果冻事件对照完全相同")
+    end
+end)
+
+-- 小牛夹具：牛(-1.5,3)接触前方草(-1.1,3)，苹果(.1,3)初始不接触；草成功消费后才冲刺。
+-- 真实碰撞推动苹果，不传送、不切sensor；复合fixture接触每冲刺只给一次+1。
+case("小牛真实吃草冲刺推动实体且只奖励一次", function(check)
+    local sim,game=ruleWorld({"calf","grass","apple"})
+    place(sim,1,-1.5,3);place(sim,2,-1.1,3);place(sim,3,.1,3)
+    for _,rec in pairs(sim.bodies) do rec.body.gravityScale=0;rec.body.linearDamping=0 end
+    sim:Step(1/60)
+    check(pair(sim,1,2) and not pair(sim,1,3),"冲刺前牛仅与草真实接触，苹果无接触")
+    -- 生产PRNG下一草签为13（空产物）；避免新便便碰撞混入唯一苹果奖励，不替换消费钩子。
+    game._rngState=3
+    local events=game:Step(0,sim:Contacts())
+    local count=0
+    for _,event in ipairs(events) do
+        if event.kind=="dash" then
+            count=count+1
+            check(event.uid==1 and event.targetUid==2 and math.abs(event.duration-.35)<1e-8
+                and event.dx>0,"成功消费真实草生成向前0.35秒冲刺事件")
+        end
+    end
+    check(count==1 and game:Get(2).location=="discard","只在真实草成功消费后发一次冲刺")
+    sim:RememberEvents(events);sim:Sync(game:BottleItems())
+    local calf,apple=sim.bodies[1],sim.bodies[3]
+    check(calf.body.bodyType==BT_DYNAMIC and calf.body.bullet and sim.world.continuousPhysics
+        and not calf.sensor and not assert(calf.shapes[1]).trigger,"生产冲刺保持动态实体及全局/单体CCD")
+    local appleStart=select(1,sim:GetPose(3))
+    local hit,pushed,bounded=false,false,true
+    for _=1,21 do
+        sim:Step(1/60)
+        hit=hit or pair(sim,1,3)
+        pushed=pushed or apple.body.linearVelocity.x>.5
+        local contacts=sim:Contacts()
+        local stepEvents=game:Step(1/60,contacts)
+        sim:RememberEvents(stepEvents);sim:Sync(game:BottleItems())
+        local x,y=sim:GetPose(1)
+        bounded=bounded and math.abs(x)<2.4 and y>0 and y<6.4
+    end
+    check(hit and pushed and select(1,sim:GetPose(3))>appleStart+.1,"真实Box2D冲刺接触苹果并使其前移")
+    check(game:Get(1).bonus==1 and game:Get(1).permBonus==0,"复合接触冲刺只临时+1，不提高奖励或重复计数")
+    check(game:Get(1).calfDashRemaining<1e-7 and sim.expansion.states[1].dashRemaining<1e-7
+        and bounded,"规则及物理冲刺同在21固定步结束，姿态有限在瓶内")
 end)
 
 case("独立飞盘匀速自动移动与肩颈侧壁分类", function(check)
@@ -589,9 +757,17 @@ case("加速器覆盖幽灵便便飞盘冲刺且排除锚定闪现", function(ch
         sim:RememberEvents({{kind="flight",uid=1,toX=1.2,toY=3,duration=1},
             {kind="dash",uid=2,dx=1,dy=0,duration=.35},{kind="anchor",uid=3,x=-1,y=1}})
     end
-    for _=1,21 do a:Step(1/60);b:Step(1/60) end
+    for _=1,20 do a:Step(1/60);b:Step(1/60) end
+    check(math.abs(a.expansion.states[2].dashRemaining-1/60)<1e-7
+        and math.abs(b.expansion.states[2].dashRemaining-1/60)<1e-7,
+        "普通与加速器冲刺20步后均还剩1/60秒，不提前结束")
+    a:Step(1/60);b:Step(1/60)
     local ax=a:GetPose(2);local bx=b:GetPose(2)
     check(math.abs((bx+1.2)-(ax+1.2)*1.2)<.002,"小牛短冲刺实际路程120%")
+    check(math.abs(ax+1.2-2.1)<.002 and math.abs(bx+1.2-2.52)<.002,
+        "6米每秒冲刺0.35秒实际2.1米，加速器为2.52米")
+    check(math.abs(a.clock-.35)<1e-7 and math.abs(b.clock-.35)<1e-7,
+        "普通与加速器21固定步均只推进0.35秒")
     check(a.expansion.states[2].dashRemaining<1e-7 and b.expansion.states[2].dashRemaining<1e-7,
         "加速器不缩短0.35秒冲刺计时")
     local fa=assert(a.expansion.states[1].flight);local fb=assert(b.expansion.states[1].flight)
@@ -637,33 +813,55 @@ case("加速器幽灵便便真实Game生态不偷跑计时", function(check)
     sim.bodies[9].body.angularDamping=0;sim.bodies[9].body.angularVelocity=7
     sim:SetMode(1)
     local maxCount,safe,sensors=0,true,true
-    local function consume(events)
+    local function consume(events,step,stage)
         sim:RememberEvents(events);sim:Sync(game:BottleItems(),false,nil,options)
         maxCount=math.max(maxCount,#game:BottleItems())
         for _,rec in pairs(sim.bodies) do
             if rec.kind=="poop" or rec.kind=="golden_poop" or rec.kind=="diamond_poop" or rec.kind=="rainbow_poop" then
-                sensors=sensors and rec.sensor and rec.ghostLike and rec.body.gravityScale==0
+                local valid=rec.sensor and rec.ghostLike and rec.body.gravityScale==0
+                if sensors and not valid then
+                    print(string.format("[ExpansionPhysics] relicEcology 首次sensor异常 stage=%s step=%d clock=%.6f uid=%d kind=%s sensor=%s ghostLike=%s gravity=%.6f",
+                        stage,step,sim.clock,rec.uid,rec.kind,tostring(rec.sensor),tostring(rec.ghostLike),rec.body.gravityScale))
+                end
+                sensors=sensors and valid
             end
-            for _,part in ipairs(rec.parts) do
+            for index,part in ipairs(rec.parts) do
                 local p=part.node.position2D
-                safe=safe and p.x==p.x and p.y==p.y and math.abs(p.x)<2.5 and p.y>-.1 and p.y<6.5
+                local valid=p.x==p.x and p.y==p.y and math.abs(p.x)<2.5 and p.y>-.1 and p.y<6.5
+                if safe and not valid then
+                    local center,velocity=rec.node.position2D,part.body.linearVelocity
+                    local kinds={}
+                    for _,event in ipairs(events) do kinds[#kinds+1]=event.kind..":"..tostring(event.uid) end
+                    print(string.format("[ExpansionPhysics] relicEcology 首次越界 stage=%s step=%d clock=%.6f uid=%d kind=%s part=%d center=(%.6f,%.6f) position=(%.6f,%.6f) velocity=(%.6f,%.6f) sensor=%s newborn=%.6f scale=%.6f events=%s",
+                        stage,step,sim.clock,rec.uid,rec.kind,index,center.x,center.y,p.x,p.y,velocity.x,velocity.y,
+                        tostring(rec.sensor),rec.newbornRemaining,rec.scale,table.concat(kinds,",")))
+                end
+                safe=safe and valid
             end
         end
     end
     for step=1,600 do
         if step==12 or step==240 then sim:Shake(.4,.05) end
-        sim:Step(1/60);consume(game:Step(1/60,sim:Contacts()))
+        sim:Step(1/60);consume(game:Step(1/60,sim:Contacts()),step,"running")
     end
     check(game.phase=="settle" and math.abs(game.elapsed-10)<1e-6
         and math.abs(sim.clock-10)<1e-6,"遗物生态600步仍仅10秒且恰到settle")
-    for _=1,120 do sim:Step(1/60);consume(game:SettleStep(1/60,sim:Contacts())) end
+    for step=1,120 do
+        sim:Step(1/60);consume(game:SettleStep(1/60,sim:Contacts()),step,"settle")
+    end
     check(game.phase=="reveal" and #game:BottleItems()==0,"遗物生态120步settle清瓶进入reveal")
     local lingering=false
     for _,item in ipairs(game:AllInstances()) do
-        lingering=lingering or (item.generatedTemporary and item.location=="bottle")
+        local remains=item.generatedTemporary and item.location=="bottle"
+        if not lingering and remains then
+            print(string.format("[ExpansionPhysics] relicEcology 首次临时残留 uid=%d kind=%s location=%s phase=%s",
+                item.uid,item.id,item.location,game.phase))
+        end
+        lingering=lingering or remains
     end
     check(not lingering and safe and sensors and maxCount<=100,"遗物生态全段有限/便便真实sensor/临时清理/上限100")
-    print(string.format("[ExpansionPhysics] relicEcology maxCount=%d phase=%s",maxCount,game.phase))
+    print(string.format("[ExpansionPhysics] relicEcology maxCount=%d phase=%s safe=%s sensors=%s lingering=%s",
+        maxCount,game.phase,tostring(safe),tostring(sensors),tostring(lingering)))
 end)
 
 local V=_G["V"]

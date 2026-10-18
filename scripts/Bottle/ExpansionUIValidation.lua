@@ -35,11 +35,12 @@ local acquisitionGrants = {
     {id="credit_line",gifts={"credit_card"}}, {id="bacon_network",gifts={"bacon"}},
     {id="ghost_sport",gifts={"ghost"}}, {id="lucky_roulette",gifts={"roulette"}},
 }
-local pigScreenshot, relicScreenshot, sheepScreenshot = false, false, false
+local pigScreenshot, relicScreenshot, sheepScreenshot, dashScreenshot = false, false, false, false
 for _, argument in ipairs(GetArguments()) do
     if argument == "-expansion-ui-pig" then pigScreenshot = true end
     if argument == "-expansion-ui-relics" then relicScreenshot = true end
     if argument == "-expansion-ui-sheep" then sheepScreenshot = true end
+    if argument == "-expansion-ui-dash" then dashScreenshot = true end
 end
 ---@type any
 local view = {}
@@ -679,6 +680,99 @@ Guard(14,function()
             "Save/Restore已拥有遗物保留全部赠品且不再次发放"..entry.id)
         local restoredAgain=Game.Restore(restored:Snapshot())
         Check(Equal(acquired,restoredAgain:Snapshot()),"连续第二次读档也不赠品"..entry.id)
+    end
+end)
+
+-- 冲刺视觉专项：复用真实main/Board/Box2D，存档仍全程内存隔离。
+Guard(15,function()
+    local fixture = require("Bottle.RepairTests").Fixture({"calf", "grass", "jelly", "apple"})
+    for key in pairs(game) do game[key] = nil end
+    for key,value in pairs(fixture) do game[key] = value end
+    game.phase = "running"
+    rawset(game, "_RandomInt", function() return 1 end) -- 草无产物，隔离入场粒子。
+    physics:Sync(game:BottleItems(),true,123)
+    local function Place(uid,x,y)
+        local record=assert(physics.bodies[uid])
+        record.node:SetPosition2D(x,y);record.node.rotation2D=0
+        record.body.gravityScale,record.body.linearDamping=0,0
+        record.body.linearVelocity=Vector2(0,0);record.body.angularVelocity=0
+    end
+    Place(1,-1.5,3.7);Place(2,-1.2,3.7);Place(3,-1,1.5);Place(4,1,1.5)
+    view:Rebind(game);view:CloseInventory();view:CloseItemDetail();view:CloseDefinition()
+    view.modal:Hide();view.draft:Hide()
+    UI.Layout()
+    local board=view.board
+    board.pops,board.popByUid,board.bursts={},{},{}
+    board.presentUids={}
+    for _,item in ipairs(game:BottleItems()) do board.presentUids[item.uid]=true end
+    game._lastPositions=physics:Contacts().positions
+    local events={}
+    Check(game:_Destroy(2,false,events,assert(game:Get(1)),"consume"),"真实成功吃草触发冲刺")
+    board:Effects(events);physics:RememberEvents(events);physics:Sync(game:BottleItems())
+    Check(board.dashEmitters[1]~=nil and #board.dashTrails==0,"冲刺事件只开启采样，不伪造旧位置")
+    for _=1,12 do physics:Step(1/60);board:UpdateDashTrails(1/60) end
+    Check(#board.dashTrails>=3 and #board.dashTrails<=5,"少量真实轨迹残影，0.2秒内最多5张")
+    local before=game:_Value(assert(game:Get(1)))
+    local lastX=-math.huge
+    for _,trail in ipairs(board.dashTrails) do
+        Check(trail.uid==1 and trail.x>lastX and math.abs(trail.y-3.7)<1e-5,
+            "残影顺序沿真实冲刺方向，不受默认事件坐标污染")
+        Check(trail.age>=0 and trail.age<.2 and trail.radius==Items.byId.calf.radius,
+            "残影保存原尺寸且有短生命周期")
+        lastX=trail.x
+    end
+    local oldItem,oldAlpha=Art.Item,_G["nvgGlobalAlpha"]
+    local drawn,alphas={},{}
+    Art.Item=function(vg,id,x,y,r,angle,cooling,rollValue,woolCount)
+        drawn[#drawn+1]={id=id,x=x,y=y,radius=r,angle=angle}
+        oldItem(vg,id,x,y,r,angle,cooling,rollValue,woolCount)
+    end
+    _G["nvgGlobalAlpha"]=function(vg,alpha)
+        alphas[#alphas+1]=alpha
+        oldAlpha(vg,alpha)
+    end
+    local ok,err=pcall(function() board:Render(Core.GetNVGContext()) end)
+    Art.Item,_G["nvgGlobalAlpha"]=oldItem,oldAlpha
+    Check(ok,"真实NanoVG渲染残影无错误"..(ok and "" or tostring(err)))
+    Check(#alphas==#board.dashTrails and #drawn>=#board.dashTrails+3,
+        "每张残影真实提交原小牛图案，其他实体仍绘制")
+    local ox,oy,ppu=board:GetBottleTransform()
+    for index,trail in ipairs(board.dashTrails) do
+        local draw=drawn[index]
+        Check(draw and draw.id=="calf" and math.abs(draw.x-ox-trail.x*ppu)<1e-5
+            and math.abs(draw.y-oy+trail.y*ppu)<1e-5 and math.abs(draw.angle+trail.angle)<1e-5,
+            "残影在全部实体前绘制并复用米制变换和真实角度")
+        Check(alphas[index]>0 and alphas[index]<=.32
+            and (index==1 or alphas[index]>=alphas[index-1]),"旧残影更淡，最大32%不遮住本体")
+    end
+    for _=1,25 do physics:Step(1/60);board:UpdateDashTrails(1/60) end
+    Check(#board.dashTrails==0 and next(board.dashEmitters)==nil,"冲刺结束后残影和计时全部回收")
+    Check(game:_Value(assert(game:Get(1)))==before,"采样与绘制不改变任何价值奖励")
+    board:Effects({{kind="dash",uid=1,duration=.35}})
+    board:UpdateDashTrails(.1);board:UpdateDashTrails(.1)
+    Check(#board.dashTrails==0,"顶墙或原地未移动不堆残影")
+    Place(1,0,3.7);board:UpdateDashTrails(.05)
+    Check(#board.dashTrails==1,"再次真实位移才追加残影")
+    board:Effects({{kind="remove",uid=1}})
+    Check(#board.dashTrails==0 and next(board.dashEmitters)==nil,"移除即时清残影与发射器")
+    board:Effects({{kind="dash",uid=1,duration=.35}})
+    Place(1,.3,3.7);board:UpdateDashTrails(.05)
+    board:ResetEffects()
+    Check(#board.dashTrails==0 and next(board.dashEmitters)==nil,"重摆或换局ResetEffects不遗留轨迹")
+    if dashScreenshot then
+        -- 确定性受控展示：12个真实物理步后冻结表现，不拿软件渲染wall time猜动作进度。
+        game.phase="prepare";view:Update(true)
+        game.phase="running"
+        Place(1,-1.5,3.7)
+        local dash={{kind="dash",uid=1,dx=1,dy=0,duration=.35}}
+        board:Effects(dash);physics:RememberEvents(dash);physics:Sync(game:BottleItems())
+        for _=1,12 do physics:Step(1/60);board:UpdateDashTrails(1/60) end
+        game.phase="prepare"
+        board.UpdateDashTrails=function() end -- 仅验收实例冻结，生产方法不改。
+        Check(#board.dashTrails>=3,"截图冻结前仍有真实冲刺轨迹")
+        UI.Layout()
+    else
+        game.phase="prepare"
     end
 end)
 
