@@ -165,7 +165,8 @@ function RelicEffects.AfterSettle(game, events)
         if item.location == "bottle" then
             total = total + game:_Value(item)
             -- _Destroy 保留 discard 与 gm_fruit 语义；本钩子之后不再统一结算/返还。
-            game:_Destroy(item.uid, false, events, { id = "juicer" })
+            -- 遗物不是物品实例；保留消费原因，不伪造缺少实例字段的消耗者。
+            game:_Destroy(item.uid, false, events, nil, "consume")
         end
     end
     if total ~= 0 then

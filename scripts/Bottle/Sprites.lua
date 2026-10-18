@@ -5,15 +5,7 @@
 -- 硬币十档共用 COIN_ROWS，用色板+压印条数区分；
 -- 半份水果由完整水果图案程序化取左半并加切面生成。
 
----@class BottlePixelGroup
----@field color number[]
----@field rects number[] 整数网格矩形，按 x、y、宽、高连续存储
-
----@class BottlePixelSprite
----@field width number
----@field height number
----@field groups BottlePixelGroup[]
----@field mirror boolean
+-- BottlePixelGroup / BottlePixelSprite 统一由 Art.lua 声明，避免重复且不一致的宽高类型。
 
 local INK = { 10, 10, 26, 255 }
 local Sprites = {}

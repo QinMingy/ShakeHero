@@ -246,6 +246,7 @@ function GamePersistence.Install(Game, helpers)
         local discardSeen = {}
         for _, uid in ipairs(snapshot.discard) do
             assert(IsInteger(uid), "弃牌 uid 不是整数")
+            ---@type ItemInstance
             local item = assert(self:Get(uid), "弃牌索引不存在")
             assert(not discardSeen[uid] and not deckSeen[uid] and item.location == "discard",
                 "弃牌重复、位置错误或仍在牌库")
@@ -257,6 +258,7 @@ function GamePersistence.Install(Game, helpers)
         local drawnSeen = {}
         for _, uid in ipairs(snapshot.drawn) do
             assert(IsInteger(uid), "抽取 uid 不是整数")
+            ---@type ItemInstance
             local item = assert(self:Get(uid), "抽取实例不存在")
             assert(not drawnSeen[uid] and item.location == "bottle", "抽取实例重复或不在瓶中")
             drawnSeen[uid] = true
