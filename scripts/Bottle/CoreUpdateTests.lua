@@ -347,9 +347,9 @@ Test("新果汁基础3、消费奖励锁定有效值且榨汁产物不额外加3
     juicer.juicerValue = 12.5
     local ok, _, juice = RelicEffects.UseJuicer(juicer)
     assert(ok and juice)
-    Close(juice.valueBase, 12.5); Close(juice.permBonus, 0); Close(juicer:_Value(juice), 12.5)
+    Close(juice.valueBase, 13); Close(juice.permBonus, 0); Close(juicer:_Value(juice), 13)
     local restored = Game.Restore(juicer:Snapshot())
-    Close(restored:_Value(Item(restored, juice.uid)), 12.5)
+    Close(restored:_Value(Item(restored, juice.uid)), 13)
 end)
 
 Test("旧果汁迁移基础0保持累计价值、不改其他物品或永久增益", function()
@@ -359,11 +359,11 @@ Test("旧果汁迁移基础0保持累计价值、不改其他物品或永久增�
     snapshot.instances[2].permBonus = 4
     local restored = Game.Restore(snapshot)
     Close(Item(restored, 1).valueBase, 0)
-    Close(Item(restored, 1).permBonus, 12.5)
-    Close(restored:_Value(Item(restored, 1)), 12.5)
+    Close(Item(restored, 1).permBonus, 12.5, "旧永久价值组成项保留原精度")
+    Close(restored:_Value(Item(restored, 1)), 13)
     Close(restored:_Value(Item(restored, 2)), 6)
     local again = Game.Restore(restored:Snapshot())
-    Close(again:_Value(Item(again, 1)), 12.5, "迁移不重复扣加基础")
+    Close(again:_Value(Item(again, 1)), 13, "迁移不重复扣加基础")
 end)
 
 Test("金盘洗手小偷不再被警察消灭或老师负面转化", function()
@@ -462,6 +462,8 @@ Test("额外羊毛存档拒绝错误类型价值回合抽取位置及瓶容量",
     local corruptions = {
         function(snapshot) snapshot.instances[2].id = "apple" end,
         function(snapshot) snapshot.instances[2].permBonus = 1 end,
+        function(snapshot) snapshot.instances[2].valueBase = .2 end,
+        function(snapshot) snapshot.instances[2].valueBase = .8 end,
         function(snapshot) snapshot.instances[2].woolReadyRound = 2 end,
         function(snapshot) snapshot.drawn[#snapshot.drawn + 1] = 2 end,
         function(snapshot)
@@ -487,6 +489,21 @@ Test("额外羊毛存档拒绝错误类型价值回合抽取位置及瓶容量",
     assert(not pcall(Game.Restore, game:Snapshot()), "额外入场仍受100瓶容量限制")
 end)
 
+Test("合法旧额外羊毛保留小数价值组成且恢复幂等", function()
+    local snapshot = Fixture({"apple", "wool"}, 1):Snapshot()
+    local wool = snapshot.instances[2]
+    wool.location, wool.woolExtraEntry, wool.woolReadyRound = "bottle", true, 1
+    wool.valueBase, wool.permBonus = .25, .75
+    local restored = Game.Restore(snapshot)
+    Close(Item(restored, 2).valueBase, .25); Close(Item(restored, 2).permBonus, .75)
+    Close(restored:_Value(Item(restored, 2)), 1, "合法额外羊毛原始组成项之和恰为1")
+    assert(Item(restored, 2).woolExtraEntry and #restored.drawn == 1 and restored.drawn[1] == 1)
+    local saved = restored:Snapshot()
+    local again = Game.Restore(saved)
+    assert(Equal(saved, again:Snapshot()), "合法旧额外羊毛不得因恢复重复涨价或改变抽取归属")
+    Close(snapshot.instances[2].valueBase, .25); Close(snapshot.instances[2].permBonus, .75)
+end)
+
 Test("存档严格拒绝新永久字段非法值和所有运行态残留", function()
     local invalid = {
         refreshes={-1,.5,false,"1",0/0,math.huge},
@@ -496,7 +513,7 @@ Test("存档严格拒绝新永久字段非法值和所有运行态残留", funct
         woolCount={-1,2147483648,.5,false,"1",0/0,math.huge},
         woolReadyRound={0,-1,2147483648,.5,false,"1",0/0,math.huge},
         woolExtraEntry={0,"true",{}},
-        eventMult={0,2,false,"1",{}}, generatedTemporary={true,0,"false"},
+        eventMult={0,2,false,"1",{},0/0,math.huge,-math.huge}, generatedTemporary={true,0,"false"},
         shielded={true,0,"false"}, anchored={true,0,"false"},
         abacusMerges={1,false,{}}, calfDashRemaining={.1,false,{}},
         discusWait={1,false,{}}, compassProgress={1,false,{}},
@@ -506,6 +523,12 @@ Test("存档严格拒绝新永久字段非法值和所有运行态残留", funct
         discusState={"flying"}, discusHolderUid={1}, compassAngle={0}, compassTravel={0},
         compassForced={0}, cactusScale={1}, cactusBonus={.1,false,"0",{},0/0,math.huge},
     }
+    -- 每个允许nil/零的运行态字段都必须拒绝非有限数；原生与标准Lua都执行此检查。
+    for _, field in ipairs({"abacusMerges", "calfDashRemaining", "discusWait", "compassProgress",
+        "ghostTravel", "spinProgress", "geckoContactTime", "cactusBonus", "jackpotBonus",
+        "rotationProgress", "gearPlayback"}) do
+        invalid[field] = {.1, false, "0", {}, 0/0, math.huge, -math.huge}
+    end
     for field, values in pairs(invalid) do
         for _, value in ipairs(values) do
             local snapshot = Fixture({"apple"}):Snapshot() --[[@as any]]
@@ -521,7 +544,8 @@ Test("存档严格拒绝新永久字段非法值和所有运行态残留", funct
     valid.refreshes = 100
     valid.instances[1].valueBase, valid.instances[1].refreshCount = -2.5, 4
     local restored = Game.Restore(valid)
-    Close(restored.refreshes, 100); Close(Item(restored, 1).valueBase, -2.5)
+    Close(restored.refreshes, 100); Close(Item(restored, 1).valueBase, -2.5, "合法旧基础值组成项保留原精度")
+    Close(restored:_Value(Item(restored, 1)), -2, "最终负价值-2.5向上取整为-2")
     Close(Item(restored, 1).refreshCount, 4)
 end)
 

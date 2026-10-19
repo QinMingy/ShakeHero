@@ -11,6 +11,7 @@ local Relics = require("Bottle.Relics")
 local Game = require("Bottle.Game")
 local ShakeMotion = require("Bottle.ShakeMotion")
 local Physics = require("Bottle.Physics")
+local PublishConfig = require("PublishConfig")
 local Tests = {}
 
 ---@param actual number
@@ -460,10 +461,14 @@ Test("三选一按考核阶段概率且候选不重复", function()
     end
 end)
 
-Test("腐烂香蕉屏蔽新候选但保留GM与已有实例", function()
+Test("腐烂香蕉屏蔽新候选但保留已有实例", function()
     for seed = 1, 100 do
         local game = Game.New(seed)
-        assert(game:GmAddItem(4) and game:GmAddItem("rotten_banana"), "屏蔽不限制GM添加")
+        for _ = 1, 2 do
+            assert(game:_Create("rotten_banana"))
+            game.revision = game.revision + 1
+        end
+        IdentityInvariant(game)
         local restored = Game.Restore(game:Snapshot())
         assert(Item(restored, 5).id == "rotten_banana" and Item(restored, 6).id == "rotten_banana",
             "屏蔽不删除已有实例或阻止其读档")
@@ -628,8 +633,39 @@ Test("存档校验拒绝损坏数据", function()
     assert(#restored.deck == 4 and restored:Start())
 end)
 
-Test("GM添加按实装状态过滤", function()
+Test("GM添加遵守发布开关与实装状态过滤", function()
     local game = Game.New(5)
+    if PublishConfig.PUBLISH_MODE ~= false then
+        -- Snapshot在运行/结算阶段会返回rollback；复制实时字段，避免掩盖GM副作用。
+        local function Copy(value)
+            if type(value) ~= "table" then return value end
+            local result = {}
+            for key, entry in pairs(value) do result[key] = Copy(entry) end
+            return result
+        end
+        local function Rejected(id)
+            local before = Copy(game)
+            local ok, message = game:GmAddItem(id)
+            assert(ok == false and message == "发布模式已禁用 GM", "发布配置必须优先拒绝GM")
+            assert(Equal(before, game), "拒绝GM不得改变实例、金币、候选、revision、UID或RNG")
+        end
+        for _, phase in ipairs({"prepare", "draft", "over"}) do
+            game.phase = phase
+            for _, id in ipairs({"apple", 48, "ninja", "cherry", "gambler", 34, 4, "rotten_banana"}) do
+                Rejected(id)
+            end
+        end
+        game.phase = "prepare"
+        assert(game:Start())
+        Rejected("apple")
+        game:Step(10)
+        assert(game.phase == "settle")
+        Rejected("apple")
+        game:SettleStep(2)
+        assert(game.phase == "reveal")
+        Rejected("apple")
+        return
+    end
     local ok = game:GmAddItem("apple")
     assert(ok and #game.deck == 5)
     ok = game:GmAddItem(48) -- 小球（V0.4 70件表中位于 #48）
@@ -642,6 +678,10 @@ Test("GM添加按实装状态过滤", function()
     assert(ok and #game.deck == 8, "赌徒当前已实装，允许添加")
     ok = game:GmAddItem(34) -- 赌徒
     assert(ok and #game.deck == 9, "已实装数字编号允许添加")
+    ok = game:GmAddItem(4)
+    assert(ok and #game.deck == 10 and game.deck[10].id == "rotten_banana", "屏蔽不限制开发GM数字添加")
+    ok = game:GmAddItem("rotten_banana")
+    assert(ok and #game.deck == 11 and game.deck[11].id == "rotten_banana", "屏蔽不限制开发GM按id添加")
     game:Start()
     ok = game:GmAddItem("apple")
     assert(not ok, "摇晃中拒绝GM")
@@ -1001,7 +1041,7 @@ Test("结算效果：种子变植物、气球爆炸、学生成长、桂冠、�
     assert(laurel:Start())
     laurel:Step(10)
     SettleAndReveal(laurel)
-    Close(laurel.lastRoundScore, 22 * 1.5 * 1.5 + 8, "苹果22×2.25 + 桂冠8，保留小数金币")
+    Close(laurel.lastRoundScore, 58, "苹果22×2.25=49.5向上取整50，再加桂冠8")
     -- 樱桃：结算再结算一次（共2次）。
     local cherry = Fixture({ "cherry" })
     assert(cherry:Start())
@@ -1218,43 +1258,44 @@ Test("存档往返保留遗物与跨回合实例状态", function()
     assert(next(old.relics) == nil and not old.relicDraft, "旧档缺省无遗物")
 end)
 
-Test("金币逐笔保留精度且事件余额累计回合一致", function()
+Test("金币与有效价值逐笔向上取整且事件余额累计回合一致", function()
     local cherry = Fixture({ "cherry" })
     Item(cherry, 1).permBonus = -1.8
-    Close(cherry:_Value(Item(cherry, 1)), 1.2, "物品价值保留计算精度")
+    Close(cherry:_Value(Item(cherry, 1)), 2, "物品有效价值1.2向上取整2")
     assert(cherry:Start())
     cherry:Step(10)
     local events = SettleAndReveal(cherry)
     local scores = Events(events, "score", 1)
     assert(#scores == 2, "樱桃仍然逐笔结算两次")
-    Close(scores[1].value, 1.2); Close(scores[2].value, 1.2)
-    Close(cherry.score, 2.4, "两笔1.2不取整，共2.4金币")
-    Close(cherry.totalScore, 2.4); Close(cherry.roundScore, 2.4)
-    Close(cherry.lastRoundScore, 2.4); Close(cherry.bestRoundScore, 2.4)
+    Close(scores[1].value, 2); Close(scores[2].value, 2)
+    Close(cherry.score, 4, "两笔有效价值各2，共4金币")
+    Close(cherry.totalScore, 4); Close(cherry.roundScore, 4)
+    Close(cherry.lastRoundScore, 4); Close(cherry.bestRoundScore, 4)
 
     local card = Fixture({ "credit_card" })
     Item(card, 1).permBonus = -11.2
     assert(card:Start())
     card:Step(10)
     events = SettleAndReveal(card)
-    Close(Events(events, "score", 1)[1].value, -1.2, "负收益也保留小数")
-    Close(card.score, -1.2); Close(card.totalScore, -1.2)
-    Close(card.roundScore, -1.2); Close(card.lastRoundScore, -1.2)
+    Close(Events(events, "score", 1)[1].value, -1, "负收益-1.2向正无穷取整为-1")
+    Close(card.score, -1); Close(card.totalScore, -1)
+    Close(card.roundScore, -1); Close(card.lastRoundScore, -1)
 end)
 
-Test("金币奖励不截断物品价值和倍率", function()
+Test("消费奖励使用向上取整的有效价值且保留小数倍率", function()
     local game = Fixture({ "police", "thief" })
     Item(game, 2).permBonus, Item(game, 2).permMult = 4, 1.5
-    Close(game:_Value(Item(game, 2)), 7.5, "消灭前目标有效价值仍为7.5")
+    Close(game:_Value(Item(game, 2)), 8, "消灭前目标有效价值7.5先取整为8")
+    Close(Item(game, 2).permMult, 1.5, "永久倍率本身仍保留1.5")
     assert(game:Start())
     local events = game:Step(0, { pairs = { { 1, 2 } } })
     local scores = Events(events, "score", 1)
     assert(#scores == 1 and Item(game, 2).location == "discard")
-    Close(scores[1].value, 30, "7.5×4为30，不能提前取整成8×4")
-    Close(game.score, 30); Close(game.totalScore, 30); Close(game.roundScore, 30)
+    Close(scores[1].value, 32, "警察使用目标有效价值8×4为32")
+    Close(game.score, 32); Close(game.totalScore, 32); Close(game.roundScore, 32)
 end)
 
-Test("存档金币物品与榨汁往返保留小数精度", function()
+Test("旧档金币向上迁移且有效价值只在最终取整", function()
     local game = Fixture({ "apple" })
     assert(game:Start())
     game:Step(10)
@@ -1263,21 +1304,63 @@ Test("存档金币物品与榨汁往返保留小数精度", function()
     snapshot.score, snapshot.totalScore, snapshot.roundScore = 12.2, 24.2, 3.2
     snapshot.lastRoundScore, snapshot.bestRoundScore = 3.2, 6.2
     snapshot.instances[1].permBonus, snapshot.instances[1].permMult = .25, 1.5
+    snapshot.instances[1].valueBase = 2.2
     snapshot.juicerValue = 7.5
     snapshot.lastResult = "第1回合获得3.2金币"
     local restored = Game.Restore(snapshot)
-    Close(restored.score, 12.2); Close(restored.totalScore, 24.2); Close(restored.roundScore, 3.2)
-    Close(restored.lastRoundScore, 3.2); Close(restored.bestRoundScore, 6.2)
-    Close(Item(restored, 1).permBonus, .25); Close(Item(restored, 1).permMult, 1.5)
-    Close(restored:_Value(Item(restored, 1)), 3.375)
-    Close(restored.juicerValue, 7.5)
-    assert(restored.lastResult == snapshot.lastResult, "读档不改写结果文案中的小数金额")
+    Close(restored.score, 13); Close(restored.totalScore, 25); Close(restored.roundScore, 4)
+    Close(restored.lastRoundScore, 4); Close(restored.bestRoundScore, 7)
+    Close(Item(restored, 1).valueBase, 2.2); Close(Item(restored, 1).permBonus, .25)
+    Close(Item(restored, 1).permMult, 1.5, "倍率和价值组成项都保留原始精度")
+    Close(restored:_Value(Item(restored, 1)), 4, "(2.2+.25)×1.5=3.675只在最终取整4")
+    Close(restored.juicerValue, 8)
+    assert(restored.lastResult == "第1回合获得4金币", "旧结果文案金额同步向上迁移")
     local saved = restored:Snapshot()
-    for _, field in ipairs({"score", "totalScore", "roundScore", "lastRoundScore", "bestRoundScore"}) do
-        Close(saved[field], snapshot[field], "金币字段保留精度：" .. field)
+    local expected = {score=13,totalScore=25,roundScore=4,lastRoundScore=4,bestRoundScore=7}
+    for field, value in pairs(expected) do
+        Close(saved[field], value, "金币字段独立向上取整：" .. field)
     end
     Close(snapshot.score, 12.2, "恢复不改写源快照")
-    assert(Equal(saved, Game.Restore(saved):Snapshot()), "小数金币往返幂等")
+    Close(snapshot.instances[1].valueBase, 2.2); Close(snapshot.instances[1].permBonus, .25)
+    assert(snapshot.lastResult == "第1回合获得3.2金币", "迁移不改写源结果文案")
+    assert(Equal(saved, Game.Restore(saved):Snapshot()), "整数迁移后往返幂等")
+end)
+
+Test("金额格式与直接计分统一向上取整且非法金额拒绝", function()
+    local Money = require("Bottle.Money")
+    for _, pair in ipairs({{4.2,5},{4.8,5},{-1.2,-1},{0,0},{5,5}}) do
+        Close(Money.Round(pair[1]), pair[2])
+        assert(Money.Format(pair[1]) == tostring(pair[2]), "金额格式必须使用同一整数规则")
+    end
+    for _, value in ipairs({false,"4.2",{},0/0,math.huge,-math.huge}) do
+        assert(not pcall(Money.Round,value --[[@as number]]), "非法或非有限金额必须拒绝")
+    end
+    local game = Fixture({"apple"})
+    local item = Item(game,1)
+    item.permBonus,item.mult,item.permMult=.25,1.5,1.5
+    Close(game:_Value(item),6,"(2+.25)×1.5×1.5=5.0625在所有倍率后取整")
+    Close(item.mult,1.5);Close(item.permMult,1.5)
+    assert(game:Start())
+    local events={}
+    game:_Score(events,item,4.2);game:_Score(events,item,4.8);game:_Score(events,item,-1.2)
+    Close(events[1].value,5);Close(events[2].value,5);Close(events[3].value,-1)
+    Close(game.score,9);Close(game.totalScore,9);Close(game.roundScore,9)
+end)
+
+Test("旧考核失败文案迁移不把39.2未达40改成40未达40", function()
+    local snapshot = Fixture({}):Snapshot()
+    snapshot.phase, snapshot.round, snapshot.drawn = "over", 5, {}
+    snapshot.score, snapshot.totalScore = 39.2, 39.2
+    snapshot.roundScore, snapshot.lastRoundScore = 3.2, 3.2
+    snapshot.lastResult = "第5回合获得3.2金币，余额39.2未达到考核目标40"
+    local restored = Game.Restore(snapshot)
+    Close(restored.score,40)
+    assert(restored.phase == "over", "旧考核结果不因金额迁移重新判定")
+    assert(restored.lastResult == "第5回合获得4金币，考核未通过，考核目标40",
+        "结果文案保留失败事实且不展示迁移后的自相矛盾比较")
+    assert(snapshot.lastResult == "第5回合获得3.2金币，余额39.2未达到考核目标40")
+    local saved=restored:Snapshot()
+    assert(Equal(saved,Game.Restore(saved):Snapshot()), "已迁移考核文案与账本再次恢复幂等")
 end)
 
 Test("可选cjson往返保持prepare/rollback/draft和RNG", function()

@@ -1,18 +1,21 @@
 -- 开始页：自绘天空渐变背景，游戏道具随机从天而降；
 -- 按进行中存档切换开始／继续入口；新局确认复用移除物品弹窗。
--- 文字沿用全局上下浮动；点击开始后整页淡出并交还牌桌。
+-- 标题从画面上方落入、白转浅金；点击开始后整页淡出并交还牌桌。
 local UI = require("urhox-libs/UI")
 local L = require("Machine.LayeredLayout")
 local Art = require("Bottle.Art")
 local GameAudio = require("Bottle.Audio")
 local Storage = require("Bottle.Storage")
 local Confirmation = require("Bottle.RemovalConfirm")
+local TitleLogo = require("Bottle.TitleLogo")
 
 ---@class BottleStartScreen
 ---@field view any
 ---@field root Panel
----@field title Label
+---@field brand Panel
+---@field title Widget
 ---@field subtitle Label
+---@field titleIntroElapsed number
 ---@field startButton Button
 ---@field exitButton Button
 ---@field newRunButton Button
@@ -26,7 +29,6 @@ StartScreen.__index = StartScreen
 
 local INK = {240, 232, 200, 255}
 local MUTED = {175, 174, 146, 255}
-local SUBTITLE = {163, 190, 188, 255}
 local BORDER = {120, 124, 103, 255}
 
 -- 从天而降的道具：已实装/可绘制精灵中挑选的辨识度高的一批。
@@ -35,91 +37,6 @@ local FALL_IDS = {
     "balloon", "knife", "credit_card", "star", "coin_one", "coin_two",
     "die_d6", "droplet",
 }
-
--- 标题像素字（24×24 点阵，与瓶内物品同源的黑体点阵化）。m6x11 只含英文数字，
--- 中文“摇摇英雄”改用点阵手绘，风格与游戏像素美术一致。
-local TITLE_GLYPHS = {
-    ["摇"] = {
-        "........................",
-        "........................",
-        ".....##...........###...",
-        ".....##....##########...",
-        ".....##..#######........",
-        ".....##............##...",
-        ".....##...#..##....##...",
-        "..#######.##..##..##....",
-        ".....##....#...#..##....",
-        ".....##.....#.....#.....",
-        ".....##....##...........",
-        ".....####..##########...",
-        "....####..##..##........",
-        "..#####...#...##........",
-        "...#.##..#############..",
-        ".....##.##############..",
-        ".....##.......##........",
-        ".....##...##..##...##...",
-        ".....##...##..##...##...",
-        ".....##...##..##...##...",
-        "...####...###########...",
-        "...###.............##...",
-        "........................",
-        "........................",
-    },
-    ["英"] = {
-        "........................",
-        "........................",
-        "........#.....##........",
-        "........#.....##........",
-        "...###################..",
-        "...##################...",
-        "........#.....##........",
-        "........#..##..#........",
-        "...........##...........",
-        ".....#############......",
-        ".....#############......",
-        "......#....##....#......",
-        "......#....##....#......",
-        ".....##....##....##.....",
-        "..###################...",
-        "..........####..........",
-        "..........##.##.........",
-        ".........##...##........",
-        ".......###.....###......",
-        ".....####.......####....",
-        "...####...........###...",
-        "....#...................",
-        "........................",
-        "........................",
-    },
-    ["雄"] = {
-        "........................",
-        "........................",
-        ".....###.....##..#......",
-        ".....##......##..##.....",
-        ".....##.....##...##.....",
-        ".....##.....##..........",
-        "..########.###########..",
-        "..#.###.##.###..##......",
-        "....##....####...#......",
-        "....##....#.##...#......",
-        "....#.##....##########..",
-        "...##.##....#########...",
-        "...##.##....##...#......",
-        "..##.##.....##...#......",
-        "..##.##.....#########...",
-        ".....##.##..##########..",
-        "....##..##..##...#......",
-        "....##...##.##...#......",
-        "...########.##..###..#..",
-        "...####..##.##########..",
-        "............##..........",
-        "............##..........",
-        "........................",
-        "........................",
-    },
-}
-local TITLE_COLOR = {255, 205, 74, 255}
-local TITLE_TEXT = { "摇", "摇", "英", "雄" }
 
 -- 私有 Park-Miller 随机源：开始页纯表现，不碰全局 math.random、不影响玩法序列。
 ---@param seed integer
@@ -131,31 +48,6 @@ local function makeRng(seed)
         s = (s * 16807) % 2147483647
         return s / 2147483647
     end
-end
-
----@param vg NVGContextWrapper
----@param glyph string[]
----@param x number 左上角 X（base 像素）
----@param y number 左上角 Y（base 像素）
----@param pixel number 单个点阵像素的显示边长
----@param color RGBA
-local function DrawGlyph(vg, glyph, x, y, pixel, color)
-    nvgFillColor(vg, nvgRGBA(color[1], color[2], color[3], color[4]))
-    nvgBeginPath(vg)
-    for row, line in ipairs(glyph) do
-        local col = 1
-        while col <= #line do
-            if line:sub(col, col) == "#" then
-                local start = col
-                while col <= #line and line:sub(col, col) == "#" do col = col + 1 end
-                nvgRect(vg, x + (start - 1) * pixel, y + (row - 1) * pixel,
-                    (col - start) * pixel, pixel)
-            else
-                col = col + 1
-            end
-        end
-    end
-    nvgFill(vg)
 end
 
 ---@param view any
@@ -172,13 +64,14 @@ function StartScreen.New(view)
     self.titleAngle, self.titleAngVel = 0.0, 0.0
     self.pulseTimer = 0.0
     self.floatTime = 0.0
+    self.titleIntroElapsed = 0.0
     self.fallItems = {}
     self:Build()
     self.newRunConfirm = Confirmation.New(view, "newRunConfirm")
     self:InitFalling()
     self:Layout()
     self:MaskGameUi()
-    print("[开始页] 摇摇英雄 / Shake Hero · 道具雨 + 每2秒标题弹性摇晃")
+    print("[开始页] 实习造物主 · 金色像素标题从上方降下，白色过渡至金色")
     return self
 end
 
@@ -187,7 +80,7 @@ function StartScreen:Build()
     self.root = UI.Panel {
         position = "absolute", left = 0, top = 0, width = "100%", height = "100%",
         -- z34：必须排在机台后效合成节点（z35）之前，否则不会进入本帧 UI 捕获。
-        zIndex = 34, pointerEvents = "auto", backgroundColor = {0, 0, 0, 0},
+        zIndex = 34, pointerEvents = "auto", backgroundColor = {0, 0, 0, 0}, overflow = "hidden",
         onClick = function() end,
     }
     -- 天空渐变背景：上浅下深，给道具雨留出纵深。
@@ -212,16 +105,20 @@ function StartScreen:Build()
     self.fallWidget = fall
     self.root:AddChild(fall)
 
-    local title = UI.Widget {position = "absolute", left = 0, top = 0, width = "100%",
-        height = 60, pointerEvents = "none"} --[[@as any]]
+    self.brand = UI.Panel {id = "startBrand", position = "absolute", left = 0, top = 0,
+        width = "100%", height = 156, padding = 0, pointerEvents = "none",
+        backgroundColor = {0, 0, 0, 0}, transformOrigin = "center"}
+    local title = UI.Widget {id = "startTitle", position = "absolute", left = 0, top = 0, width = "100%",
+        height = 120, pointerEvents = "none"} --[[@as any]]
     function title:Render(vg)
         screen:RenderTitle(self, vg)
     end
     self.title = title
     self.subtitle = UI.Label {
-        text = "Shake Hero", fontColor = SUBTITLE, textAlign = "center", verticalAlign = "middle",
+        text = TitleLogo.SUBTITLE, fontColor = TitleLogo.Color(0), textAlign = "center", verticalAlign = "middle",
         whiteSpace = "normal", position = "absolute", width = "100%", pointerEvents = "none",
         fontFamily = "pixel",
+        textMotionDisabled = true,
         textShadow = {offsetX = 2, offsetY = 2, blur = 0, color = {8, 11, 10, 210}},
     }
     local function option(text, onClick, primary)
@@ -240,8 +137,9 @@ function StartScreen:Build()
     self.newRunButton = option("开始新游戏", function() self:RequestNewRun() end, false)
     self.exitButton = option("退出", function() self:Exit() end, false)
 
-    self.root:AddChild(self.title)
-    self.root:AddChild(self.subtitle)
+    self.brand:AddChild(self.title)
+    self.brand:AddChild(self.subtitle)
+    self.root:AddChild(self.brand)
     self.root:AddChild(self.startButton)
     self.root:AddChild(self.newRunButton)
     self.root:AddChild(self.exitButton)
@@ -291,34 +189,25 @@ function StartScreen:RenderFalling(w, vg)
     nvgRestore(vg)
 end
 
--- 标题：手绘点阵“摇摇英雄”，整体弹性缩放/摇晃 + 逐字上下浮动。
+-- 标题只读动画进度；整体入场和空闲运动由同一UI视觉层承载。
 ---@param w Widget
 ---@param vg NVGContextWrapper
 function StartScreen:RenderTitle(w, vg)
     local b = w:GetAbsoluteLayout()
     if b.w <= 0 or b.h <= 0 then return end
-    local pixel = b.h / 24
-    local glyphW = 24 * pixel
-    local gap = 6 * pixel
-    local totalW = 4 * glyphW + 3 * gap
-    local baseX = b.x + (b.w - totalW) / 2
-    local baseY = b.y
+    TitleLogo.Draw(vg, b, TitleLogo.Pose(self.titleIntroElapsed).colorProgress)
+end
 
-    nvgSave(vg)
-    nvgShapeAntiAlias(vg, 0)
-    -- 弹性缩放 + 摇晃：围绕标题中心，再逐字浮动。
-    local cx, cy = b.x + b.w / 2, b.y + b.h / 2
-    nvgTranslate(vg, cx, cy)
-    nvgRotate(vg, self.titleAngle)
-    nvgScale(vg, self.titleScale, self.titleScale)
-    nvgTranslate(vg, -cx, -cy)
-    for i, ch in ipairs(TITLE_TEXT) do
-        local glyph = TITLE_GLYPHS[ch]
-        local x = baseX + (i - 1) * (glyphW + gap)
-        local float = math.sin(self.floatTime * math.pi * 2 / 2.7 - (i - 1) * 0.48) * 2.5 * pixel
-        DrawGlyph(vg, glyph, x, baseY + float, pixel, TITLE_COLOR)
+function StartScreen:SyncTitle()
+    local s = (self.view.machineSkin and self.view.machineSkin.scale) or 1
+    local pose = TitleLogo.Pose(self.titleIntroElapsed)
+    local float = pose.settled and math.sin(self.floatTime * math.pi * 2 / 2.7) * 1.5 or 0
+    self.brand:SetStyle({translateY = (pose.offsetY + float) * s,
+        scale = self.titleScale, rotate = math.deg(self.titleAngle)})
+    if self.lastTitleColor ~= pose.colorProgress then
+        self.subtitle:SetStyle({fontColor = TitleLogo.Color(pose.colorProgress)})
+        self.lastTitleColor = pose.colorProgress
     end
-    nvgRestore(vg)
 end
 
 function StartScreen:Layout()
@@ -326,9 +215,11 @@ function StartScreen:Layout()
     local s = (m and m.scale) or 1
     local width = L.width * s
     self.root:SetStyle({width = width, height = L.height * s})
-    self.title:SetStyle({left = 0, top = 248 * s, width = width, height = 60 * s})
-    self.subtitle:SetStyle({left = 0, top = 338 * s, width = width, height = 36 * s,
-        fontSize = 20 * s, letterSpacing = 2 * s})
+    self.brand:SetStyle({left = 0, top = 218 * s, width = width, height = 156 * s})
+    self.title:SetStyle({left = 0, top = 0, width = width, height = 120 * s})
+    self.subtitle:SetStyle({left = 0, top = 124 * s, width = width, height = 28 * s,
+        fontSize = 14 * s, letterSpacing = 2 * s})
+    self:SyncTitle()
     local buttonW, buttonH = 240 * s, 64 * s
     local left = (L.width - 240) * .5 * s
     local hasRun = self:HasRun()
@@ -350,7 +241,7 @@ function StartScreen:MaskGameUi()
     if #self.masked == 0 then
         for _, widget in ipairs({self.view.footer, self.view.deckButton,
             self.view.mainMenuButton,
-            m.help, m.save}) do
+            m.help}) do
             if widget then self.masked[#self.masked + 1] = widget end
         end
     end
@@ -408,6 +299,7 @@ function StartScreen:Open()
     self.pulseTimer = 0
     self.titleScale, self.titleVel = 1, 0
     self.titleAngle, self.titleAngVel = 0, 0
+    self.titleIntroElapsed, self.floatTime = 0, 0
     self.root:SetStyle({opacity = 1})
     self.root:Show()
     self.startButton:SetDisabled(false)
@@ -432,7 +324,17 @@ end
 
 -- 标题弹性缩放/摇晃的欠阻尼弹簧：每2秒踢一脚，过冲后稳定回1。
 local TITLE_STIFFNESS, TITLE_DAMPING = 160, 9
-local TITLE_SCALE_KICK, TITLE_ANGLE_KICK = 2.6, 2.5
+local TITLE_SCALE_KICK, TITLE_ANGLE_KICK = .6, .35
+
+-- 解析弹簧避免大dt时标题/细框爆振，仍保留原有每2秒的轻回弹。
+local function titleSpring(value, velocity, target, dt)
+    local damping = TITLE_DAMPING / 2
+    local wave = math.sqrt(TITLE_STIFFNESS - damping*damping)
+    local delta = value - target
+    local cosine, sine, decay = math.cos(wave*dt), math.sin(wave*dt), math.exp(-damping*dt)
+    return target + decay*(delta*cosine + (velocity + damping*delta)/wave*sine),
+        decay*(velocity*cosine - (damping*velocity + TITLE_STIFFNESS*delta)/wave*sine)
+end
 
 ---@param dt number
 function StartScreen:Update(dt)
@@ -459,20 +361,19 @@ function StartScreen:Update(dt)
             return
         end
     else
-        self.pulseTimer = self.pulseTimer + dt
+        local remaining = math.max(0, TitleLogo.DURATION - self.titleIntroElapsed)
+        self.titleIntroElapsed = math.min(TitleLogo.DURATION, self.titleIntroElapsed + dt)
+        local idleDt = math.max(0, dt - remaining)
+        self.pulseTimer = self.pulseTimer + idleDt
         while self.pulseTimer >= 2.0 do
             self.pulseTimer = self.pulseTimer - 2.0
             self.titleVel = self.titleVel + TITLE_SCALE_KICK
             self.titleAngVel = self.titleAngVel + (self.rng() * 2 - 1) * TITLE_ANGLE_KICK
         end
-        -- 半隐式欧拉弹簧：scale 围绕 1，angle 围绕 0。
-        self.titleVel = self.titleVel
-            + (-TITLE_STIFFNESS * (self.titleScale - 1) - TITLE_DAMPING * self.titleVel) * dt
-        self.titleScale = self.titleScale + self.titleVel * dt
-        self.titleAngVel = self.titleAngVel
-            + (-TITLE_STIFFNESS * self.titleAngle - TITLE_DAMPING * self.titleAngVel) * dt
-        self.titleAngle = self.titleAngle + self.titleAngVel * dt
-        self.floatTime = self.floatTime + dt
+        self.titleScale, self.titleVel = titleSpring(self.titleScale, self.titleVel, 1, idleDt)
+        self.titleAngle, self.titleAngVel = titleSpring(self.titleAngle, self.titleAngVel, 0, idleDt)
+        self.floatTime = self.floatTime + idleDt
+        self:SyncTitle()
     end
     self:MaskGameUi()
 end

@@ -137,7 +137,8 @@ Test("食物+2按tag进入括号并乘倍率、不改共享base或永久加值",
     for _=1,3 do Close(game:_Value(apple),21) end
     Finish(game)
     local restored = Game.Restore(game:Snapshot())
-    Close(restored:_Value(Item(restored,1)),10.5); Close(Item(restored,1).permBonus,3)
+    Close(restored:_Value(Item(restored,1)),11,"(基础2+永久3+食物遗物2)×1.5=10.5向上取整11")
+    Close(Item(restored,1).permBonus,3)
 end)
 
 Test("幽灵便便仅使四种便便穿透、不修改基础定义", function()

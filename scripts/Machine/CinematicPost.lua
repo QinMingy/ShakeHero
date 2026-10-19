@@ -1,6 +1,7 @@
 -- 完整 UI 合成后进行泛光、纹理与暗角处理；不再执行景深模糊。
 -- Uses public NanoVG RTT and SurfaceShader APIs; no engine library modifications.
 local UI=require('urhox-libs/UI')
+local PublishConfig=require('PublishConfig')
 local Art=require('Bottle.Art')
 ---@type any
 local Post={};Post.__index=Post
@@ -87,6 +88,7 @@ function Post:Draw()
     nvgEndFrame(self.vg)
 end
 function Post:Toggle(which)
+    if PublishConfig.PUBLISH_MODE~=false then return end
     self[which]=not self[which]
     print('[Machine.Cinematic] '..which..'='..tostring(self[which]))
 end

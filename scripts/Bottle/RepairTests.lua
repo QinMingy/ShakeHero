@@ -4,6 +4,7 @@ local Game = require("Bottle.Game")
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local RelicEffects = require("Bottle.RelicEffects")
+local PublishConfig = require("PublishConfig")
 local T = {}
 
 ---@param actual number
@@ -75,26 +76,55 @@ Case("积少成多文案明确金币而非物品增值", function()
     assert(text:find("立即获得1金币", 1, true) and text:find("不增加物品价值", 1, true), text)
 end)
 
-Case("GM添加含负值信用卡边界及无遗物对照", function()
+Case("GM添加遵守发布开关、负值信用卡边界及无遗物对照", function()
+    local function Copy(value)
+        if type(value) ~= "table" then return value end
+        local result = {}
+        for key, entry in pairs(value) do result[key] = Copy(entry) end
+        return result
+    end
+    local function Equal(a, b)
+        if type(a) ~= type(b) then return false end
+        if type(a) ~= "table" then return a == b end
+        for key, value in pairs(a) do if not Equal(value, b[key]) then return false end end
+        for key in pairs(b) do if a[key] == nil then return false end end
+        return true
+    end
     for _, savings in ipairs({false, true}) do
         local game = T.Fixture({}, savings and {small_savings=true,credit_line=true} or {credit_line=true})
-        for _, id in ipairs({"apple", "trash_can", "credit_card", "ghost"}) do
-            local score, total, roundScore = game.score, game.totalScore, game.roundScore
-            assert(game:GmAddItem(id))
-            local item = game.deck[#game.deck]
-            Close(game.score - score, savings and 1 or 0)
-            Close(game.totalScore - total, savings and 1 or 0)
-            Close(game.roundScore, roundScore, "沿用积少成多不计入roundScore")
-            Close(item.bonus, 0)
-            Close(item.permBonus, id == "credit_card" and 15 or 0)
-            Close(game:_Value(item), id == "credit_card" and 25 or Items.byId[id].base)
-            assert(item.location == "deck", "GM只添加牌库")
+        local function Rejected(id)
+            local before = Copy(game)
+            local ok, message = game:GmAddItem(id)
+            assert(ok == false and message == "发布模式已禁用 GM")
+            assert(Equal(before, game), "发布GM拒绝不得改变金币、价值、牌库、revision、UID或RNG")
         end
-        local score, count = game.score, #game.deck
-        assert(not game:GmAddItem("unknown_repair_item"))
-        Close(game.score, score); assert(#game.deck == count)
-        assert(game:Start())
-        assert(not game:GmAddItem("apple")); Close(game.score, score)
+        for _, id in ipairs({"apple", "trash_can", "credit_card", "ghost"}) do
+            if PublishConfig.PUBLISH_MODE ~= false then
+                Rejected(id)
+            else
+                local score, total, roundScore = game.score, game.totalScore, game.roundScore
+                assert(game:GmAddItem(id))
+                local item = game.deck[#game.deck]
+                Close(game.score - score, savings and 1 or 0)
+                Close(game.totalScore - total, savings and 1 or 0)
+                Close(game.roundScore, roundScore, "沿用积少成多不计入roundScore")
+                Close(item.bonus, 0)
+                Close(item.permBonus, id == "credit_card" and 15 or 0)
+                Close(game:_Value(item), id == "credit_card" and 25 or Items.byId[id].base)
+                assert(item.location == "deck", "GM只添加牌库")
+            end
+        end
+        if PublishConfig.PUBLISH_MODE ~= false then
+            Rejected("unknown_repair_item")
+            assert(game:Start())
+            Rejected("apple")
+        else
+            local score, count = game.score, #game.deck
+            assert(not game:GmAddItem("unknown_repair_item"))
+            Close(game.score, score); assert(#game.deck == count)
+            assert(game:Start())
+            assert(not game:GmAddItem("apple")); Close(game.score, score)
+        end
     end
 end)
 
@@ -149,7 +179,7 @@ Case("果汁累计价值与积少成多金币分离且失败不入账", function
     local ok, _, juice = RelicEffects.UseJuicer(game)
     assert(ok and juice)
     Close(game.score, 1); Close(game.totalScore, 1); Close(game.roundScore, 0)
-    Close(game:_Value(juice), 13.5); Close(juice.valueBase, 13.5)
+    Close(game:_Value(juice), 14); Close(juice.valueBase, 14)
     Close(juice.permBonus, 0); Close(game.juicerValue, 0)
     assert(not RelicEffects.UseJuicer(game)); Close(game.score, 1)
     game.juicerValue = 2
@@ -159,7 +189,9 @@ end)
 
 Case("重抽读档返还均不重复发添加金币或价值", function()
     local game = T.Fixture({"apple", "orange"}, {small_savings=true})
-    assert(game:GmAddItem("ball")); Close(game.score, 1)
+    assert(game:_Create("ball"))
+    game.revision = game.revision + 1
+    Close(game.score, 1)
     assert(game:Reroll()); assert(not game:Reroll())
     Close(game.score, 1); Close(game.totalScore, 1)
     for _, item in ipairs(game.deck) do Close(item.permBonus, 0) end

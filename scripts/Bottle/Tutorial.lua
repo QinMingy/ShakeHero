@@ -2,6 +2,7 @@
 local Storage=require("Bottle.Storage")
 local State=require("Bottle.TutorialState")
 local Overlay=require("Bottle.TutorialOverlay")
+local Text=require("Bottle.TutorialText")
 local L=require("Machine.LayeredLayout")
 local Skin=require("Machine.LayeredSkin")
 ---@type any
@@ -9,38 +10,28 @@ local Tutorial={}
 Tutorial.__index=Tutorial
 
 local specs={
-    welcome={text="欢迎入职，上帝实习生！\n这只烧杯，就是你的第一个小世界。能不能转正，就看你的表现了！",
-        button="开始学习",holes={L.board},hand="heart",y=335},
-    goal={text="每5回合，都要进行一次考核。\n第一次需要攒够40金币！\n达标会扣除目标金币，剩余的留到以后；金币不够，本次实习就结束啦。",
-        holes={L.score,L.target,L.round,L.targetProgress},point={86,177,18,8},
+    welcome={holes={L.board},hand="heart",y=335},
+    goal={holes={L.score,L.target,L.round,L.targetProgress},point={86,177,18,8},
         handEdge="left",handAngle=-32,y=295},
-    start={text="杯里的物品，能帮你赚金币。\n准备好就点击「开始摇晃」！",
-        button=false,holes={L.board,L.start},windows={L.start},point={276,696,8,8},
+    start={button=false,holes={L.board,L.start},windows={L.start},point={276,696,8,8},
         handEdge="right",handAngle=35,y=390},
-    shakeIntro={text="按住烧杯来回拖动，让物品移动、碰撞！支持体感时，也能直接摇动手机。\n看，小球碰到杯壁就能增加价值，每3秒可以触发一次。准备好后，开始这10秒吧！",
-        button="准备好了",holes={L.board},point={90,365,70,50},y=650,compact=true},
-    running={text="来回摇晃，让物品发挥本领！",button=false,holes={L.board,L.start,L.reroll},
+    inspectBall={button=false,holes={L.board},windows={},point=L.board,y=24,compact=true},
+    ballEffect={holes={L.board},windows={L.board},hideHand=true,y=24,compact=true},
+    shakeIntro={holes={L.board},point={90,365,70,50},y=650,compact=true},
+    running={button=false,holes={L.board,L.start,L.reroll},
         windows={L.board},handEdge="left",circle={cx=190,cy=420,rx=55,ry=60,period=2.2},
         y=755,compact=true},
-    result={text="时间到！物品落稳后，会按各自当前的价值结算金币。价值越高，赚得越多！\n普通的价值加成只管这一回合，写着「永久」的才能留到以后。",
-        holes={L.score},point=L.score,y=340},
-    choose={text="切换候选，查看物品效果。\n看好后，点击「下一步」。",
-        button="下一步",holes={L.screen,L.draftSlots[1],L.draftSlots[2],L.draftSlots[3]},
+    result={holes={L.score},point=L.score,y=340},
+    choose={holes={L.screen,L.draftSlots[1],L.draftSlots[2],L.draftSlots[3]},
         windows={L.board,L.draftSlots[1],L.draftSlots[2],L.draftSlots[3]},
         point=L.draftSlots[2],y=24,compact=true},
-    refresh={text="再教你一招：准备重抽和物品刷新共用次数！\n新局有1次，每完成2回合增加1次，没用完会保留；有次数就能继续重抽或刷新。\n遗物每组三选一另有1次独立免费刷新，每次重置。",
-        button="试试刷新",holes={L.draftRefresh},point=L.draftRefresh,y=250},
-    reroll={text="不满意这三个候选？点击「刷新」，花1次刷新机会，重抽一组！",
-        button=false,holes={L.draftRefresh},windows={L.draftRefresh},point=L.draftRefresh,y=350,compact=true},
-    confirm={text="切换看效果，再点「选择此物品」。\n每回合从牌库随机抽最多20件入杯，不足就全部上场。",
-        button=false,holes={L.screen,L.draftSlots[1],L.draftSlots[2],L.draftSlots[3],L.draftConfirm},
+    refresh={holes={L.draftRefresh},point=L.draftRefresh,y=250},
+    reroll={button=false,holes={L.draftRefresh},windows={L.draftRefresh},point=L.draftRefresh,y=350,compact=true},
+    confirm={button=false,holes={L.screen,L.draftSlots[1],L.draftSlots[2],L.draftSlots[3],L.draftConfirm},
         windows={L.board,L.draftSlots[1],L.draftSlots[2],L.draftSlots[3],L.draftConfirm},point=L.draftConfirm,y=24,compact=true},
-    finish={text="记住：搭配物品赚金币，在考核前攒够目标！\n加油吧，实习生——你的第一个小世界，交给你了！",
-        button="继续实习",holes={L.board,L.target},hand="nails",y=335},
-    exam={heading="上帝的考核提醒",text="这回合结束就要考核啦！\n攒够目标金币才能继续，考核会扣除对应金币，剩余的保留。先看看目标，再开始摇晃吧。",
-        button="明白了",holes={L.score,L.target,L.round},point=L.target,y=330},
-    relic={heading="上帝的遗物奖励",text="考核通过！选完物品，还能再挑一件遗物。\n遗物不用放进烧杯，就能为这局游戏持续提供加成。看看效果，选一件吧！",
-        button="挑选遗物",holes={L.board,L.draftSlots[1],L.draftSlots[2],L.draftSlots[3]},
+    finish={holes={L.board,L.target},hand="nails",y=335},
+    exam={holes={L.score,L.target,L.round},point=L.target,y=330},
+    relic={holes={L.board,L.draftSlots[1],L.draftSlots[2],L.draftSlots[3]},
         point=L.draftSlots[2],y=27,compact=true},
 }
 
@@ -71,6 +62,47 @@ function Tutorial:Allows(action)
     return self.milestone=="" and ((action=="switch" and (step=="choose" or step=="review" or step=="confirm"))
         or (action=="refresh" and step=="reroll") or (action=="choose" and step=="confirm")
         or (action=="shake" and step=="running"))
+end
+function Tutorial:AllowsInspection(item,source)
+    if not self:Active() then return true end
+    local step=Storage.tutorial.step
+    return self.milestone=="" and (step=="inspectBall" or step=="ballEffect")
+        and self.view.game.phase=="prepare" and source=="bottle" and item and item.location=="bottle"
+        and self.view.board:IsItemReadyForInspection(item.uid)
+end
+function Tutorial:OnInspected(item,source)
+    if Storage.tutorial.status~="active" or not self:AllowsInspection(item,source)
+        or not self.view.detailOverlay:IsVisible() or self.view.detailSource~=source
+        or self.view.selectedUid~=item.uid then return end
+    if Storage.tutorial.step=="inspectBall" then
+        self:SetState(State.Advance(Storage.tutorial,"inspectedItem",self.view.game))
+    end
+    self:Present()
+end
+function Tutorial:OnItemDetailClosed(item,source)
+    -- 收起纸条只回到自由查看气泡，下一步必须由玩家手动点击。
+    if Storage.tutorial.status=="active" and Storage.tutorial.step=="ballEffect" then self:Present() end
+end
+
+-- 优先指向小球；它尚未入场时可先看其他已就绪物品，不依赖固定摆放位置。
+function Tutorial:BallTarget()
+    local container=self.view.container:GetAbsoluteLayout()
+    local s=self.view.machineSkin.scale
+    if not (s>0 and container.w>0 and container.h>0) then return end
+    ---@type number[]?
+    local fallback
+    for _,item in ipairs(self.view.game:BottleItems()) do
+        if self.view.board:IsItemReadyForInspection(item.uid) then
+            local b=self.view.board:GetItemBounds(item.uid)
+            if b.w>0 and b.h>0 then
+                local w,h=math.max(44,b.w/s+12),math.max(44,b.h/s+12)
+                local target={(b.x+b.w/2-container.x)/s-w/2,(b.y+b.h/2-container.y)/s-h/2,w,h}
+                if item.id=="ball" then return target end
+                fallback=fallback or target
+            end
+        end
+    end
+    return fallback
 end
 function Tutorial:OnStartRequested()
     if self.launching then self.launching=false;return true end
@@ -122,6 +154,11 @@ function Tutorial:Continue()
     local step=Storage.tutorial.step
     if step=="shakeIntro" then
         self.launching=true;self.callbacks.start()
+    elseif step=="ballEffect" then
+        if game.phase=="prepare" then
+            self:SetState(State.Advance(Storage.tutorial,"continue",game))
+            self.view:CloseDefinition();self.view:CloseItemDetail()
+        end
     elseif step~="start" and step~="choose" and step~="running" and step~="reroll" and step~="confirm" then
         self:SetState(State.Advance(Storage.tutorial,"continue",game))
     end
@@ -130,11 +167,27 @@ end
 function Tutorial:Present()
     if not self:Active() then self.overlay:Hide();return end
     local key=self.milestone~="" and self.milestone or Storage.tutorial.step
-    local source=specs[key=="review" and "choose" or key]
+    -- 真实纸条打开时收起气泡；物品及关联图鉴都关闭后再显示手动下一步。
+    if key=="ballEffect" and (self.view.detailOverlay:IsVisible() or self.view.definitionModal:IsVisible()) then
+        self.overlay:Hide();return
+    end
+    local layoutKey=key=="review" and "choose" or key
+    local source=specs[layoutKey]
     if not source then self.overlay:Hide();return end
     local spec={};for k,v in pairs(source) do spec[k]=v end;spec.key=key
+    local words=Text[layoutKey]
+    if type(words)=="table" then
+        for k,v in pairs(words) do spec[k]=v end
+    end
+    if key=="inspectBall" then
+        local target=self:BallTarget()
+        if target then spec.windows={L.board};spec.point=target
+        else
+            spec.key="inspectBallLoading";spec.text=Text.inspectBallLoading.text;spec.hideHand=true
+        end
+    end
     if key=="running" and self.view.game.phase~="running" then
-        spec.key="settling";spec.text="时间到！等物品落稳，看看这一回合赚了多少金币。"
+        spec.key="settling";spec.text=Text.settling.text
         spec.windows={};spec.circle=nil
     end
     if key=="choose" or key=="review" then

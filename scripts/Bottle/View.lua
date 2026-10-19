@@ -1,4 +1,6 @@
 local UI = require("urhox-libs/UI")
+local DeveloperOverlay = require("Machine.DeveloperOverlay")
+local PublishConfig = require("PublishConfig")
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local RelicView = require("Bottle.RelicView")
@@ -11,7 +13,6 @@ local ItemText = require("Bottle.ItemText")
 local Money = require("Bottle.Money")
 local PaperNote = require("Bottle.PaperNote")
 local RemovalConfirm = require("Bottle.RemovalConfirm")
-local SaveCodeField = require("Bottle.SaveCodeField")
 local RefreshUI = require("Bottle.RefreshUI")
 local RulesUI = require("Bottle.RulesUI")
 local MachineSkin = require("Machine.LayeredSkin")
@@ -274,14 +275,19 @@ function View:Init(game, physics, actions)
         inspect = function(uid) self:InspectItem(uid) end,
         width = "100%", flexGrow = 1, flexBasis = 0, minHeight = 120, pointerEvents = "auto"}
     self.physicsButton = Button("切换物理 · 二", function()
+        if not DeveloperOverlay.IsAllowed(self) then return end
         self.board:ResetShake()
         self.physicsMenu:SetVisible(not self.physicsMenu:IsVisible())
     end)
     self.physicsButton:SetStyle({position = "absolute", left = 8, top = 8,
         width = 144, height = 40, fontSize = 11.25, zIndex = 5})
     self.physicsButton:SetWidth(144)
-    self.physicsOne = Button("物理一 · 原版", function() self.actions.physics(1) end)
-    self.physicsTwo = Button("物理二 · 摇晃", function() self.actions.physics(2) end, true)
+    self.physicsOne = Button("物理一 · 原版", function()
+        if DeveloperOverlay.IsAllowed(self) then self.actions.physics(1) end
+    end)
+    self.physicsTwo = Button("物理二 · 摇晃", function()
+        if DeveloperOverlay.IsAllowed(self) then self.actions.physics(2) end
+    end, true)
     self.physicsOne:SetWidth(162)
     self.physicsTwo:SetWidth(162)
     self.physicsOne:SetStyle({fontSize = 11.25})
@@ -290,6 +296,7 @@ function View:Init(game, physics, actions)
     self.sensorLabel = UI.Label {id = "sensorStatus", text = "体感：未启用", fontSize = 10,
         whiteSpace = "normal", width = "100%", fontColor = C.textSecondary}
     self.sensorButton = Button("启用／校准体感", function()
+        if not DeveloperOverlay.IsAllowed(self) then return end
         self.actions.sensor()
         self.physicsMenu:Hide()
     end)
@@ -309,17 +316,15 @@ function View:Init(game, physics, actions)
     self.modal = UI.Panel {position = "absolute", top = 0, left = 0, right = 0, bottom = 0,
         visible = false, backgroundColor = C.overlay, padding = 16,
         justifyContent = "center", zIndex = 30, pointerEvents = "auto"}
-    -- 牌库入口以袋子为底图，文字写在袋身上。
+    -- 牌库入口使用像素钱袋与吊牌，保留实际牌库数量。
     self.deckButton = Button("牌库 3", function() self:OpenInventory() end)
     self.deckButton:SetStyle({height = 40, fontSize = 11.25, width = 86})
     local help = Button("规则", function() self:OpenHelp() end)
     help:SetStyle({height = 40, fontSize = 11.25, width = 64})
-    local save = Button("存档", function() self:OpenSave() end)
-    save:SetStyle({height = 40, fontSize = 11.25, width = 64})
     local gm = Button("GM", function() self:OpenGm() end)
     gm:SetStyle({textMotionDisabled = true})
     gm:SetStyle({height = 40, fontSize = 11.25, width = 52})
-    local title = Label("摇摇牌库", 22.5, C.primary)
+    local title = Label("实习造物主", 22.5, C.primary)
     title:SetStyle({textShadow = {offsetX = 2, offsetY = 2, blur = 0, color = C.secondary}})
     self.container = UI.Panel {width = "100%", maxWidth = 560, height = "100%",
         alignSelf = "center", paddingHorizontal = 20, paddingTop = 16, gap = 10,
@@ -327,7 +332,7 @@ function View:Init(game, physics, actions)
             UI.Panel {flexDirection = "row", alignItems = "center", gap = 8, children = {
                 UI.Panel {flexGrow = 1, flexBasis = 0, children = {
                     title, Label("瓶子里，藏着无限可能", 9, C.textSecondary),
-                }}, gm, help, save,
+                }}, gm, help,
             }},
             UI.Card {id = "scoreSummary", backgroundColor = C.surface, padding = 14, gap = 6,
                 pointerEvents = "none", children = {
@@ -347,7 +352,7 @@ function View:Init(game, physics, actions)
         pointerEvents = "auto", onClick = function() self:CloseItemDetail() end,
         children = {UI.SafeAreaView {width = "100%", height = "100%", nativeMenuInset = true,
             children = {self.container}}}}
-    MachineSkin.Apply(self,title,help,save,gm)
+    MachineSkin.Apply(self,title,help,gm)
     self.removalConfirm = RemovalConfirm.New(self)
     UI.SetRoot(self.root)
     self:UpdatePhysicsMode()
@@ -378,12 +383,15 @@ function View:SetSensorStatus(status)
 end
 
 function View:CloseItemDetail()
+    local closedSource=self.detailSource
+    local closedItem=self.tutorial and self.game:Get(self.selectedUid) or nil
     if self.removalConfirm then self.removalConfirm:Close() end
     if self.deckBoard then self.deckBoard.selectedUid = 0 end
     self.selectedUid, self.board.selectedUid = 0, 0
     self.detailSource = ""
     self.deckDetailUid, self.relicDetailId = 0, ""
     self.itemNote:Close()
+    if self.tutorial then self.tutorial:OnItemDetailClosed(closedItem,closedSource) end
 end
 
 function View:NoteBounds()
@@ -433,7 +441,9 @@ function View:InspectItem(uid)
         self:CloseItemDetail()
         return
     end
+    if self.tutorial and not self.tutorial:AllowsInspection(item,"bottle") then return end
     self:ShowItemNote(item, "bottle")
+    if self.tutorial then self.tutorial:OnInspected(item,"bottle") end
 end
 
 function View:ShowItemNote(item, source)
@@ -489,7 +499,7 @@ function View:InspectRelic(id)
     self.itemNote:SetMeta("遗物 · " .. Items.rarityNames[def.rarity])
     self.itemNote:SetStatus(RelicView.Status(self.game, id))
     self.detailEffect:SetText(def.effect); self.detailEffect:RestartReveal()
-    self.itemNote:SetAction(id == "juicer" and ("生成果汁 · " .. string.format("%g", self.game.juicerValue or 0)) or nil,
+    self.itemNote:SetAction(id == "juicer" and ("生成果汁 · " .. Money.Format(self.game.juicerValue or 0)) or nil,
         id == "juicer" and function() RelicView.ConfirmJuicer(self) end or nil)
     self.itemNote:Open(function()
         if inDeck and self.deckBoard then return self.deckBoard:GetItemBounds(def.numberId) end
@@ -519,7 +529,7 @@ function View:Rebind(game)
     self.deckDetailUid, self.deckDraftWasOpen = 0, false
     self.inventoryTab, self.relicDetailId = "items", ""
     self:DisposeDeckSim()
-    if self.physicsButton then self.physicsButton:Show() end
+    if self.physicsButton then self.physicsButton:SetVisible(DeveloperOverlay.IsAllowed(self)) end
     self.modal:Hide()
     self:Update(true)
 end
@@ -754,7 +764,7 @@ function View:Modal(title, noClose)
         self:DisposeDeckSim()
         if self.game.phase=="draft" and self.deckDraftWasOpen then self.draft:Show() end
         self.deckDraftWasOpen=false
-        if self.physicsButton then self.physicsButton:Show() end
+        if self.physicsButton then self.physicsButton:SetVisible(DeveloperOverlay.IsAllowed(self)) end
     end
     self.inventoryPanel,self.inventoryTitle,self.deckBody=nil,nil,nil
     self.inventoryHead,self.inventoryRemovalLabel=nil,nil
@@ -940,7 +950,7 @@ function View:CloseInventory()
     self.deckDetailUid = 0
     self.relicDetailId = ""
     self:DisposeDeckSim()
-    if self.physicsButton then self.physicsButton:Show() end
+    if self.physicsButton then self.physicsButton:SetVisible(DeveloperOverlay.IsAllowed(self)) end
     if self.game.phase == "draft" and self.deckDraftWasOpen then self.draft:Show() end
     self.deckDraftWasOpen = false
     self:Update(true)
@@ -995,6 +1005,7 @@ function View:OpenHelp()
 end
 
 function View:OpenAtmosphere()
+    if PublishConfig.PUBLISH_MODE ~= false then return end
     if Busy(self.game) then return end
     local panel=self:Modal("机台氛围")
     panel:SetStyle({height="auto"})
@@ -1017,6 +1028,7 @@ end
 
 --- GM 面板：接受数字编号 1–98 或字符串 id，由 Game:GmAddItem 统一匹配；未实装物品会被拒绝。
 function View:OpenGm()
+    if not DeveloperOverlay.IsAllowed(self) then return end
     local panel = self:Modal("GM 面板")
     panel:SetStyle({textMotionDisabled = true})
     panel:AddChild(UI.Label {text = "功能一 · 添加物品：输入数字编号 1–98 或字符串 id，全部98件可添加，加入牌库供后续抽取",
@@ -1074,32 +1086,10 @@ function View:OpenGm()
     panel:AddChild(scroll)
 end
 
-function View:OpenSave()
-    if Busy(self.game) then return end
-    local panel = self:Modal("保存与继续")
-    panel:AddChild(Label("本地状态：" .. Storage.status, 11, C.primary))
-    panel:AddChild(UI.Label {text = "网页预览刷新后本地文件可能丢失。请复制下方存档码到外部保存，再粘贴导入。原生平台使用本地自动存档。",
-        whiteSpace = "normal", width = "100%", fontSize = 11, fontColor = C.textSecondary})
-    local code = Storage.Export(self.game)
-    local field = SaveCodeField {id = "saveCode", value = code, width = "100%", height = 54, fontSize = 10,
-        fontFamily = "mono"}
-    panel:AddChild(field)
-    panel:AddChild(Label("点击输入框，全选并复制；导入时替换为已保存的完整内容。", 10, C.textSecondary))
-    local message = Label("摇晃阶段的存档会回退本回合所有变化。", 10, C.textSecondary)
-    panel:AddChild(message)
-    local import = Button("导入此存档", function()
-        local ok, errorText = self.actions.import(field:GetValue())
-        if ok then self.modal:Hide() else message:SetText(errorText or "导入失败") end
-    end, true)
-    import:SetStyle({width = "100%"})
-    panel:AddChild(import)
-    panel:AddChild(Button("开始新的一局", function() self:ConfirmNewRun() end))
-end
-
 function View:ConfirmNewRun()
     local panel = self:Modal("开始新的一局？")
     panel:SetStyle({height = 260})
-    panel:AddChild(UI.Label {text = "当前自动存档将被新局覆盖。如需保留，请先导出存档码。",
+    panel:AddChild(UI.Label {text = "上局游戏进度将会丢失，是否开始新游戏？",
         whiteSpace = "normal", width = "100%", fontSize = 12, fontColor = C.textSecondary})
     panel:AddChild(Button("确认开始新局", function() self.actions.newrun(); self.modal:Hide() end, true))
 end

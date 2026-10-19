@@ -657,12 +657,14 @@ Test("榨汁无遗物不消耗、跨回合累加保留", function()
     game.juicerValue = 2.5
     assert(game:Start())
     Finish(game)
-    Close(game.juicerValue, 3.5)
+    Close(game.juicerValue, 4, "原累计2.5向上取整3，再加入半苹果价值1")
     assert(game:Skip())
-    local ok = game:GmAddItem("banana_half")
-    assert(ok and game:Reroll() and game:Start())
+    assert(game:_Create("banana_half"))
+    game.revision = game.revision + 1
+    Identity(game)
+    assert(game:Reroll() and game:Start())
     Finish(game)
-    Close(game.juicerValue, 4.5)
+    Close(game.juicerValue, 5, "第二回合只增加半香蕉价值1")
     assert(#game.discard == 1, "上一回合弃牌已清除，不再次榨取")
 end)
 
@@ -676,7 +678,7 @@ Test("使用榨汁机生成永久食物果汁到牌库、清值一次", function
     assert(juice.id == "juice" and juice.location == "deck" and not juice.temporary)
     assert(game:Get(juice.uid) == juice and #game.deck == #before.deck + 1)
     assert(Equal(game.drawn, before.drawn), "生成果汁不补进当前瓶内")
-    Close(game:_Value(juice), 12.5)
+    Close(game:_Value(juice), 13)
     Close(game.juicerValue, 0)
     Close(game.score - before.score, 1, "正常添加触发积少成多一次")
     assert(Items.HasTag("juice", "食物") and #Items.byId.juice.tags == 1)
@@ -686,7 +688,7 @@ Test("使用榨汁机生成永久食物果汁到牌库、清值一次", function
     assert(not ok and type(message) == "string" and juice == nil)
     assert(Equal(after, game:Snapshot()), "重复点击不得生成或修改状态")
     local restored = Game.Restore(after)
-    Close(restored:_Value(Item(restored, after.nextUid - 1)), 12.5)
+    Close(restored:_Value(Item(restored, after.nextUid - 1)), 13)
     Identity(restored)
 end)
 
@@ -716,7 +718,7 @@ Test("榨汁机无遗物空值及运行结算展示阶段拒绝且原子保值",
     end
 end)
 
-Test("新字段prepare与draft往返保值、不共享快照对象", function()
+Test("新字段旧金额迁移后prepare与draft往返保值、不共享快照对象", function()
     local game = Fixture({ "killer", "gambler", "doctor", "juice" })
     game.relics.jungle_hunt, game.relics.gambling_token, game.relics.juicer = true, true, true
     game.huntTargetUid, game.juicerValue = 3, 17.25
@@ -724,10 +726,17 @@ Test("新字段prepare与draft往返保值、不共享快照对象", function()
     Item(game, 2).permBonus, Item(game, 4).permBonus = 55, 7.5
     local snapshot = game:Snapshot()
     local restored = Game.Restore(snapshot)
-    assert(Equal(snapshot, restored:Snapshot()))
+    local expected = game:Snapshot()
+    expected.juicerValue = 18
+    assert(Equal(expected, restored:Snapshot()), "旧榨汁累计取整，价值组成项和其他prepare字段保持一致")
+    Close(Item(restored, 4).permBonus, 7.5, "旧永久价值加数不能单独取整")
+    Close(Item(restored, 1).permMult, 2.25, "小数永久倍率不迁移为整数")
     restored.juicerValue, Item(restored, 1).permMult = 3, 1.5
     Close(snapshot.juicerValue, 17.25)
     Close(snapshot.instances[1].permMult, 2.25)
+    Close(snapshot.instances[4].permBonus, 7.5, "恢复不得改写源快照金额")
+    game = Game.Restore(snapshot)
+    assert(Equal(expected, game:Snapshot()))
     assert(game:Start())
     Finish(game)
     snapshot = game:Snapshot()
@@ -793,10 +802,10 @@ end
 
 Test("读档拒绝非法juicerValue类型与非有限值", function()
     RejectValues("juicerValue", { false, true, "12", {}, function() end, 0 / 0, math.huge, -math.huge })
-    -- 累计值是有效价值之和，负数/小数只要有限仍合法，不擅自封顶或截断。
+    -- 有限旧金额仍合法；向正无穷迁移，不改变负数方向或放宽类型校验。
     local snapshot = Fixture({}):Snapshot()
     snapshot.juicerValue = -2.5
-    Close(Game.Restore(snapshot).juicerValue, -2.5)
+    Close(Game.Restore(snapshot).juicerValue, -2)
 end)
 
 Test("读档拒绝非法permMult而保留合法小数永久倍率", function()
@@ -870,16 +879,16 @@ Test("提前Finish同样使用最终接触倍率和半橘贴底加成", function
     Close(game.juicerValue, 12, "提前结束不能遗漏最终接触价值")
 end)
 
-Test("榨汁与最终金币均保留零负小数价值", function()
+Test("榨汁与最终金币统一向上取整且保留零负方向", function()
     local game = Fixture({ "apple_half", "banana_half", "cherry_half" })
     game.relics.juicer = true
     game.juicerValue = 10
     Item(game, 1).permBonus, Item(game, 2).permBonus = -1, -3.5
     assert(game:Start())
     local events = Finish(game)
-    Close(game.juicerValue, 9.5, "0-2.5+2=-0.5，半樱桃只累计本体一次")
+    Close(game.juicerValue, 10, "原累计10+0-2+2=10，半樱桃只累计本体一次")
     assert(#game.discard == 3 and #game.deck == 0)
-    Close(game.lastRoundScore, 1.5, "零值0、负值-2.5、半樱桃两次4")
+    Close(game.lastRoundScore, 2, "零值0、负值-2.5向上取整-2、半樱桃两次共4")
     assert(#Events(events, "remove") == 3)
 end)
 

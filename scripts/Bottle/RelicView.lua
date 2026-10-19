@@ -4,7 +4,9 @@ local Relics = require("Bottle.Relics")
 local Items = require("Bottle.Items")
 local Art = require("Bottle.Art")
 local Audio = require("Bottle.Audio")
+local Money = require("Bottle.Money")
 local L = require("Machine.LayeredLayout")
+local RelicLighting = require("Machine.RelicLighting")
 local RelicView = {}
 local ink = {226, 214, 174, 255}
 
@@ -13,16 +15,11 @@ local function Busy(game)
     return game.phase == "running" or game.phase == "settle" or game.phase == "reveal"
 end
 
----@param value number
-local function Number(value)
-    return string.format("%.10g", value)
-end
-
 ---@param game BottleGame
 ---@param id string
 local function Status(game, id)
     if id == "juicer" then
-        return "累计价值：" .. Number(game.juicerValue or 0) .. " · 点击生成果汁"
+        return "累计价值：" .. Money.Format(game.juicerValue or 0) .. " · 点击生成果汁"
     elseif id == "jungle_hunt" then
         local target = game:Get(game.huntTargetUid or 0)
         if target and target.location ~= "discard" then
@@ -37,11 +34,22 @@ end
 
 ---@param id string
 ---@param size number
-local function Icon(id, size)
+---@param lighting any?
+---@param viewport Widget?
+local function Icon(id, size, lighting, viewport)
     local icon = UI.Widget {width = size, height = size, flexShrink = 0, pointerEvents = "none"}
     function icon:Render(vg)
         local b = self:GetAbsoluteLayout()
-        Art.Relic(vg, id, b.x + b.w / 2, b.y + b.h / 2, math.min(b.w, b.h) * .38)
+        local radius = math.min(b.w, b.h) * .38
+        if lighting and viewport and lighting:Draw(self, id,
+            {x = b.x + b.w / 2 - radius, y = b.y + b.h / 2 - radius,
+                w = radius * 2, h = radius * 2}, viewport) then return end
+        Art.Relic(vg, id, b.x + b.w / 2, b.y + b.h / 2, radius)
+    end
+    local destroy = icon.Destroy
+    icon.Destroy = function(self)
+        if lighting then lighting:Release(self) end
+        destroy(self)
     end
     return icon
 end
@@ -69,13 +77,13 @@ function RelicView.ConfirmJuicer(view)
     panel:SetStyle({gap = 12 * s, padding = 16 * s})
     panel:AddChild(Icon("juicer", 72 * s))
     local prose = UI.ScrollView {width = "100%", flexGrow = 1, flexBasis = 0,
-        minHeight = 0, children = {Label(view, "当前累计价值：" .. Number(value)
+        minHeight = 0, children = {Label(view, "当前累计价值：" .. Money.Format(value)
         .. "\n\n确认后生成1份果汁，基础价值为累计值，永久加入牌库，不直接进入瓶中。"
         .. "\n果汁被消耗时：消耗者价值永久增加，数值等于果汁当时的价值。"
         .. "\n果汁为食物，不进入三选一卡池；食物+2等遗物仍可额外生效。"
         .. "\n\n生成成功后累计值清零；取消不会消耗累计值。")}}
     panel:AddChild(prose)
-    local confirm = Audio.Button {id = "juicerConfirm", text = "确认生成 · " .. Number(value),
+    local confirm = Audio.Button {id = "juicerConfirm", text = "确认生成 · " .. Money.Format(value),
         height = 44 * s, fontSize = 13 * s, onClick = function()
             -- 不允许旧局／旧数值的确认框兑现新状态；规则入口还会再次检查阶段与持有权。
             if view.game ~= game or Busy(game) or game.juicerValue ~= value then
@@ -121,6 +129,9 @@ RelicView.Status = Status
 
 ---@param view any
 function RelicView.Attach(view)
+    if view.machineSkin.litScene then
+        view.machineSkin.relicLighting = RelicLighting.New(view.machineSkin.litScene, view.container)
+    end
     local grid = UI.Panel {id = "relicGrid", flexDirection = "row", flexWrap = "wrap",
         alignContent = "flex-start", flexShrink = 0, pointerEvents = "box-none",
         backgroundColor = {0, 0, 0, 0}, boxShadow = false}
@@ -158,7 +169,7 @@ local function BuildGrid(view, owned)
                     RelicView.Detail(view, id)
                 end}
             slot = button
-            local icon = Icon(id, L.relicSlot * m.scale)
+            local icon = Icon(id, L.relicSlot * m.scale, m.relicLighting, m.relicGridScroll)
             icon.id = "relicGridIcon"
             -- 悬停层会重挂子控件，使用满槽绝对布局保持图案居中及统一比例。
             icon:SetStyle({position = "absolute", left = 0, top = 0, width = "100%", height = "100%"})
@@ -197,6 +208,7 @@ end
 ---@param visible boolean
 function RelicView.SetVisible(view, visible)
     view.machineSkin.relicGridScroll:SetVisible(visible)
+    if not visible and view.machineSkin.relicLighting then view.machineSkin.relicLighting:Hide() end
 end
 
 ---@param view any

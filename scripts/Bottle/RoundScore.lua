@@ -12,6 +12,7 @@ local Money = require("Bottle.Money")
 ---@field pulseAge number
 ---@field phase string
 ---@field layoutScale number
+---@field captionFontVersion number
 ---@field pulseCount integer
 ---@field plate any
 ---@field heading Panel
@@ -21,8 +22,12 @@ local Money = require("Bottle.Money")
 ---@field shakeIcon BottleCoinIcon
 ---@field shakeTotal number
 ---@field shakeIdle number
+---@field transferPhase 'counting'|'hold'|'shrink'|'flight'|'done'
+---@field transferAge number
 local Score = {}
 Score.__index = Score
+Score.HOLD = 1
+Score.SHRINK = .32
 
 ---@return BottleRoundScore
 function Score.New()
@@ -32,9 +37,10 @@ function Score.New()
 end
 
 function Score:Init()
-    self.caption = UI.Label {id = "roundScoreCaption", text = "本回合金币", width = 64, height = 22,
-        flexShrink = 0,
-        fontSize = 12, fontFamily = "pixel", textAlign = "center", fontColor = {255, 255, 255, 255},
+    self.caption = UI.Label {id = "roundScoreCaption", text = "本回合金币", height = 22,
+        flexShrink = 0, paddingHorizontal = 2,
+        fontSize = 12, fontFamily = "pixel", textAlign = "center", verticalAlign = "middle",
+        fontColor = {255, 255, 255, 255},
         textStroke = {width = 1, color = {0, 0, 0, 255}}, textMotionDisabled = true}
     self.headingCoin = Coin.Widget {width = 18, height = 18, flexShrink = 0, pointerEvents = "none"}
     self.heading = UI.Panel {width = "100%", height = 22, flexDirection = "row", gap = 5,
@@ -45,7 +51,7 @@ function Score:Init()
         transformOrigin = "center", textMotionDisabled = true}
     self.root = UI.Panel {id = "roundScore", position = "absolute", visible = false,
         width = 236, height = 106, padding = 9, gap = 2,
-        pointerEvents = "none", zIndex = 7,
+        pointerEvents = "none", zIndex = 7, transformOrigin = "center",
         children = {self.heading, self.number}}
     self.shakeIcon = Coin.Widget {id = "shakeCoinIcon", width = 24, height = 24, pointerEvents = "none"}
     self.shakeNumber = UI.Label {id = "shakeCoinValue", text = "×0", width = 74, height = 26,
@@ -72,15 +78,18 @@ function Score:Init()
         destroy(widget)
     end
     self.layoutScale = 0
+    self.captionFontVersion = -1
     self:Reset()
 end
 
 function Score:Reset()
     self.total, self.pulseAge, self.phase, self.pulseCount = 0, 1, "", 0
     self.shakeTotal, self.shakeIdle = 0, 0
+    self.transferPhase, self.transferAge = "counting", 0
     self.shakeNumber:SetText("×0")
     self.number:SetText("+0")
     self.number:SetStyle({translateY = 0, scale = 1})
+    self.root:SetStyle({scale = 1})
     self.root:Hide()
     self.shakeRoot:Hide()
 end
@@ -136,7 +145,7 @@ function Score:Sync(phase, total, pending, uncollected)
             if transfer <= 0 then self:SetTotal(transfer); self:SetShake(0); transfer = nil end
         end
         if uncollected > 0 then self.shakeRoot:Show(); self.shakeIdle = 0 end
-        self.root:Show()
+        self.root:SetVisible(self.transferPhase ~= "flight" and self.transferPhase ~= "done")
     else
         if self.phase ~= phase then self:Reset() end
         self.root:Hide()
@@ -146,19 +155,61 @@ function Score:Sync(phase, total, pending, uncollected)
     return transfer
 end
 
+-- 收齐以后完整停留1秒，面板开始缩小时请求一次出币，金币与缩小同时播放。
+---@param dt number
+---@param ready boolean
+---@return boolean launch
+function Score:StepTransfer(dt, ready)
+    if self.phase ~= "reveal" then return false end
+    if self.transferPhase == "counting" then
+        if ready then self.transferPhase, self.transferAge = "hold", 0 end
+        return false
+    end
+    if self.transferPhase ~= "hold" and self.transferPhase ~= "shrink" then return false end
+    local launch = false
+    self.transferAge = self.transferAge + math.max(0, dt)
+    if self.transferPhase == "hold" and self.transferAge >= Score.HOLD then
+        self.transferPhase = "shrink"
+        self.transferAge = self.transferAge - Score.HOLD
+        launch = true
+    end
+    if self.transferPhase == "shrink" then
+        local t = math.min(1, self.transferAge / Score.SHRINK)
+        self.root:SetStyle({scale = (1 - t) ^ 3})
+        if t >= 1 then
+            self.transferPhase, self.transferAge = "flight", 0
+            self.root:Hide()
+        end
+    end
+    return launch
+end
+
+function Score:FinishTransfer()
+    self.transferPhase = "done"
+    self.root:Hide()
+end
+
 ---@param dt number
 ---@param width number 画布宽度，由 UI 统一处理 DPR
 function Score:Update(dt, width)
     local s = math.max(.01, width / 370)
-    if self.layoutScale ~= s then
+    local fontVersion = UI.GetFontVersion()
+    if self.layoutScale ~= s or self.captionFontVersion ~= fontVersion then
         self.layoutScale = s
         self.root:SetStyle({left = (width - 236 * s) / 2, top = 54 * s,
             width = 236 * s, height = 106 * s, padding = 9 * s, gap = 2 * s})
         self.heading:SetStyle({height = 22 * s, gap = 5 * s})
         self.headingCoin:SetStyle({width = 18 * s, height = 18 * s})
-        -- 标题和图标共用固定高度；显式文本宽度避免字体初测/缩放把图标挤到右边。
-        self.caption:SetStyle({width = 64 * s, height = 22 * s, fontSize = 12 * s,
+        -- 字号是pt，不能按字符数乘字号猜宽度；测量实际字体并为两侧描边留白。
+        local captionSize = 12 * s
+        local captionWidth = UI.MeasureTextWidth(self.caption:GetText(), UI.Theme.FontSize(captionSize),
+            UI.Theme.FontFace("pixel"))
+        self.caption:SetStyle({height = 22 * s, fontSize = captionSize, paddingHorizontal = 2 * s,
             textStroke = {width = s, color = {0, 0, 0, 255}}})
+        if captionWidth > 0 then
+            self.caption:SetStyle({width = captionWidth + 4 * s})
+            self.captionFontVersion = fontVersion
+        end
         self.number:SetStyle({fontSize = 38 * s, height = 64 * s,
             textStroke = {width = 2 * s, color = {0, 0, 0, 255}}})
         self.shakeRoot:SetStyle({left = 12 * s, top = 10 * s, width = 116 * s, height = 36 * s,

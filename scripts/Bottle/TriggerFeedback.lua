@@ -9,12 +9,26 @@ local Feedback = {}
 ---@param trigger 'move'|'rotate'|'distance'|'collision'
 ---@param position {x:number,y:number}?
 function Feedback.Reward(events, item, amount, rewardKind, trigger, position)
+    if rewardKind ~= "size" then amount = Money.Round(amount) end
     if math.abs(amount) < 1e-9 then return end
     events[#events + 1] = {
         kind = "triggerReward", uid = item.uid, id = item.id, value = amount,
         rewardKind = rewardKind, trigger = trigger,
         x = position and position.x, y = position and position.y,
     }
+end
+
+-- 使用同一份完整价值算法比较倍率前后，避免从取整后的结果逆算出小数或浮点噪声。
+---@param game BottleGame
+---@param item ItemInstance
+---@param permanent number
+---@param mult number
+---@return number
+local function ValueAt(game, item, permanent, mult)
+    local sample = {} --[[@as ItemInstance]]
+    for key, value in pairs(item) do sample[key] = value end
+    sample.permMult, sample.mult = permanent, mult
+    return game:_Value(sample)
 end
 
 ---@param events GameEvent[]
@@ -92,13 +106,14 @@ function Feedback.Finish(game, before, events, first, trigger, contacts)
                 "value", trigger, position)
             local permanent = item.permMult or 1
             local oldPermanent = same and old.permMult or 1
+            local oldMult = same and old.mult or 1
             if permanent ~= oldPermanent and permanent > 0 then
-                Feedback.Reward(events, item, game:_Value(item) * (1 - oldPermanent / permanent),
+                Feedback.Reward(events, item, ValueAt(game, item, permanent, oldMult)
+                    - ValueAt(game, item, oldPermanent, oldMult),
                     "permanent", trigger, position)
             end
-            local oldMult = same and old.mult or 1
             if item.mult ~= oldMult and item.mult > 0 then
-                Feedback.Reward(events, item, game:_Value(item) * (1 - oldMult / item.mult),
+                Feedback.Reward(events, item, game:_Value(item) - ValueAt(game, item, permanent, oldMult),
                     "value", trigger, position)
             end
         end
@@ -117,8 +132,9 @@ local LABELS = {move = "移动：", rotate = "旋转：", distance = "位移", c
 function Feedback.Content(value, trigger, rewardKind)
     local prefix = LABELS[trigger] or ""
     if rewardKind == "size" then prefix = prefix .. "体积" end
-    -- 金币按实际入账金额显示；价值、永久增益和体积仍保留其真实精度。
-    local number = rewardKind and string.format("%.10g", value) or Money.Format(value)
+    -- 金币与价值使用同一整数规则；体积百分比继续保留实际精度。
+    if rewardKind ~= "size" then value = Money.Round(value) end
+    local number = rewardKind == "size" and string.format("%.10g", value) or Money.Format(value)
     local amount = (value >= 0 and "+" or "") .. number
     -- 永久是价值的修饰，放在图标后、数字前；金币不加价值图标。
     if rewardKind == "permanent" then amount = "永久" .. amount end

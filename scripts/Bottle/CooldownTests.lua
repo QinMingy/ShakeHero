@@ -435,11 +435,11 @@ Test("钻石永久倍率和彩虹临时倍率叠乘且回合结束只清临时",
     game:Step(0, {pairs={{1,2},{1,3},{1,4},{1,5}}})
     Close(Item(game, 1).permMult, 2 * 1.2 * 1.2)
     Close(Item(game, 1).eventMult, 1.5 * 1.5)
-    Close(game:_Value(Item(game, 1)), Items.byId.apple.base * 2 * 1.2 * 1.2 * 1.5 * 1.5)
+    Close(game:_Value(Item(game, 1)), 13, "2×2×1.2²×1.5²=12.96向上取整13")
     game:Finish({})
     Close(Item(game, 1).permMult, 2 * 1.2 * 1.2)
     Close(Item(game, 1).eventMult, 1); Close(Item(game, 1).mult, 1)
-    Close(game:_Value(Item(game, 1)), Items.byId.apple.base * 2 * 1.2 * 1.2)
+    Close(game:_Value(Item(game, 1)), 6, "清临时倍率后2×2×1.2²=5.76向上取整6")
 end)
 
 Test("高阶便便自身护盾拦截不发倍率产物或随机数解除后可立即成功", function()

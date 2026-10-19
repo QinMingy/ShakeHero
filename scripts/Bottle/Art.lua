@@ -751,31 +751,50 @@ end
 
 ------------------------------------------------------------- 牌库入口图标
 
--- 牌库入口底图：横向铺满按钮的布袋轮廓，文字直接写在袋身上。
--- 32×16 整数像素，与物品／遗物共用 INK 黑描边；不含任何货币符号、字母或数字。
+-- 钱袋与布吊牌共用92×34整数网格；袋子保持32×32的鼓腹比例，轮廓为2像素粗边。
+-- 文字由按钮绘制在右侧吊牌内，图案不烘焙货币符号、字母或数字。
 local DECK_ICON = Sprite({
-    "............ohhhdddo............",
-    "............ohhhdddo............",
-    "...........ohhhbdddo............",
-    "..........ohhhbbbbdddo..........",
-    "........ohhhbbbbbbbdddo.........",
-    ".......ohhhhbbbbbbbbddddo.......",
-    ".....ohhhhhbbbbbbbbbdddddo......",
-    "....ohhhhhbbbbbbbbbbbdddddo.....",
-    "...ohhhhhhbbbbbbbbbbbddddddo....",
-    "...ohhhhhhbbbbbbbbbbbbddddddo...",
-    "..ohhhhhhhbbbbbbbbbbbdddddddo...",
-    "..ohhhhhhhbbbbbbbbbbbdddddddo...",
-    "..ohhhhhhhbbbbbbbbbbbdddddddo...",
-    "...ohhhhhhbbbbbbbbbbbbddddddo...",
-    "....ohhhhhbbbbbbbbbbbbdddddo....",
-    ".....ohhhhbbbbbbbbbbbddddo......",
+    "........oooooooooooooooo....................................................................",
+    "........oooooooooooooooo....................................................................",
+    "........ooolllhhhhhhbbooo...................................................................",
+    ".........oolllhhddhhbboo....................................................................",
+    ".........oohhhhhddhhhhoo....................................................................",
+    ".........ooohhhhddhhhoo.....................................................................",
+    "..........oohhhhddhhooo.....................................................................",
+    "..........ooooooooooooo.....................................................................",
+    "...........oooooooooooo....o................................................................",
+    "..........oogllllllgggooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo.....",
+    "..........ooggggggggggooggggoooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo....",
+    ".........ooooooooooooooooooogoollllllllllllllllllllllllllllllllllllllllllllllllllllllpooo...",
+    "........oooooooooooooooo.ooogoollllllllllllllllllllllllllllllllllllllllllllllllllllllppooo..",
+    ".......oooohhhhhhhhbhoooooooooopppppppppppppppppppppppppppppppppppppppppppppppppppppppppooo.",
+    "......oooohhhhlhhhhhbboooooooppppppppppppppppppppppppppppppppppppppppppppppppppppppppppppoo.",
+    "......ooohhllllhhhhhbbboooooppppppppppppppppppppppppppppppppppppppppppppppppppppphhpppbbboos",
+    ".....ooohhllllllhhhhhbbbooooppppppppppppppppppppppppppppppppppppppppppppppppppppppppppbbboos",
+    "....ooohllllllllhhhhhhbbboooppppppppppppppppppppppppppppppppppppppppppppppppppppppppppbbboos",
+    "....oohhllllllhhhhhhhhddbbooopppppppppppppppppppppppppppppppppppppppppppppppppppppppppbbboos",
+    "...ooohllllllddddddhhhddbbooopppppppppppppppppppppppppppppppppppppppppppppppppppppppppbbboos",
+    "...oohhlllllddggggddhhdddbboooppppppppppppppppppppppppppppppppppppppppppppppppppppppppbbboos",
+    "..ooohlllllddglllggddhhbddboooppppppppppppppppppppppppppppppppppppppppppppppppppppppppbbboos",
+    "..oohhllllldghggggggdhhbdddbooppppppppppppppppppppppppppppppppppppppppppppppppppppppppbbboos",
+    "..oohhllllldghggggggdhhbddddooppppppppppppppppppppppppppppppppppppppppppppppppppppppppbbboos",
+    "..oohhllllhddggggbbddhhdddddooppppppppppppppppppppppppppppppppppppppppppppppppppppppppbbboos",
+    "..oohhllhhhhddggggddhhhdddddoopppphhhpppppppppppppppppppppppppppppppppppppppppppppppppbbboos",
+    "..oohhllhhhhhddddddhhhbdddddoopppppppppppppppppppppppppppppppppppppppppppppppppppppppbbbboos",
+    "..ooohhhhhhhhhhhhhhhhddddddooobbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbooos",
+    "...ooohbdddddddddddddddddoooopbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbboooss",
+    "....oooohdddddddddddddddooooopbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbooosss",
+    ".....ooooodddddddddbbboooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooosss.",
+    ".......oooooooooooooooooo..sooooooooooooooooooooooooooooooooooooooooooooooooooooooooooosss..",
+    ".........oooooooooooooo.....sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss...",
+    ".............................sssssssssssssssssssssssssssssssssssssssssssssssssssssssssss....",
 }, {
-    o = INK, h = {238, 214, 166, 255}, b = {196, 163, 110, 255},
-    d = {140, 110, 70, 255},
+    o = INK, s = {8, 15, 11, 140}, p = {214, 203, 160, 255},
+    l = {235, 220, 174, 255}, h = {202, 182, 126, 255},
+    b = {166, 142, 88, 255}, d = {109, 91, 57, 255}, g = {199, 160, 76, 255},
 })
 
---- 牌库入口底图：按给定宽高铺满，非等比拉伸袋身以填满按钮。
+--- 牌库入口底图：保持像素等比例，兼容普通页和三选一的紧凑点击区域。
 ---@param vg NVGContextWrapper
 ---@param x number 左边界
 ---@param y number 上边界
@@ -783,10 +802,12 @@ local DECK_ICON = Sprite({
 ---@param h number 目标高度
 ---@param cooling? boolean
 function Art.DeckPlate(vg, x, y, w, h, cooling)
+    if w <= 0 or h <= 0 then return end
+    local pixel = math.min(w / DECK_ICON.width, h / DECK_ICON.height)
     nvgSave(vg)
     nvgShapeAntiAlias(vg, 0)
     nvgTranslate(vg, x + w / 2, y + h / 2)
-    DrawSprite(vg, DECK_ICON, w / 2, cooling, nil, h / 2)
+    DrawSprite(vg, DECK_ICON, DECK_ICON.width * pixel / 2, cooling)
     nvgRestore(vg)
 end
 

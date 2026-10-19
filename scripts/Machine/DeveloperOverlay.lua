@@ -1,8 +1,9 @@
 -- Developer controls own both the final drawing pass and the highest input layer.
 -- The root anchor follows the cabinet without tutorial/start-page input clipping.
 local UI=require("urhox-libs/UI")
+local PublishConfig=require("PublishConfig")
 ---@type any
-local Overlay={OPACITY=.3,PRIORITY=10000}
+local Overlay={OPACITY=.7,PRIORITY=10000}
 
 local function entries(view)
     local m=view.machineSkin
@@ -18,7 +19,7 @@ function Overlay.ApplyOpacity(view)
         presentationMenu=m.presentationMenu,physics=view.physicsButton,physicsMenu=view.physicsMenu}) do
         widget:SetOpacity(Overlay.OPACITY)
     end
-    -- The same modal hosts inventory/rules/save pages: only its GM content fades.
+    -- The same modal hosts inventory/rules pages: only its GM content fades.
     view.modal:SetOpacity(view.modalDeveloperUi and Overlay.OPACITY or 1)
     if m.developerLayer then
         local parent=view.modalDeveloperUi and m.developerLayer or view.container
@@ -28,10 +29,33 @@ function Overlay.ApplyOpacity(view)
     end
 end
 
+-- 发布权限与 G 键显隐是两层独立判断；发布模式不能被显隐状态覆盖。
+function Overlay.IsAllowed(view)
+    local m=view.machineSkin
+    return PublishConfig.PUBLISH_MODE==false and m~=nil and m.developerVisible==true
+end
+
+local function hideControls(view)
+    local m=view.machineSkin
+    for _,widget in ipairs(entries(view)) do widget:Hide() end
+    m.presentationMenu:Hide();view.physicsMenu:Hide()
+    if view.modalDeveloperUi then view.modal:Hide() end
+    m.developerLayer:Hide()
+    UI.PopOverlay(m.developerLayer)
+    local focused=UI.GetFocus()
+    while focused do
+        if focused==m.developerLayer then UI.ClearFocus();break end
+        focused=focused.parent
+    end
+end
+
 function Overlay.Sync(view)
     local m=view.machineSkin
     if not m or not m.developerLayer then return end
+    -- 放在布局与绘制之前，防止读档、新局或其它 Show() 把开发控件重新显示。
+    if not Overlay.IsAllowed(view) then hideControls(view);return end
     local layer=m.developerLayer
+    layer:Show()
     -- PostUpdate runs before UI.Render's normal layout pass. Resolve a dirty
     -- cabinet first so first-frame / safe-area changes never use stale bounds.
     if UI.IsLayoutDirty() then UI.Layout() end
@@ -43,27 +67,16 @@ function Overlay.Sync(view)
         or p.translateX~=tx or p.translateY~=ty then
         layer:SetStyle({left=b.x,top=b.y,width=b.w,height=b.h,translateX=tx,translateY=ty})
     end
-    -- One switch owns all developer visibility, including on inventory/start pages.
-    if m.developerVisible then
-        for _,widget in ipairs(entries(view)) do if not widget:IsVisible() then widget:Show() end end
-        if UI.GetTopOverlay()~=layer then UI.PopOverlay(layer);UI.PushOverlay(layer) end
-    else UI.PopOverlay(layer) end
+    for _,widget in ipairs(entries(view)) do if not widget:IsVisible() then widget:Show() end end
+    if UI.GetTopOverlay()~=layer then UI.PopOverlay(layer);UI.PushOverlay(layer) end
 end
 
 function Overlay.SetVisible(view,visible)
     local m=view.machineSkin
     if not m or not m.developerLayer then return end
+    -- 发布模式不响应任何“打开”请求，也不把发布开关当成 G 键变量写回。
+    if PublishConfig.PUBLISH_MODE~=false then hideControls(view);return end
     m.developerVisible=visible==true
-    m.developerLayer:SetVisible(m.developerVisible)
-    if not m.developerVisible then
-        m.presentationMenu:Hide();view.physicsMenu:Hide()
-        if view.modalDeveloperUi then view.modal:Hide() end
-        local focused=UI.GetFocus()
-        while focused do
-            if focused==m.developerLayer then UI.ClearFocus();break end
-            focused=focused.parent
-        end
-    end
     Overlay.Sync(view)
 end
 
@@ -71,8 +84,9 @@ end
 ---@return boolean consumed
 function Overlay.HandleKeyDown(view,eventData)
     if eventData:GetInt("Key")~=KEY_G then return false end
-    -- Holding G cannot flicker the controls. Typing g into an item ID or save
-    -- code stays ordinary text input instead of invoking the global shortcut.
+    if PublishConfig.PUBLISH_MODE~=false then Overlay.Sync(view);return false end
+    -- Holding G cannot flicker the controls. Typing g into an item ID stays
+    -- ordinary text input instead of invoking the global shortcut.
     if eventData:GetBool("Repeat") then return true end
     local focus=UI.GetFocus()
     if focus and focus.OnTextInput and not focus.props.disabled then return false end
@@ -95,7 +109,7 @@ function Overlay.Attach(view,gm)
     end
     for _,widget in ipairs(entries(view)) do widget:SetStyle({zIndex=50}) end
     function layer:HitTest(x,y)
-        if not self:IsVisible() then return false end
+        if not Overlay.IsAllowed(view) or not self:IsVisible() then return false end
         -- The overlay stack supplies coordinates after this layer's inverse
         -- translation; child bounds also include their hover transforms.
         local sx=x+(self.props.translateX or 0)
@@ -112,6 +126,7 @@ function Overlay.Attach(view,gm)
     function layer:Destroy() UI.PopOverlay(self);destroy(self) end
     view.root:AddChild(layer)
     Overlay.ApplyOpacity(view)
+    Overlay.Sync(view)
     -- NanoVG font registrations belong to each context, not to the UI tree.
     for _,font in ipairs(require("Bottle.Theme").fonts) do
         for weight,path in pairs(font.weights) do
@@ -126,7 +141,7 @@ function Overlay.Attach(view,gm)
         end
     end
     m.litScene.post.drawDeveloperUi=function(vg)
-        if not m.developerVisible then return end
+        if not Overlay.IsAllowed(view) then return end
         nvgSave(vg)
         nvgScale(vg,UI.GetScale(),UI.GetScale())
         UI.RenderWidgetSubtree(layer,vg)

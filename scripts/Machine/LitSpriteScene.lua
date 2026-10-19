@@ -3,6 +3,7 @@
 -- Reference mechanism: EVIDENCE.md / sharedassets0:50,210 / level0:5318.
 -- Does NOT claim to recover the proprietary Sprite With Depth graph.
 local L=require("Machine.LayeredLayout")
+local PublishConfig=require("PublishConfig")
 local Dust=require("Machine.DustField")
 local Post=require("Machine.CinematicPost")
 local Motion=require("Machine.AmbientMotion")
@@ -158,17 +159,20 @@ end
 -- Elevation describes the physical stack, never accumulated draw-call order.
 function SceneSkin:Layer(elevation) self.depth=elevation or -.09 end
 function SceneSkin:ToggleCameraMotion()
+    if PublishConfig.PUBLISH_MODE~=false then return end
     self.cameraMotionEnabled=not self.cameraMotionEnabled
     -- 统一刷新相机和参考平面；不冻结风、光纹、灰尘的共享时间。
     self:Tick(0)
     print("[表现GM] 镜头动画="..tostring(self.cameraMotionEnabled))
 end
 function SceneSkin:ToggleDust()
+    if PublishConfig.PUBLISH_MODE~=false then return end
     self.dustEnabled=not self.dustEnabled
     self.dust.node.enabled=self.dustEnabled
     print("[表现GM] 浮尘="..tostring(self.dustEnabled))
 end
 function SceneSkin:ToggleNoise()
+    if PublishConfig.PUBLISH_MODE~=false then return end
     self.noiseEnabled=not self.noiseEnabled
     print("[Machine.LitSprites] structure noise enabled="..tostring(self.noiseEnabled))
 end

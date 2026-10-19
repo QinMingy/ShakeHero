@@ -30,7 +30,7 @@ local ink={226,214,174,255}
 local muted={133,145,122,255}
 local clear={0,0,0,0}
 local selectedInk={39,29,12,255}
--- 品质是物品元数据；选中黄底统一使用，不能被误认作传说品质。
+-- 品质是物品元数据；选中金色底板／边框不代表传说品质。
 local qualityColors={{224,224,211,255},{80,200,120,255},{69,170,242,255},
     {167,122,245,255},{255,205,74,255}}
 
@@ -244,27 +244,78 @@ local function phaseClock(view)
     return clock
 end
 
--- 牌库入口：袋子取代木底板，文字直接写在袋身上。
--- 纵向略微内收，避免束口顶端被按钮上沿切掉。
+-- 钱袋保留正常比例，文字放在绳结旁的吊牌里；与原按钮共用页面、悬停和按下变换。
 local function deckButtonDecor(b,vg,l,s,probe)
     if probe then return true end
-    local inset=2*s
-    Art.DeckPlate(vg,l.x,l.y+inset,l.w,l.h-inset,b.props.disabled)
+    if l.w<=0 or l.h<=0 then return end
+    ---@type number
+    local pixel=math.min(l.w/92,l.h/34)
+    local inset=(l.w-92*pixel)/2
+    local left,right=inset+36*pixel,inset+6*pixel
+    local props=b.props
+    local text=props.text or ""
+    local face=UI.Theme.FontFace(props.fontFamily,props.fontWeight)
+    local spacing=props.letterSpacing or 0
+    local version=UI.GetFontVersion()
+    local cached=b.deckTextFit
+    local size=11.25*pixel
+    if cached and cached.text==text and cached.width==l.w and cached.pixel==pixel
+        and cached.face==face and cached.spacing==spacing and cached.version==version then
+        size=cached.size
+    else
+        local width=UI.MeasureTextWidth(text,UI.Theme.FontSize(size),face,spacing)
+        if width>0 then
+            size=size*math.min(1,math.max(1,l.w-left-right-4*pixel)/width)
+            b.deckTextFit={text=text,width=l.w,pixel=pixel,face=face,spacing=spacing,version=version,size=size}
+        end
+    end
+    if props.fontSize~=size or props.paddingLeft~=left or props.paddingRight~=right
+        or props.paddingTop~=8*pixel or props.paddingBottom~=0 then
+        b:SetStyle({fontSize=size,paddingLeft=left,paddingRight=right,paddingTop=8*pixel,paddingBottom=0})
+    end
+    Art.DeckPlate(vg,l.x,l.y,l.w,l.h,props.disabled)
 end
 
--- 收藏切换复用机台九宫格、受光与页面/悬停的同源变换。
-local function inventoryTabDecor(button,vg,b,s,probe)
-    if probe then return true end
-    local selected=button.inventoryTabKey==button.inventoryView.inventoryTab
+-- 保留两牌原有14px错落；抬升24px让任一选中牌都高于另一块。
+local INVENTORY_LIFT=24
+local function syncInventoryVisual(view,visual)
+    local pose,button=visual.pose,visual.button
     local pressed=button.state.pressed and not button.props.disabled
-    button.inventoryView.machineSkin.sprites:Panel(vg,selected and "green" or "wood",
-        b.x,b.y,b.w,b.h,s,nil,-.12,
-        PageMotion.Transform(button,b,ButtonMotion.Transform(button,b,pressed and 2*s or 0)))
+    local y=(pose.y+(pressed and 2 or 0))*view.machineSkin.scale
+    if visual.motion.props.translateY~=y then visual.motion:SetStyle({translateY=y}) end
+    local angle=math.deg(pose.angle+pose.hover.angle)
+    if visual.tilt.props.rotate~=angle or visual.tilt.props.scale~=pose.hover.scale then
+        visual.tilt:SetStyle({rotate=angle,scale=pose.hover.scale})
+    end
+end
+
+function Skin.TickInventory(view,dt)
+    local m=view.machineSkin
+    if not m or not m.inventoryVisuals then return end
+    local open=view.inventoryOpen and view.modal:IsVisible()
+    local step=math.max(0,dt)
+    for key,visual in pairs(m.inventoryVisuals) do
+        local pose=visual.pose
+        local selected=open and key==view.inventoryTab
+        local target=selected and -INVENTORY_LIFT or 0
+        pose.y,pose.velocity=spring(pose.y,pose.velocity,target,step)
+        pose.angle,pose.angularVelocity=spring(pose.angle,pose.angularVelocity,0,step)
+        if math.abs(pose.y-target)<.005 and math.abs(pose.velocity)<.02 then pose.y=target;pose.velocity=0 end
+        if math.abs(pose.angle)<.0001 and math.abs(pose.angularVelocity)<.001 then pose.angle=0;pose.angularVelocity=0 end
+        if open then
+            local page=visual.button.pageEntry
+            local moving=selected or math.abs(pose.y)>.005 or math.abs(pose.angle)>.0001
+                or (page and (not page.interactive or math.abs(page.pose.y)>.05 or math.abs(page.pose.angle)>.0002))
+            ButtonMotion.Step(pose.hover,ButtonMotion.IsHovered(visual.button),moving==true,step)
+        else ButtonMotion.Reset(pose.hover) end
+        syncInventoryVisual(view,visual)
+    end
 end
 
 function Skin.AttachInventoryTabs(view)
     local m=view.machineSkin
     m.inventoryButtons={}
+    m.inventoryVisuals={}
     for _,entry in ipairs({{"items","inventoryItems",L.inventoryItems,.08},
         {"relics","inventoryRelics",L.inventoryRelics,.14}}) do
         local key=entry[1]
@@ -272,7 +323,30 @@ function Skin.AttachInventoryTabs(view)
             zIndex=9,onClick=function() view:SwitchInventoryTab(key) end} --[[@as any]]
         button.inventoryTabKey=key;button.inventoryView=view
         place(button,entry[3],m.scale)
-        spriteButton(view,button,"wood",18,inventoryTabDecor)
+        buttonStyle(button,18,m.scale)
+        button:SetStyle({hoverBackgroundColor=clear,pressedBackgroundColor=clear})
+        local pose={y=0,velocity=0,angle=0,angularVelocity=0,hover=ButtonMotion.NewPose()}
+        ButtonMotion.Attach(button,pose.hover,true)
+        button.Render=function() end
+        local motion=UI.Panel{position="absolute",left=0,top=0,width="100%",height="100%",
+            padding=0,pointerEvents="none",backgroundColor=clear}
+        local face=UI.Panel{width="100%",height="100%",padding=0,pointerEvents="none",
+            backgroundColor=clear,transformOrigin="center"} --[[@as any]]
+        local caption=UI.Label{text="",width="100%",height="100%",fontSize=18*m.scale,
+            textAlign="center",verticalAlign="middle",fontColor=ink,
+            textMotionDisabled=true,pointerEvents="none"}
+        local visual={button=button,motion=motion,tilt=face,caption=caption,pose=pose}
+        m.inventoryVisuals[key]=visual
+        function face:Render(vg)
+            local b=self:GetAbsoluteLayout()
+            local selected=key==view.inventoryTab
+            local transform={cx=b.x+b.w/2,cy=b.y+b.h/2,y=motion.props.translateY or 0,
+                angle=math.rad(self.props.rotate or 0),scale=self.props.scale or 1}
+            m.sprites:Panel(vg,selected and "gold" or "green",b.x,b.y,b.w,b.h,m.scale,nil,-.12,
+                PageMotion.Transform(button,b,transform))
+        end
+        face:AddChild(caption);motion:AddChild(face);button:AddChild(motion)
+        syncInventoryVisual(view,visual)
         view.container:AddChild(button)
         m.inventoryButtons[key]=button
         m.pageMotion:Attach(button,"inventory-"..key,"deckpage",entry[3],"bottom",entry[4])
@@ -283,36 +357,43 @@ function Skin.InventoryTabs(view)
     local m=view.machineSkin
     if not m or not m.inventoryButtons then return end
     local deckOpen=view.inventoryOpen and view.modal:IsVisible()
-    local changed=deckOpen and m.inventoryActive~=nil and m.inventoryActive~=view.inventoryTab
+    local changed=deckOpen and m.inventoryActive~=view.inventoryTab
     local resized=m.inventoryButtonsScale~=m.scale
     local counts={items=#view.game.deck,relics=#RelicView.Entries(view.game)}
     for _,entry in ipairs({{"items","物品",L.inventoryItems},{"relics","遗物",L.inventoryRelics}}) do
         local key=entry[1]
         local button=m.inventoryButtons[key]
+        local visual=m.inventoryVisuals[key]
         if resized then
             place(button,entry[3],m.scale)
             buttonStyle(button,18,m.scale)
+            visual.caption:SetStyle({fontSize=18*m.scale})
         end
         local text=entry[2].." · "..counts[key]
         if button.props.text~=text then button:SetText(text) end
-        -- 只在实际切换时补一次选中回弹；持久按钮保留悬停/页面弹簧与指针门控。
-        if changed and key==view.inventoryTab and button.hoverPose then
-            local pose=button.hoverPose
-            pose.scale=.94;pose.velocity=1.8
-            pose.angularVelocity=key=="items" and -1.5 or 1.5
+        if visual.caption.props.text~=text then visual.caption:SetText(text) end
+        local color=key==view.inventoryTab and selectedInk or ink
+        if visual.caption.props.fontColor~=color then visual.caption:SetStyle({fontColor=color}) end
+        -- 和三选一共用选中角/位移弹簧，快速反选沿用当前位置。
+        if changed and key==view.inventoryTab then
+            local pose=visual.pose
+            pose.hover.angle=0;pose.hover.angularVelocity=0
+            pose.velocity=-45
+            pose.angularVelocity=key=="items" and -2.2 or 2.2
         end
+        syncInventoryVisual(view,visual)
     end
     m.inventoryButtonsScale=m.scale
     m.inventoryActive=deckOpen and view.inventoryTab or nil
 end
 
-function Skin.Apply(view,title,help,save,gm)
+function Skin.Apply(view,title,help,gm)
     RulesUI.Attach(view,help)
     local old=view.container
     local safe=old.parent
     ---@type any
     local m={safe=safe,scale=scale(safe),sprites=Sprites.New(),reels=Reels.New(),placements={},
-        clock={phase="prepare",centis=1000,flashElapsed=-1,visible=true},help=help,save=save,gm=gm}
+        clock={phase="prepare",centis=1000,flashElapsed=-1,visible=true},help=help,gm=gm}
     view.machineSkin=m
     -- 复用SafeAreaView的差量更新；原生同尺寸下也检查延迟出现／消失的胶囊。
     safe.pollInterval_=0.5
@@ -368,6 +449,7 @@ function Skin.Apply(view,title,help,save,gm)
         view.goalLabel:SetText(Money.Format(TargetSwap.Value(view)))
         Skin.FitNumbers(view)
         Skin.TickDraft(view,dt)
+        Skin.TickInventory(view,dt)
         m.pageMotion:Tick(dt)
         -- UI applies the same reference-plane movement, including inverse hit tests.
         view.container:SetStyle({translateX=(m.litScene.motionX+m.litScene.shakeX)*m.scale,
@@ -382,6 +464,12 @@ function Skin.Apply(view,title,help,save,gm)
     m.targetBase.id="targetProgressBase"
     local score=panel(view,"metal",L.score,2)
     score.id="scoreSummary"
+    view.board.reelTarget=score
+    view.board.reelsPending=function()
+        return m.reels.value~=view.board:DisplayedBalance() or m.reels:Spinning()
+    end
+    view.board.onReelBurst=function() m.litScene:AddShake(3,-2) end
+    view.container:AddChild(view.board.reelCoins)
     local scoreFace=score.Render
     function score:Render(vg)
         scoreFace(self,vg)
@@ -415,7 +503,7 @@ function Skin.Apply(view,title,help,save,gm)
     TargetProgress.Attach(view)
     panel(view,"screen",L.screen,2)
     for _,w in ipairs({view.board,view.roundLabel,view.goalLabel,view.deckButton,view.footer,
-        view.detailOverlay,view.definitionModal,view.draft,view.modal,help,save,gm,view.physicsButton,view.physicsMenu}) do
+        view.detailOverlay,view.definitionModal,view.draft,view.modal,help,gm,view.physicsButton,view.physicsMenu}) do
         view.container:AddChild(w)
     end
     -- Hidden retained controls remain valid for Bottle.View's updates and assertions.
@@ -444,7 +532,7 @@ function Skin.Apply(view,title,help,save,gm)
     DeductionNote.Attach(view)
     view.deckButton:SetStyle({zIndex=8})
     view.footer:SetStyle({zIndex=8,pointerEvents="box-none"})
-    for _,b in ipairs({help,save,gm,view.physicsButton}) do b:SetStyle({zIndex=40}) end
+    for _,b in ipairs({help,gm,view.physicsButton}) do b:SetStyle({zIndex=40}) end
     -- 表现开关集中在小型列表中，展开时仍可直接观察机台。
     m.presentationMenu=UI.Panel{id="presentationGmMenu",position="absolute",left=0,top=0,
         width="100%",height="100%",visible=false,zIndex=42,backgroundColor=clear,
@@ -469,6 +557,7 @@ function Skin.Apply(view,title,help,save,gm)
         end
         local button=GameAudio.Button{id="presentationGm_"..key,textMotionDisabled=true,
             height=40,flexShrink=0,onClick=function(b)
+                if not DeveloperOverlay.IsAllowed(view) then return end
                 if key=="noise" then m.litScene:ToggleNoise()
                 elseif key=="camera" then m.litScene:ToggleCameraMotion()
                 elseif key=="dust" then m.litScene:ToggleDust()
@@ -486,6 +575,7 @@ function Skin.Apply(view,title,help,save,gm)
     view.container:AddChild(m.presentationMenu)
     m.presentationButton=GameAudio.Button{id="presentationGm",text="表现GM",textMotionDisabled=true,
         zIndex=43,onClick=function()
+            if not DeveloperOverlay.IsAllowed(view) then return end
             view.board:ResetShake()
             view:CloseItemDetail()
             view.physicsMenu:Hide()
@@ -544,21 +634,21 @@ function Skin.Layout(view)
     place(m.targetCaption,{270,144,44,26},s);labelStyle(m.targetCaption,16,s)
     place(view.goalLabel,{316,142,62,30},s);labelStyle(view.goalLabel,22,s)
     place(view.deckButton,L.deck,s);spriteButton(view,view.deckButton,"wood",15,deckButtonDecor)
-    -- 文字写在浅色袋身上：改用深色墨迹，并略下移落到袋腹。
-    view.deckButton:SetStyle({paddingLeft=6*s,paddingRight=6*s,
-        textColor=selectedInk,textShadow=false,paddingTop=8*s})
+    -- 浅布吊牌用深色字；透明边角不再因悬停/按下铺出矩形底色。
+    view.deckButton:SetStyle({textColor=selectedInk,textShadow=false,
+        hoverBackgroundColor=clear,pressedBackgroundColor=clear,disabledBackgroundColor=clear})
     place(view.deckBackButton,L.deckBack,s)
     view.deckBackButton:SetStyle({fontSize=18*s})
     Skin.InventoryTabs(view)
     -- Development tools are ordinary UI, deliberately separate from the painted machine.
-    for i,b in ipairs({m.gm,m.save,view.physicsButton}) do
-        place(b,{213+(i-1)*45,26,43,32},s)
+    for i,b in ipairs({m.gm,view.physicsButton}) do
+        place(b,{213+(i-1)*90,26,43,32},s)
         b:SetStyle({fontSize=11*s,padding=0,borderWidth=1,boxShadow=false,
             backgroundColor={24,30,27,235},textColor=ink,borderColor={94,96,97,255}})
     end
     RulesUI.Layout(view,m.help)
     view.physicsButton:SetText("物理")
-    place(m.presentationButton,{308,74,84,30},s)
+    place(m.presentationButton,{258,0,84,24},s)
     m.presentationButton:SetStyle({fontSize=11*s,padding=0,borderWidth=1,boxShadow=false,
         backgroundColor={24,30,27,235},textColor=ink,borderColor={94,96,97,255}})
     place(m.presentationPanel,{190,100,202,272},s)
@@ -744,7 +834,8 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
         place(button,L.draftSlots[index],s)
         local isSelected=index==selected
         button.draftSelected=isSelected
-        button.draftMaterial=isSelected and "gold" or "metal"
+        button.draftMaterial=relicDraft and "wood" or (isSelected and "gold" or "metal")
+        button.draftFrame=relicDraft and isSelected and "gold" or nil
         buttonStyle(button,12,s)
         -- Button 只保留固定命中区；视觉子树整块抬升和回摆。
         button:SetStyle({hoverBackgroundColor=clear,pressedBackgroundColor=clear})
@@ -764,8 +855,12 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
             local b=self:GetAbsoluteLayout()
             local transform={cx=b.x+b.w/2,cy=b.y+b.h/2,
                 y=motion.props.translateY or 0,angle=math.rad(self.props.rotate or 0),scale=self.props.scale or 1}
-            m.sprites:Panel(vg,button.draftMaterial,b.x,b.y,b.w,b.h,m.scale,nil,nil,
-                PageMotion.Transform(button,b,transform))
+            local pageTransform=PageMotion.Transform(button,b,transform)
+            m.sprites:Panel(vg,button.draftMaterial,b.x,b.y,b.w,b.h,m.scale,nil,nil,pageTransform)
+            -- 遗物始终保留褐色板心，选中只换金框；与普通物品的整块金底区分。
+            if button.draftFrame then
+                m.sprites:Panel(vg,button.draftFrame,b.x,b.y,b.w,b.h,m.scale,true,-.091,pageTransform)
+            end
         end
         local width=L.draftSlots[index][3]
         local shadow=UI.Widget{position="absolute",left=0,top=0,width="100%",height="100%",
@@ -782,7 +877,7 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
         animateDraftIcon(view,itemIcon,m.draftMotion[index],false)
         face:AddChild(itemIcon)
         face:AddChild(UI.Label{text=itemDef.name,id="draftName_"..index,position="absolute",left=8*s,top=41*s,
-            width=(width-16)*s,height=22*s,fontSize=10*s,fontColor=isSelected and selectedInk or ink,
+            width=(width-16)*s,height=22*s,fontSize=10*s,fontColor=isSelected and not relicDraft and selectedInk or ink,
             textAlign="center",verticalAlign="middle",pointerEvents="none"})
         local badge=qualityLabel(itemDef.rarity,9,s,"draftQuality_"..index)
         place(badge,{(width-46)/2,64,46,17},s);face:AddChild(badge)
@@ -859,11 +954,8 @@ function Skin.Update(view)
         clearDraftMotion(m)
     end
     if view.physicsButton.props.text~="物理" then view.physicsButton:SetText("物理") end
-    -- 结算展示期间滚轮跟随逐件弹出的收益递增（board.displayScore）；
-    -- 其余阶段直接显示真实余额。
-    local phase=view.game.phase
-    local showingIncome=phase=="running" or phase=="settle" or phase=="reveal"
-    m.reels:SetValue(showingIncome and view.board.displayScore or view.game.score)
+    -- 中央汇总完成并出币后，金币真正抵达才推动滚轮与目标进度。
+    m.reels:SetValue(view.board:DisplayedBalance())
     -- 转轮音：只有分数滚轮实际滚动时起循环，停稳后收尾；开始页不响。
     local reelsSpinning = m.reels:Spinning()
     if view.startScreen and view.startScreen:IsActive() then reelsSpinning = false end

@@ -1,0 +1,29 @@
+{
+  "items": 120,
+  "products": 32,
+  "relics": 80,
+  "reviewed": 232,
+  "permanentProducts": 22,
+  "permanentUpgrades": 3,
+  "temporaryProducts": 7,
+  "builds": 12,
+  "pilot": 60,
+  "unchangedIds": true,
+  "removedMechanicsInActiveEffects": 0,
+  "examples": [
+    7,
+    18,
+    48,
+    9,
+    8,
+    12,
+    19,
+    24
+  ],
+  "playtested": false,
+  "changedBySection": {
+    "items": 119,
+    "products": 32,
+    "relics": 78
+  }
+}

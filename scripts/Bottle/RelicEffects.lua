@@ -1,6 +1,7 @@
 -- 遗物规则与首次正常获取附赠。纯 Lua，仅依赖 Bottle 数据模块与 Game 的规则接口。
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
+local Money = require("Bottle.Money")
 
 ---@class RelicEffects
 local RelicEffects = {}
@@ -202,16 +203,16 @@ function RelicEffects.AfterSettle(game, events)
         end
     end
     if total ~= 0 then
-        game.juicerValue = game.juicerValue + total
+        game.juicerValue = Money.Round(game.juicerValue) + Money.Round(total)
         game.revision = game.revision + 1
     end
-    return total
+    return Money.Round(total)
 end
 
 ---@param game BottleGame
 ---@return number
 function RelicEffects.JuicerValue(game)
-    return game.juicerValue or 0
+    return Money.Round(game.juicerValue or 0)
 end
 
 --- 在允许交互的阶段生成一件进入牌库的果汁；失败不清累计值。
@@ -228,6 +229,7 @@ function RelicEffects.UseJuicer(game)
     if value <= 0 or value ~= value or value == math.huge then
         return false, "榨汁机没有可生成的果汁", nil
     end
+    value = Money.Round(value)
     if not Items.byId.juice or not Items.byId.juice.implemented or game._nextUid >= 2147483647 then
         return false, "当前无法生成果汁", nil
     end

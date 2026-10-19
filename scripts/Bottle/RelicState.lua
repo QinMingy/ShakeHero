@@ -1,6 +1,7 @@
 -- 五件遗物共享的持久化状态辅助。纯 Lua，不依赖引擎或 UI。
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
+local Money = require("Bottle.Money")
 local RelicState = {}
 
 local MAX_UID = 2147483646
@@ -42,7 +43,7 @@ function RelicState.ReadGame(snapshot)
     assert(Finite(juicerValue), "无效榨汁机累计价值")
     assert(Integer(huntTargetUid) and huntTargetUid >= 0 and huntTargetUid <= MAX_UID,
         "无效江湖追杀目标 UID")
-    return juicerValue, math.floor(huntTargetUid)
+    return Money.Round(juicerValue), math.floor(huntTargetUid)
 end
 
 --- 验证并读取实例级遗物字段。旧 version=2 字段缺省为默认值。

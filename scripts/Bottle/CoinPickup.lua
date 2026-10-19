@@ -33,6 +33,7 @@ local Coin = require("Bottle.CoinIcon")
 ---@field shakeTargetY number
 ---@overload fun(props:WidgetProps): BottleCoinPickup
 local Pickup = UI.Widget:Extend("BottleCoinPickup") --[[@as BottleCoinPickup]]
+Pickup.REEL_COUNT = 36
 
 ---@param amount number
 ---@return integer
@@ -75,17 +76,22 @@ end
 function Pickup:LaunchWaiting()
     -- 忙碌时保留批次，最多128个飞币；收益不会因视觉限流而丢失。
     while #self.waiting > 0 and #self.coins < 128 do
-        local count = Pickup.Count(self.waiting[1].amount)
+        local count = self.waiting[1].source == "reels" and Pickup.REEL_COUNT or Pickup.Count(self.waiting[1].amount)
         if #self.coins + count > 128 then break end
         local batch = table.remove(self.waiting, 1)
         ---@type number
         local credited = 0
         self.serial = self.serial + 1
         for i = 1, count do
-            local nextCredit = i == count and batch.amount or math.floor(batch.amount * (i / count))
+            local reels = batch.source == "reels"
+            -- 两段飞币都按整币分摊，最后一枚补齐真实批次金额，保证抵达总额守恒。
+            local nextCredit = i == count and batch.amount
+                or (reels and math.min(batch.amount, math.ceil(batch.amount * (i / count)))
+                    or math.floor(batch.amount * (i / count)))
             self.coins[#self.coins + 1] = {
-                age = 0, delay = (i - 1) * .026, drop = .25 + (i % 3) * .018,
-                flight = .37 + (i % 4) * .022,
+                age = 0, delay = (i - 1) * (reels and .022 or .026),
+                drop = .25 + (i % 3) * .018,
+                flight = reels and .72 or .37 + (i % 4) * .022,
                 x = math.max(12, math.min(358, batch.x)),
                 y = math.max(12, math.min(batch.height - 18, batch.y)),
                 vx = (((i * 37 + self.serial * 19) % 101) - 50) * 1.3,
@@ -106,6 +112,7 @@ end
 ---@return number scale
 function Pickup.Pose(coin, age, targetX, targetY)
     local t = math.max(0, age - coin.delay)
+    -- 物体收益和转轮长串共用生成／散落的短缓冲，之后才进入吸入曲线。
     local dropT = math.min(t, coin.drop)
     local dx = coin.x + coin.vx * dropT
     local dy = coin.y + 24 * dropT + 330 * dropT * dropT

@@ -14,6 +14,7 @@ local Relics = require("Bottle.Relics")
 local StartScreen = require("Bottle.StartScreen")
 local Tutorial = require("Bottle.Tutorial")
 local DeveloperOverlay = require("Machine.DeveloperOverlay")
+local PublishConfig = require("PublishConfig")
 
 -- WebGPU 校验 SetScissorRect 必须落在渲染区域内：全屏 scissor 按 ceil(逻辑尺寸 × scale) 取设备像素。
 -- UI.Scale.DEFAULT 在部分窗口下（如 449×1000、DPR=3 → scale=1.875）会发生浮点往返上浮：
@@ -132,7 +133,7 @@ local function StartRound()
     view.inventoryOpen = false
     view.deckDetailUid = 0
     view:DisposeDeckSim()
-    if view.physicsButton then view.physicsButton:Show() end
+    if view.physicsButton then view.physicsButton:SetVisible(DeveloperOverlay.IsAllowed(view)) end
     if game:Start() then
         if view.tutorial then view.tutorial:OnStarted() end
         -- 篮筐沿用准备阶段位置；开始按钮不重新随机设施。
@@ -192,6 +193,7 @@ local function Import(text)
 end
 
 local function SetPhysicsMode(mode)
+    if PublishConfig.PUBLISH_MODE ~= false then return end
     if not physics or not view or not physics:SetMode(mode) then return end
     Storage.SetPhysicsMode(mode)
     sensorSampled = false
@@ -202,7 +204,7 @@ local function SetPhysicsMode(mode)
 end
 
 function Start()
-    graphics.windowTitle = "摇摇牌库"
+    graphics.windowTitle = "实习造物主"
     input.mouseMode = MM_ABSOLUTE
     -- scale 传函数：初始化与窗口尺寸变化时都会重新计算，浮点安全微调随之生效。
     UI.Init({theme = require("Bottle.Theme"), scale = SafeUIScale})
@@ -272,8 +274,11 @@ function Start()
             end
             return ok, message
         end,
-        sensor = function() Sensor(true) end, physics = SetPhysicsMode,
+        sensor = function()
+            if PublishConfig.PUBLISH_MODE == false then Sensor(true) end
+        end, physics = SetPhysicsMode,
         atmosphere = function(mode)
+            if PublishConfig.PUBLISH_MODE ~= false then return end
             if not Storage.SetAtmosphere(mode) then return end
             if view then view:Update(true) end
             Save()
@@ -294,13 +299,18 @@ function Start()
     view.board.isPaused = function()
         return view.startScreen:IsActive() or view.tutorial:IsPaused()
     end
+    view.board.animateAppearanceWhilePaused = function()
+        return not view.startScreen:IsActive() and game.phase == "prepare" and view.tutorial:Active()
+    end
     -- Android/iOS 原生端默认接通体感；Web/桌面仅显示触摸回退提示。
     Sensor(false)
     TextMotion.Update(0)
     ButtonMotion.Update(0)
-    -- 验收助手在 Start 之后加载，所以在调用时判断验证运行时。
+    print("[启动] PUBLISH_MODE=" .. tostring(PublishConfig.PUBLISH_MODE)
+        .. (PublishConfig.PUBLISH_MODE ~= false and "，全部 GM 已禁用" or "，允许 G 键显隐 GM"))
+    -- 验收助手在 Start 之后加载；发布模式即使出现 V 也不暴露可写调试对象。
     _G["BottleValidationGet"] = function()
-        if not _G["V"] then return nil end
+        if PublishConfig.PUBLISH_MODE ~= false or not _G["V"] then return nil end
         return {
             GetGame = function() return game end,
             GetView = function() return view end,
@@ -316,7 +326,7 @@ function Start()
     SubscribeToEvent("PhysicsEndContact2D", "HandleContactEnd")
     SubscribeToEvent("KeyDown", "HandleKeyDown")
     Save()
-    print("[启动] 摇摇牌库 V0.6，单机竖屏2D，98件物品与37件遗物已实装")
+    print("[启动] 实习造物主 V0.6，单机竖屏2D，98件物品与37件遗物已实装")
 end
 
 ---@param eventType string
@@ -419,8 +429,9 @@ function HandleUpdate(eventType, eventData)
         end
     end
     if game.phase == "reveal" then
-        -- 结算展示：分数弹出后停留2秒让玩家看清，不做物理步进；结束再存档并打印结算。
-        local revealEvents = game:RevealStep(dt, view.board:CoinPickupsBusy())
+        -- 结算汇总→停1秒→缩小→飞币入转轮；转轮停稳再考核／三选一。
+        local pending = view.board:CoinPickupsBusy()
+        local revealEvents = game:RevealStep(dt, pending, not pending)
         for _, event in ipairs(revealEvents) do
             if event.kind == "deduction" then view:ShowDeduction(event.value or 0) end
         end

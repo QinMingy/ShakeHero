@@ -29,6 +29,7 @@ local Rotation = require("Bottle.RotationEffects")
 local Lifecycle = require("Bottle.GameLifecycle")
 local TriggerFeedback = require("Bottle.TriggerFeedback")
 local Removal = require("Bottle.Removal")
+local Money = require("Bottle.Money")
 local DURATION = 10
 local SETTLE_DELAY = 2
 -- 结算展示：先逐个弹出收益浮字（队列），队列结束后再停留 REVEAL_DELAY 秒进入考核/三选一。
@@ -200,6 +201,7 @@ local MAX_COUNTER = 2147483647
 ---@field pendingRelicDraft boolean 考核达标后待追加的遗物三选一（V0.4 新增）
 
 ---@class BottleGame
+---@field GmAddItem fun(self:BottleGame,id:string|integer):boolean,string
 ---@field CanRemoveOwned fun(self:BottleGame,uid:integer):boolean,string
 ---@field RemoveOwned fun(self:BottleGame,uid:integer):boolean,string
 ---@field Snapshot fun(self:BottleGame):BottleSnapshot
@@ -600,7 +602,7 @@ function Game:CooldownOf(id)
 end
 
 ---@param item ItemInstance
----@return number 当前有效价值 =（基础 + 临时 + 永久）× 倍率
+---@return number 全部加值和倍率计算完成后向上取整的当前有效价值
 function Game:_Value(item)
     local base = item.rollValue or item.valueBase or Items.byId[item.id].base
     if item.id == "trash_can" and Relics.Has(self, "lucky_charm") then base = 1 end
@@ -617,7 +619,8 @@ function Game:_Value(item)
     if item.id == "tomato" and Relics.Has(self, "tomato_tycoon") then
         value = value * 2
     end
-    return value * ((item.permMult or 1) + (item.cactusBonus or 0)) * (1 + (item.jackpotBonus or 0))
+    return Money.Round(value * ((item.permMult or 1) + (item.cactusBonus or 0))
+        * (1 + (item.jackpotBonus or 0)))
 end
 
 ---@param events GameEvent[]
@@ -625,6 +628,7 @@ end
 ---@param value number
 ---@param position {x:number,y:number}?
 function Game:_Score(events, item, value, position)
+    value = Money.Round(value)
     self.score = self.score + value
     self.totalScore = self.totalScore + value
     self.roundScore = self.roundScore + value
@@ -1113,7 +1117,7 @@ function Game:_Settle(state)
     self:_CleanupRound()
     self.options = {}
     self.refreshUsed = false
-    self.lastResult = string.format("第%d回合获得%g金币", self.round, self.roundScore)
+    self.lastResult = "第" .. self.round .. "回合获得" .. Money.Format(self.roundScore) .. "金币"
     -- 分数已弹出，进入结算展示阶段停留，让玩家看清再进入考核/三选一。
     -- 保留 _rollback 到 reveal 结束：展示中退出仍回退到回合开始前。
     self.phase = "reveal"
@@ -1122,20 +1126,24 @@ function Game:_Settle(state)
     return events
 end
 
---- reveal 结算展示阶段推进：逐件弹出收益浮字（队列），队列播完后再停留
---- REVEAL_DELAY 秒执行考核扣款与三选一；接入飞币时从全部抵达后保留两秒。
---- 该阶段不产金币、无物理步进，仅等待玩家看清分数。
+--- reveal不产金币、不做物理步进。客户端完整动效结束后执行考核扣款与三选一；
+--- 未传入完成信号的纯规则调用沿用队列时长加REVEAL_DELAY的等待方式。
 ---@param dt number
----@param presentationPending? boolean 飞币/浮字仍在播放时，保留完整的末尾停留时间
+---@param presentationPending? boolean 飞币/汇总/滚轮仍在播放时暂停结束
+---@param presentationComplete? boolean 客户端完整结算动效已结束，无需追加旧版固定尾停
 ---@return GameEvent[]
-function Game:RevealStep(dt, presentationPending)
+function Game:RevealStep(dt, presentationPending, presentationComplete)
     ---@type GameEvent[]
     local events = {}
     if self.phase ~= "reveal" then return events end
     assert(IsFinite(dt) and dt >= 0, "dt 必须为非负有限数字")
     local duration = REVEAL_DELAY + Game.ScorePopTime(self._revealPopCount or 0)
     local limit = presentationPending and duration - REVEAL_DELAY or duration
-    self.revealElapsed = math.min(limit, self.revealElapsed + dt)
+    if presentationComplete and not presentationPending then
+        self.revealElapsed = duration
+    else
+        self.revealElapsed = math.min(limit, self.revealElapsed + dt)
+    end
     if self.revealElapsed >= duration - EPSILON then
         self.revealElapsed = duration
         local paid = self:_FinishReveal()
@@ -1157,7 +1165,8 @@ function Game:_FinishReveal()
         local paidTarget = self.target
         if self.score < paidTarget then
             self.phase = "over"
-            self.lastResult = self.lastResult .. string.format("，余额%g未达到考核目标%g", self.score, paidTarget)
+            self.lastResult = self.lastResult .. "，余额" .. Money.Format(self.score)
+                .. "未达到考核目标" .. Money.Format(paidTarget)
             self.revision = self.revision + 1
             return 0
         end
@@ -1167,7 +1176,8 @@ function Game:_FinishReveal()
         paid = paidTarget
         self.stage = nextStage
         self.target = nextTarget
-        self.lastResult = self.lastResult .. string.format("，考核达标扣除%g，下一目标%g", paidTarget, self.target)
+        self.lastResult = self.lastResult .. "，考核达标扣除" .. Money.Format(paidTarget)
+            .. "，下一目标" .. Money.Format(self.target)
         self.pendingRelicDraft = true
         self.removals = self.removals + 1
         print(string.format("[移除] 第%d回合考核达标，机会+1，剩余%d", self.round, self.removals))
@@ -1451,35 +1461,8 @@ function Game:Skip()
     return true
 end
 
---- GM 功能：按物品 id 添加一件已实装物品到牌库。
---- running/settle 阶段拒绝：回合前快照会把新增物品回滚。
----@param id string|integer
----@return boolean ok
----@return string message
-function Game:GmAddItem(id)
-    if self.phase == "running" or self.phase == "settle" or self.phase == "reveal" then
-        return false, "摇晃或结算进行中不能添加物品，请等本回合结束"
-    end
-    local numberId = type(id) == "number" and id or tonumber(id)
-    local def = numberId and (Items.byNumber --[[@as table<number,ItemDef>]])[numberId] or Items.byId[id]
-    if not def then return false, "未知物品 id：" .. tostring(id) end
-    if not def.implemented then
-        return false, string.format("%s（#%d）尚未实装，暂不能添加", def.name, def.numberId)
-    end
-    local item = self:_Create(def.id)
-    if self.phase == "draft" and not self.relicDraft then
-        -- 遗物三选一的候选与牌库无关，添加物品不过滤遗物候选。
-        local owned = OwnedTypes(self.deck)
-        ---@type string[]
-        local options = {}
-        for _, option in ipairs(self.options) do
-            if DraftEligible(Items.byId[option], owned) then options[#options + 1] = option end
-        end
-        self.options = options
-    end
-    self.revision = self.revision + 1
-    return true, string.format("已添加 %s（#%d）到牌库，当前牌库 %d 件", def.name, item.uid, #self.deck)
-end
+-- GM 独立模块统一执行发布权限检查，保持核心规则文件在行数限制内。
+require("Bottle.GmCommands").Install(Game, OwnedTypes, DraftEligible)
 
 Removal.Install(Game)
 local snapshotImpl, restoreImpl = require("Bottle.GamePersistence").Install(Game, {

@@ -1,0 +1,22 @@
+{
+  "items": 120,
+  "products": 32,
+  "relics": 80,
+  "builds": 12,
+  "pilotItems": 60,
+  "unknownSourceEffectsUsed": 0,
+  "sourceRows": {
+    "triggers": 146,
+    "boons": 58
+  },
+  "examples": [
+    16,
+    18,
+    48,
+    8,
+    8,
+    11,
+    19,
+    24
+  ]
+}

@@ -1,6 +1,5 @@
 -- Rules use retained UI for layout/input and the cabinet's existing wood slices.
 local UI = require("urhox-libs/UI")
-local Audio = require("Bottle.Audio")
 local Sprites = require("Machine.LayeredSprites")
 
 ---@type any
@@ -19,11 +18,7 @@ Rules.entries = {
     {"07  遗物三选一", "每次通过考核并完成物品三选一后，会获得1次遗物三选一机会。每组遗物候选有1次独立免费刷新机会，每次重置，不消耗物品刷新次数，也不累计。已拥有的遗物不会重复出现。"},
     {"08  考核", "每经过5天需要完成一次考核。金币达到目标时扣除对应金币，保留余额并继续；金币不足则游戏结束。当前目标与剩余天数会显示在机台上。"},
     {"09  体积与质量", "除特别说明外，物品的体积与质量均有上下限：最低50%，最高200%。"},
-}
-Rules.notes = {
-    "金币按当前有效价值结算，保留小数，不逐笔向上取整。考核目标会随阶段提高。",
-    "每次考核达标增加1次移除机会。准备或三选一阶段打开牌库并查看物品详情，可点击红色“移除”，二次确认后消耗1次机会并永久移除该物品，不触发被消耗效果。",
-    "物品明确注明的特殊效果优先。永久消耗的物品会离开牌库，临时生成或临时消耗则按物品说明处理。",
+    {"10  移除机会", "每次通过考核，获得1次移除机会。在准备或物品三选一阶段，可打开牌库查看物品详情，点击“移除”并确认，消耗1次机会将该物品永久移出牌库。未使用的机会可以保留。"},
 }
 
 function Rules.Attach(view, button)
@@ -98,25 +93,7 @@ function Rules.Open(view)
                     fontColor = muted, textMotionDisabled = true, pointerEvents = "none"},
             }})
     end
-    local notes = UI.Panel {id = "rulesNotes", width = "100%", flexShrink = 0, gap = 6*s,
-        children = {UI.Label {text = "补充说明", fontSize = 13*s, fontColor = ink,
-            textMotionDisabled = true, pointerEvents = "none"}}}
-    for _, text in ipairs(Rules.notes) do
-        notes:AddChild(UI.Label {text = text, width = "100%", whiteSpace = "normal", fontSize = 10.5*s,
-            fontColor = muted, textMotionDisabled = true, pointerEvents = "none"})
-    end
-    scroll:AddChild(notes)
     panel:AddChild(scroll)
-    local function utility(text, action)
-        return Audio.Button {text = text, onClick = action, height = 38*s,
-            flexGrow = 1, flexBasis = 0, fontSize = 10.5*s, paddingHorizontal = 3*s,
-            textMotionDisabled = true}
-    end
-    panel:AddChild(UI.Panel {width = "100%", flexDirection = "row", gap = 8*s, flexShrink = 0,
-        children = {
-            utility("机台氛围", function() view:OpenAtmosphere() end),
-            utility("校准手机体感", function() view.actions.sensor() end),
-        }})
     return panel
 end
 

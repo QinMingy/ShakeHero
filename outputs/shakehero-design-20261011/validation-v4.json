@@ -1,0 +1,27 @@
+{
+  "items": 151,
+  "relics": 80,
+  "draftPool": 120,
+  "permanent": 144,
+  "temporary": 7,
+  "removedIds": [
+    "I009",
+    "P002"
+  ],
+  "newIds": [
+    "I121"
+  ],
+  "examples": [
+    7,
+    18,
+    48,
+    9,
+    8,
+    12,
+    19,
+    24
+  ],
+  "terminologyScanPassed": true,
+  "buildReferencesPassed": true,
+  "playtested": false
+}

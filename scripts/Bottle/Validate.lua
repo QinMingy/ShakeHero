@@ -422,7 +422,5 @@ end)
 
 V.atFrame(410, function()
     api.GetView().modal:Hide()
-    api.GetView():OpenSave()
-    V.assert(api.GetView().modal:IsVisible(), "存档码面板可打开")
     V.finish()
 end)

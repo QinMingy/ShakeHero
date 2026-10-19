@@ -34,6 +34,12 @@ end
 ---@return GameEvent[]
 local function Events(events, kind, uid) return Repair.Events(events, kind, uid) end
 
+---@return BottleStepContacts
+local function EmptyContacts()
+    return {pairs={}, bottom={}, top={}, wall={}, positions={}, side={}, angles={},
+        rotateOffsets={}, angularTravel={}, flightArrived={}, flightHits={}}
+end
+
 ---@param events GameEvent[]
 ---@param uid integer
 ---@param amount number
@@ -253,15 +259,62 @@ Test("金币价值永久与位移文案保持真实数字和图标标记", funct
     local prefix,amount,icon = Feedback.Content(5,"move")
     assert(prefix == "移动：" and amount == "+5" and not icon)
     prefix,amount,icon = Feedback.Content(1.2,"move")
-    assert(prefix == "移动：" and amount == "+1.2" and not icon)
+    assert(prefix == "移动：" and amount == "+2" and not icon)
     prefix,amount,icon = Feedback.Content(-1.2,"move")
-    assert(prefix == "移动：" and amount == "-1.2" and not icon)
+    assert(prefix == "移动：" and amount == "-1" and not icon)
     prefix,amount,icon = Feedback.Content(1.5,"collision","value")
-    assert(prefix == "碰撞" and amount == "+1.5" and icon)
+    assert(prefix == "碰撞" and amount == "+2" and icon)
     prefix,amount,icon = Feedback.Content(3,"rotate","permanent")
     assert(prefix == "旋转：" and amount == "永久+3" and icon)
     prefix,amount,icon = Feedback.Content(-10,"distance","size")
     assert(prefix == "位移体积" and amount == "-10%" and not icon)
+end)
+
+Test("倍率收益比较取整后的价值且永久临时两段不重复", function()
+    local game = Fixture({"hay"})
+    local hay = Item(game, 1)
+    hay.permBonus = -1
+    Close(game:_Value(hay), 4)
+    local before = Feedback.Capture(game)
+    hay.permMult = 1.2
+    local events = {}
+    Feedback.Finish(game, before, events, 1, "collision", EmptyContacts())
+    Close(game:_Value(hay), 5)
+    Reward(events, 1, 1, "permanent", "collision")
+    Close(hay.permMult, 1.2)
+    Close(game.roundScore, 0)
+
+    hay.permMult = 1
+    before = Feedback.Capture(game)
+    hay.permMult, hay.mult = 1.2, 1.5
+    events = {}
+    Feedback.Finish(game, before, events, 1, "collision", EmptyContacts())
+    assert(#events == 2)
+    Close(events[1].value, 1)
+    assert(events[1].rewardKind == "permanent")
+    Close(events[2].value, 3)
+    assert(events[2].rewardKind == "value")
+    Close(game:_Value(hay), 8)
+    Close((events[1].value or 0) + (events[2].value or 0), 8 - 4)
+end)
+
+Test("加法跳字不额外放大且体积小数保留", function()
+    local game = Fixture({"hay"})
+    local hay = Item(game, 1)
+    hay.permBonus, hay.mult = -1, 1.5
+    Close(game:_Value(hay), 6)
+    local before = Feedback.Capture(game)
+    hay.bonus = hay.bonus + 1
+    local events = {}
+    Feedback.Finish(game, before, events, 1, "collision", EmptyContacts())
+    Reward(events, 1, 1, "value", "collision")
+    Close(game:_Value(hay), 8)
+    Feedback.Reward(events, hay, -.2, "value", "collision")
+    assert(#events == 1, "向上取整为0时不显示虚假收益")
+    Feedback.Reward(events, hay, 2.5, "size", "distance")
+    Close(events[2].value, 2.5)
+    local prefix, amount, icon = Feedback.Content(2.5, "distance", "size")
+    assert(prefix == "位移体积" and amount == "+2.5%" and not icon)
 end)
 
 Test("四类触发按金币价值和永久价值统一排版", function()

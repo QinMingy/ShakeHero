@@ -382,10 +382,10 @@ Test("仙人掌吃水珠按实际尺寸临时加倍率、上限不超收且旧�
     Close(Item(game, 1).scale, 2)
     Close(Item(game, 1).cactusBonus, .05)
     Close(Item(game, 1).permMult, 1.5)
-    Close(game:_Value(Item(game, 1)), 4 * 1.55, "旧永久倍率与本回合加数相加而非连乘")
+    Close(game:_Value(Item(game, 1)), 7, "旧永久倍率与本回合加数相加，4×1.55=6.2向上取整7")
     assert(Item(game, 2).location == "discard" and Item(game, 3).location == "discard")
     local settled = game:Finish()
-    Close(Events(settled, "score")[1].value, 4 * 1.55)
+    Close(Events(settled, "score")[1].value, 7)
     Close(Item(game, 1).cactusBonus, 0)
     Close(Item(game, 1).scale, 2)
     Close(Item(game, 1).permMult, 1.5)
@@ -417,7 +417,7 @@ Test("仙人掌追踪其他正向尺寸变化，不奖励缩小且清理只清�
     Expansion.Step(game, 0, Contacts(), {})
     Close(Item(game, 1).cactusBonus, .3)
     Close(Item(game, 1).permMult, 1)
-    Close(game:_Value(Item(game, 1)), 5.2)
+    Close(game:_Value(Item(game, 1)), 6, "4×1.3=5.2向上取整6")
     Item(game, 1).scale = 1.1
     Expansion.Step(game, 0, Contacts(), {})
     Close(Item(game, 1).cactusBonus, .3)
@@ -554,7 +554,7 @@ Test("果汁被消耗按当前有效值永久加给消费者", function()
     Item(game, 2).valueBase, Item(game, 2).permBonus = 7, 2
     Item(game, 2).mult, Item(game, 2).permMult = 2, 1.2
     assert(game:_Destroy(2, false, {}, Item(game, 1), "consume"))
-    Close(Item(game, 1).permBonus, 21.6)
+    Close(Item(game, 1).permBonus, 22, "果汁有效价值21.6向上取整后永久转给消费者")
 end)
 
 Test("分裂只穿透物，向上取整且不触发消耗幽灵收益", function()

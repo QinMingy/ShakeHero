@@ -4,6 +4,7 @@ local Game = require("Bottle.Game")
 local Relics = require("Bottle.Relics")
 local Effects = require("Bottle.RelicEffects")
 local Repair = require("Bottle.RepairTests")
+local PublishConfig = require("PublishConfig")
 local Tests = {}
 
 ---@type {id:string, items:string[]}[]
@@ -136,10 +137,21 @@ Test("附赠创建每件正常触发积少成多、维护读档和GM不重复送
         local restored = Game.Restore(game:Snapshot())
         assert(restored._nextUid == game._nextUid and restored.score == game.score)
         local count = #restored.deck
-        assert(restored:GmAddItem("ball"))
+        local beforeGm = restored:Snapshot()
+        local ok, message = restored:GmAddItem("ball")
+        if PublishConfig.PUBLISH_MODE ~= false then
+            assert(ok == false and message == "发布模式已禁用 GM")
+            assert(Equal(beforeGm, restored:Snapshot()), "发布GM拒绝不得添加实例、发金币或补送遗物附赠")
+        else
+            assert(ok)
+        end
         Effects.Maintain(restored)
-        assert(#restored.deck == count+1 and restored.score-game.score == 1,
-            "GM只添加指定物品，不重发已持遗物的附赠")
+        if PublishConfig.PUBLISH_MODE ~= false then
+            assert(Equal(beforeGm, restored:Snapshot()), "拒绝后的维护也不补送遗物附赠")
+        else
+            assert(#restored.deck == count+1 and restored.score-game.score == 1,
+                "GM只添加指定物品，不重发已持遗物的附赠")
+        end
     end
 end)
 
@@ -149,7 +161,11 @@ Test("贷款额度先持有再送信用卡25、原有信用卡仍10且以后获�
     assert(game:Choose(1))
     assert(game:_Value(Item(game,1)) == 10 and game:_Value(Item(game,2)) == 25)
     assert(Item(game,2).permBonus == 15)
-    assert(game:GmAddItem("credit_card") and game:_Value(Item(game,3)) == 25)
+    local card = game:_Create("credit_card")
+    game.revision = game.revision + 1
+    assert(game:Get(card.uid) == card and Item(game,3) == card and game:_Value(card) == 25)
+    assert(#game.deck == 3 and game._nextUid == 4)
+    Game.Restore(game:Snapshot())
 end)
 
 Test("旧档已有附赠遗物不追溯补发、单纯设置遗物和维护也不送",function()

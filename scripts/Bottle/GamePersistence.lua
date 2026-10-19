@@ -3,6 +3,7 @@ local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local RelicState = require("Bottle.RelicState")
 local PhysicalState = require("Bottle.PhysicalState")
+local Money = require("Bottle.Money")
 local GamePersistence = {}
 
 -- 与 Game 的规则常量保持一致；持久化校验不依赖可变运行状态。
@@ -31,6 +32,36 @@ function GamePersistence.Install(Game, helpers)
     local OwnedTypes = assert(helpers.OwnedTypes)
     local DraftEligible = assert(helpers.DraftEligible)
 
+    -- 只迁移游戏生成的完整结果句式；未知自定义文本保持原样。
+    ---@param text string
+    ---@return string
+    local function RoundLastResult(text)
+        local round, income, suffix = text:match("^第(%d+)回合获得([%+%-%.%deE]+)金币(.*)$")
+        local amount = income and tonumber(income)
+        if not round or not amount or not suffix or not IsFinite(amount) then return text end
+        if suffix ~= "" then
+            local balance, target = suffix:match("^，余额([%+%-%.%deE]+)未达到考核目标([%+%-%.%deE]+)$")
+            if balance then
+                local balanceValue, targetValue = tonumber(balance), tonumber(target)
+                if not balanceValue or not targetValue or not IsFinite(balanceValue)
+                    or not IsFinite(targetValue) then return text end
+                if Money.Round(balanceValue) >= Money.Round(targetValue) then
+                    -- 旧档失败结果不重新判关；向上取整跨过阈值时避免出现“40未达到40”。
+                    suffix = "，考核未通过，考核目标" .. Money.Format(targetValue)
+                else
+                    suffix = "，余额" .. Money.Format(balanceValue) .. "未达到考核目标" .. Money.Format(targetValue)
+                end
+            else
+                local paid, nextTarget = suffix:match("^，考核达标扣除([%+%-%.%deE]+)，下一目标([%+%-%.%deE]+)$")
+                local paidValue, nextValue = tonumber(paid), tonumber(nextTarget)
+                if not paidValue or not nextValue or not IsFinite(paidValue)
+                    or not IsFinite(nextValue) then return text end
+                suffix = "，考核达标扣除" .. Money.Format(paidValue) .. "，下一目标" .. Money.Format(nextValue)
+            end
+        end
+        return "第" .. round .. "回合获得" .. Money.Format(amount) .. "金币" .. suffix
+    end
+
     -- 存档数组必须是无额外键的连续1-based数组；避免 ipairs 静默丢掉损坏数据。
     ---@param value any
     ---@param name string
@@ -52,7 +83,8 @@ function GamePersistence.Install(Game, helpers)
     ---@param item ItemInstance
     local function ReadExpansionItem(saved, item)
         assert(saved.valueBase == nil or IsFinite(saved.valueBase), "无效基础价值覆盖")
-        assert(saved.eventMult == nil or saved.eventMult == 1, "可持久化阶段残留事件倍率")
+        assert(saved.eventMult == nil or (IsFinite(saved.eventMult) and saved.eventMult == 1),
+            "可持久化阶段残留事件倍率")
         assert(saved.generatedTemporary == nil or saved.generatedTemporary == false,
             "可持久化阶段残留临时生成物")
         assert(saved.shielded == nil or saved.shielded == false, "可持久化阶段残留护盾")
@@ -71,7 +103,9 @@ function GamePersistence.Install(Game, helpers)
         for _, key in ipairs({"abacusMerges", "calfDashRemaining", "discusWait", "compassProgress",
             "ghostTravel", "spinProgress", "geckoContactTime", "cactusBonus", "jackpotBonus",
             "rotationProgress", "gearPlayback"}) do
-            assert(saved[key] == nil or saved[key] == 0, "可持久化阶段残留扩展状态: " .. key)
+            -- 原生运行时的NaN与整数零比较可能误判，必须先验证有限数再接受零值。
+            assert(saved[key] == nil or (IsFinite(saved[key]) and saved[key] == 0),
+                "可持久化阶段残留扩展状态: " .. key)
         end
         assert(saved.anchored == nil or saved.anchored == false, "可持久化阶段残留锚定状态")
         for _, key in ipairs({"pendingConsumerUid", "calfDashHits", "discusOwnerUid", "discusTargetUid",
@@ -200,7 +234,7 @@ function GamePersistence.Install(Game, helpers)
         local self = setmetatable({}, Game)
         self:_Init(1) -- 只初始化字段，不抽取，不消耗随机状态。
         self.phase, self.round, self.stage = snapshot.phase, math.floor(snapshot.round), math.floor(snapshot.stage)
-        -- 账户保留远端实际结算精度；格式化展示不得反写或逐笔取整收益。
+        -- 先保留原值完成全部严格校验，末尾才迁移合法存档的金额字段。
         self.score, self.totalScore, self.roundScore = snapshot.score, snapshot.totalScore, snapshot.roundScore
         self.elapsed, self.target = snapshot.elapsed, snapshot.target
         self.bestRound, self.bestRoundScore = snapshot.bestRound, snapshot.bestRoundScore
@@ -295,7 +329,9 @@ function GamePersistence.Install(Game, helpers)
             if item.woolExtraEntry then
                 assert(self.phase == "prepare" and item.id == "wool"
                     and (item.location == "deck" or item.location == "bottle")
-                    and self:_Value(item) == 1 and not drawnSeen[item.uid]
+                    -- 此处校验原始羊毛价值，不能让向上取整把损坏的0.x放行为1。
+                    and ((item.valueBase or Items.byId.wool.base) + item.permBonus) * item.permMult == 1
+                    and not drawnSeen[item.uid]
                     and (item.woolReadyRound == nil or item.woolReadyRound <= self.round),
                     "无效羊毛额外入场状态")
             end
@@ -330,6 +366,11 @@ function GamePersistence.Install(Game, helpers)
             end
         end
         RelicState.ValidateTarget(self)
+        -- 旧账户金额向上取整；实例保留原始因子，在完整有效价值计算后统一取整。
+        self.score, self.totalScore, self.roundScore = Money.Round(self.score), Money.Round(self.totalScore),
+            Money.Round(self.roundScore)
+        self.bestRoundScore, self.lastRoundScore = Money.Round(self.bestRoundScore), Money.Round(self.lastRoundScore)
+        self.lastResult = RoundLastResult(self.lastResult)
         return self
     end
     return Game.Snapshot, Game.Restore

@@ -28,6 +28,8 @@ local calfSource = nil
 local deductionSound = nil
 ---@type SoundSource?
 local deductionSource = nil
+---@type SoundSource?
+local coinBurstSource = nil
 local lastCalfTime = -1
 local calfTime = 0
 local FADE_SECONDS = 1.2
@@ -48,6 +50,7 @@ local REEL_LOOP_GAIN = .38
 local REEL_START_GAIN = .7
 local REEL_STOP_GAIN = .75
 local DEDUCTION_GAIN = 1.0
+local COIN_BURST_GAIN = .7
 -- 出现音调阶梯（用户要求：音调从低到高，超出上限后从最低开始）：
 -- 每批出现都从低于原调3个半音起，每次升高1.5个半音，共8档
 -- （约0.84 → 1.55倍速），用完回到本批最低档；批次开始时由调用方重置。
@@ -153,6 +156,9 @@ function Music.Init()
         source:SetSoundType(SOUND_EFFECT)
         Music.impacts[i] = source
     end
+    -- 汇总出币独占声源，复用金币素材，不抢占碰撞、出现或转轮声音。
+    coinBurstSource = audioScene:CreateChild("CoinBurst"):CreateComponent("SoundSource")
+    coinBurstSource:SetSoundType(SOUND_EFFECT)
     -- 转轮音：独立循环源 + 开始/停止一次性源，不与按钮/出现音抢占。
     reelLoopSound = Load(AUDIO_DIR .. REEL_LOOP_FILE, true)
     reelStartSound = Load(AUDIO_DIR .. REEL_START_FILE, false)
@@ -218,6 +224,12 @@ end
 function Music.Deduction()
     if not audioScene or not deductionSource or not deductionSound then return end
     deductionSource:Play(deductionSound, 0, DEDUCTION_GAIN)
+end
+
+-- 计分牌开始缩小并出币时调用一次；每次调用只播放一次金币短音。
+function Music.CoinBurst()
+    if not audioScene or not coinBurstSource or not impactSound then return end
+    coinBurstSource:Play(impactSound, 0, COIN_BURST_GAIN)
 end
 
 function Music.Click()
@@ -335,6 +347,7 @@ function Music.Shutdown()
     end
     if calfSource then calfSource:Stop(); calfSource:Dispose(); calfSource = nil end
     if deductionSource then deductionSource:Stop(); deductionSource:Dispose(); deductionSource = nil end
+    if coinBurstSource then coinBurstSource:Stop(); coinBurstSource:Dispose(); coinBurstSource = nil end
     deductionSound = nil
     calfSound, lastCalfTime, calfTime = nil, -1, 0
     if audioScene then audioScene:Dispose(); audioScene = nil end

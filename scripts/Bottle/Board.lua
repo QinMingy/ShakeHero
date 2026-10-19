@@ -37,7 +37,7 @@ local SCORE_OUTLINE = {
     {x = -2, y = 2}, {x = 0, y = 2}, {x = 2, y = 2},
 }
 
--- 收益浮字存活时长（秒），与结算展示阶段 reveal 的停顿一致，保证玩家看清分数。
+-- 收益浮字存活时长（秒），独立于汇总牌的停留与转轮飞币时序。
 local PARTICLE_LIFETIME = 2.0
 local DASH_TRAIL_LIFETIME = .20
 local DASH_TRAIL_INTERVAL = .04
@@ -161,12 +161,18 @@ end
 ---@field scorePopTimer number
 ---@field scorePopInterval number? 本次reveal固定节拍，按Game统计初始总收益事件计算
 ---@field scorePopRevealing boolean
----@field displayScore number? 结算展示期间逐件递增的顶部滚轮暂显值；nil 时显示真实余额
+---@field displayScore number? 收益汇总期间冻结，最终金币抵达转轮才递增的展示余额
 ---@field roundScore BottleRoundScore 当前回合逐件累计，与顶部总余额分开显示
 ---@field coinPickups BottleCoinPickup
 ---@field coinsInFlight number 已发射、尚未抵达的金币收益
 ---@field shakeCoinsInFlight number 即时收益中尚未抵达左上角的部分
+---@field reelCoins BottleCoinPickup 汇总消失后飞向转轮的独立全画布金币流
+---@field reelCoinsInFlight number 尚未飞入转轮的展示金额
+---@field reelTarget Widget? 转轮机实际面板
+---@field reelsPending (fun():boolean)? 转轮尚未同步最终展示余额或尚未停稳
+---@field onReelBurst (fun())? 汇总开始缩小出币时的屏幕震动
 ---@field isPaused (fun():boolean)? 主菜单覆盖时与玩法一起暂停表现
+---@field animateAppearanceWhilePaused (fun():boolean)? 教程准备阶段仅放行物品入场，继续暂停其余表现
 ---@field pulses table<number,number>
 ---@field residue table<number,{id:string,x:number,y:number,angle:number,radius:number,rollValue:number?,woolCount:number?,soft:BottleSoftPose[]?}> 结算残留：物品回牌库后保留的最后姿态
 ---@field pops BottlePopPose[] 出现弹跳动效；按 uid 查表的 popByUid 与其同步维护
@@ -200,6 +206,10 @@ function Board:Init(props)
     self.coinPickups = CoinPickup {id = "coinPickups", position = "absolute",
         left = 0, top = 0, width = "100%", height = "100%", pointerEvents = "none", zIndex = 8}
     self:AddChild(self.coinPickups)
+    -- LayeredSkin把这层移至机台容器，允许金币飞出瓶内画布到上方转轮。
+    self.reelCoins = CoinPickup {id = "reelCoins", position = "absolute",
+        left = 0, top = 0, width = "100%", height = "100%", pointerEvents = "none", zIndex = 9}
+    self:AddChild(self.reelCoins)
     self.consumeFlash = ConsumeFlash.New()
     self:ResetEffects()
     self:ResetPopState()
@@ -214,6 +224,8 @@ function Board:ResetEffects()
     self.scorePopInterval, self.scorePopRevealing = nil, false
     self.displayScore = nil
     self.coinPickups:Reset()
+    self.reelCoins:Reset()
+    self.reelCoinsInFlight = 0
     self.coinsInFlight = 0
     self.shakeCoinsInFlight = 0
     self.roundScore:Reset()
@@ -270,6 +282,20 @@ function Board:ResetPopState()
     -- 不并入 ResetEffects——阶段切换（如 prepare→running）只是清表现残留，
     -- 同一批瓶内物品不能因此被误判为新出现而重复弹跳/响音。
     self.pops, self.popByUid, self.presentUids = {}, {}, {}
+end
+
+--- 已有真实刚体且入场结束，才允许教程指向和查看；缺失姿态的默认坐标不算就绪。
+---@param uid integer
+---@return boolean
+function Board:IsItemReadyForInspection(uid)
+    local item = self.game:Get(uid)
+    if not item or item.location ~= "bottle" or not self.physics.bodies[uid]
+        or not self.presentUids[uid] or self.popByUid[uid] then return false end
+    for _, pop in ipairs(self.pops) do
+        if pop.uid == uid then return false end
+    end
+    local l = self:GetAbsoluteLayout()
+    return l.w > 0 and l.h > 0
 end
 
 function Board:ResetShake()
@@ -345,10 +371,60 @@ function Board:OnPanMove(event)
     end
 end
 
---- 队列和限流中的批次均须播完，主循环才可结束结算展示。
+--- 原始收益先全部汇入中央计分牌。
+---@return boolean
+function Board:IncomeCoinsBusy()
+    return #self.scoreQueue > 0 or self.coinPickups:Busy()
+end
+
+--- 汇总、停留、缩小、出币与滚轮全部结束，主循环才可进入考核／三选一。
 ---@return boolean
 function Board:CoinPickupsBusy()
-    return #self.scoreQueue > 0 or self.coinPickups:Busy()
+    return self:IncomeCoinsBusy() or self.reelCoins:Busy()
+        or (self.game.phase == "reveal" and (self.roundScore.transferPhase ~= "done"
+            or (self.reelsPending and self.reelsPending() or false)))
+end
+
+---@return number
+function Board:DisplayedBalance()
+    if not Busy(self.game) then return self.game.score end
+    if self.displayScore == nil then
+        -- 以回合开始前余额为基线；score-roundScore会提前显示小储蓄等直接奖励。
+        self.displayScore = self.game._rollback and self.game._rollback.score
+            or self.game.score - self.game.roundScore
+    end
+    return self.displayScore
+end
+
+---@param dt number
+function Board:UpdateReelCoins(dt)
+    local canvas = self.reelCoins:GetAbsoluteLayout()
+    local scale = math.max(.01, canvas.w / 370)
+    local target = self.reelTarget and self.reelTarget:GetAbsoluteLayout()
+    if target and target.w > 0 and target.h > 0 then
+        self.reelCoins.targetX = (target.x + target.w / 2 - canvas.x) / scale
+        self.reelCoins.targetY = (target.y + target.h / 2 - canvas.y) / scale
+    end
+    self.reelCoins:Step(dt, function() end, function(amount)
+        self.reelCoinsInFlight = math.max(0, self.reelCoinsInFlight - amount)
+        self.displayScore = self:DisplayedBalance() + amount
+    end)
+end
+
+function Board:LaunchReelCoins()
+    local amount = self.game.score - self:DisplayedBalance()
+    if amount <= 0 then
+        -- 零／负收益仍完整缩小，到flight空流尾部再同步余额与结束。
+        return
+    end
+    local canvas = self.reelCoins:GetAbsoluteLayout()
+    local source = self.roundScore.root:GetAbsoluteLayout()
+    local scale = math.max(.01, canvas.w / 370)
+    self.reelCoinsInFlight = amount
+    self.reelCoins:Burst(amount, (source.x + source.w / 2 - canvas.x) / scale,
+        (source.y + source.h / 2 - canvas.y) / scale, "reels", canvas.h / scale)
+    GameAudio.CoinBurst()
+    if self.onReelBurst then self.onReelBurst() end
 end
 
 ---@param amount number
@@ -378,11 +454,16 @@ function Board:LaunchRewardCoins(popup, source)
 end
 
 function Board:Update(dt)
-    if self.isPaused and self.isPaused() then return end
+    if self.isPaused and self.isPaused() then
+        if self.game.phase == "prepare" and self.animateAppearanceWhilePaused
+            and self.animateAppearanceWhilePaused() then self:UpdateAppearance(dt) end
+        return
+    end
     self:UpdateDashTrails(dt)
     if self.consumeFlash then self.consumeFlash:Update(dt) end
     local l = self:GetAbsoluteLayout()
     local phase = self.game.phase
+    if Busy(self.game) then self:DisplayedBalance() end
     local previousPhase = self.roundScore.phase
     ---@type number
     local pendingScore = 0
@@ -401,6 +482,8 @@ function Board:Update(dt)
         self.coinPickups:Reset()
         self.coinsInFlight = 0
         self.shakeCoinsInFlight = 0
+        self.reelCoins:Reset()
+        self.reelCoinsInFlight = 0
     end
     for uid, inflation in pairs(self.inflations) do
         if PopIn.StepInflation(inflation, dt) then self.inflations[uid] = nil end
@@ -459,11 +542,7 @@ function Board:Update(dt)
                 local pending = table.remove(self.scoreQueue, 1)
                 pending.age = 0
                 self.particles[#self.particles + 1] = pending
-                -- 顶部滚轮随每件浮字逐步增加（用户要求）：暂显值先停在结算前，
-                -- 每弹出一件加上该件收益，滚轮因此分多次滚动而不是一次跳到最终值。
-                if self.displayScore ~= nil then
-                    self.displayScore = self.displayScore + pending.value
-                end
+                -- 这里仅汇入中央计分牌；顶部滚轮等最终金币流抵达后再递增。
                 self:LaunchRewardCoins(pending, "item")
                 -- 每弹出一件结算浮字播放一次出现音效；音调阶梯由队列起点重置后逐件升高。
                 GameAudio.Pop()
@@ -501,12 +580,25 @@ function Board:Update(dt)
     end)
     -- 末帧的即时收益仍先入左上角，再转入结算；回调结束后发射，避免新金币在同帧被推进两次。
     if collectedAfterShake > 0 then self:LaunchCoins(collectedAfterShake, 32, 28, "shake") end
-    if phase == "reveal" and not self:CoinPickupsBusy() then
+    -- 先推进已经出生的金币，新流在本帧末尾发射，不重复消费本帧dt。
+    self:UpdateReelCoins(dt)
+    if phase == "reveal" and not self:IncomeCoinsBusy() then
         self.coinsInFlight = 0
         self.roundScore:SetTotal(self.game.roundScore)
-        if self.displayScore ~= nil then self.displayScore = self.game.score end
+        if self.roundScore:StepTransfer(dt, true) then self:LaunchReelCoins() end
+        if self.roundScore.transferPhase == "flight" and not self.reelCoins:Busy() then
+            self.reelCoinsInFlight = 0
+            self.displayScore = self.game.score
+            self.roundScore:FinishTransfer()
+        end
     end
     self.roundScore:Update(dt, l.w)
+    self:UpdateAppearance(dt)
+end
+
+--- 入场与像素粒子独立于回合计时和收益动画；教程暂停时也能让物品完整出现。
+---@param dt number
+function Board:UpdateAppearance(dt)
     -- 出现动效：以瓶内成员差量识别新入瓶的物品，按 uid 顺序错峰弹跳出现。
     -- 纯表现层，不触碰规则、随机数或物理；刚体由主循环的 Sync 保证已就绪。
     local present = {}
@@ -677,14 +769,9 @@ function Board:Effects(events)
             self.pops[#self.pops + 1] = pop
         end
     end
-    -- 一批新结算浮字入队：重置音调阶梯；顶部滚轮从结算前的值起步，
-    -- 之后每弹出一件才加上该件收益（用户要求：滚轮逐步增加，而不是一次跳到最终值）。
-    if #self.scoreQueue > queueStart and self.displayScore == nil then
-        local pending = 0
-        for i = queueStart + 1, #self.scoreQueue do
-            pending = pending + self.scoreQueue[i].value
-        end
-        self.displayScore = self.game.score - pending
+    -- 一批新结算浮字入队：重置音调阶梯；顶部余额继续冻结到汇总后金币抵达。
+    if #self.scoreQueue > queueStart and not self.scorePopRevealing then
+        self:DisplayedBalance()
         GameAudio.ResetPopPitch()
     end
 end

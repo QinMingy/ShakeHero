@@ -68,3 +68,11 @@ AGENTS.md
 *.key
 __pycache__/
 *.pyc
+node_modules/
+/.project/taptap-video-cache.json
+/.project/taptap-video-cache.json.meta
+/refresh_preview.bat
+
+# 验收与临时输出不入库，保留物品／遗物设计源文件和表格
+/outputs/*
+!/outputs/shakehero-design-*/

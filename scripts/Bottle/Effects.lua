@@ -504,12 +504,13 @@ function Effects.Continuous(game, contacts, events)
         local aura = AuraMult(game, item, contacts) * (item.eventMult or 1)
         if item.mult ~= aura then
             local previous = item.mult
+            local previousValue = game:_Value(item)
             item.mult = aura
             events[#events + 1] = {
                 kind = "buff", uid = item.uid, id = item.id, value = aura,
             }
             if aura > previous and aura > 0 and game.phase == "running" then
-                TriggerFeedback.Reward(events, item, game:_Value(item) * (1 - previous / aura),
+                TriggerFeedback.Reward(events, item, game:_Value(item) - previousValue,
                     "value", "collision", contacts.positions[item.uid])
             end
         end

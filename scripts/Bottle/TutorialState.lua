@@ -9,7 +9,7 @@ local TutorialState = {}
 ---@field relicSeen boolean
 
 local STEPS = {
-    welcome = true, goal = true, start = true, shakeIntro = true,
+    welcome = true, goal = true, start = true, inspectBall = true, ballEffect = true, shakeIntro = true,
     running = true, result = true, choose = true, review = true, refresh = true,
     reroll = true, confirm = true, finish = true,
 }
@@ -91,13 +91,16 @@ function TutorialState.Advance(value, event, game)
     if event == "continue" then
         if state.step == "welcome" then state.step = "goal"
         elseif state.step == "goal" then state.step = "start"
+        elseif state.step == "ballEffect" and phase == "prepare" then state.step = "shakeIntro"
         elseif state.step == "result" and phase == "draft" then state.step = "choose"
         elseif state.step == "review" and phase == "draft" then state.step = "refresh"
         elseif state.step == "refresh" and phase == "draft" then state.step = "reroll"
         elseif state.step == "finish" then state.status, state.step = "complete", "complete"
         end
     elseif event == "start" and state.step == "start" and phase == "prepare" then
-        state.step = "shakeIntro"
+        state.step = "inspectBall"
+    elseif event == "inspectedItem" and state.step == "inspectBall" and phase == "prepare" then
+        state.step = "ballEffect"
     elseif event == "started" and state.step == "shakeIntro" and phase == "running" then
         state.step = "running"
     elseif event == "settled" and state.step == "running" and phase == "draft" then

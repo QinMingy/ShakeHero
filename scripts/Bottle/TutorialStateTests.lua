@@ -15,8 +15,56 @@ local function AtShakeIntro(game)
     local state = TutorialState.Begin(TutorialState.New(false), game)
     state = TutorialState.Advance(state, "continue", game)
     state = TutorialState.Advance(state, "continue", game)
-    return TutorialState.Advance(state, "start", game)
+    state = TutorialState.Advance(state, "start", game)
+    state = TutorialState.Advance(state, "inspectedItem", game)
+    return TutorialState.Advance(state, "continue", game)
 end
+
+Test("点击开始后自由看物品，关闭详情不推进，下一步才进入摇晃说明", function()
+    local game = Game.New(1)
+    local state = TutorialState.Begin(TutorialState.New(false), game)
+    state = TutorialState.Advance(state, "continue", game)
+    state = TutorialState.Advance(state, "continue", game)
+    local inspect = TutorialState.Advance(state, "start", game)
+    assert(inspect.step == "inspectBall" and game.phase == "prepare")
+    for _,event in ipairs({"continue", "closedBall", "inspectedBall", "started"}) do
+        assert(TutorialState.Advance(inspect, event, game).step == "inspectBall")
+    end
+    for _,phase in ipairs({"running", "settle", "reveal", "draft"}) do
+        assert(TutorialState.Advance(inspect, "inspectedItem", {phase=phase}).step == "inspectBall")
+    end
+    local reading = TutorialState.Advance(inspect, "inspectedItem", game)
+    assert(reading.step == "ballEffect" and inspect.step == "inspectBall")
+    for _,phase in ipairs({"prepare", "running", "settle", "reveal", "draft"}) do
+        assert(TutorialState.Advance(reading, "closedBall", {phase=phase}).step == "ballEffect")
+        assert(TutorialState.Advance(reading, "inspectedItem", {phase=phase}).step == "ballEffect")
+        if phase ~= "prepare" then
+            assert(TutorialState.Advance(reading, "continue", {phase=phase}).step == "ballEffect")
+        end
+    end
+    local nextState = TutorialState.Advance(reading, "continue", game)
+    assert(nextState.step == "shakeIntro" and reading.step == "ballEffect")
+    assert(nextState ~= reading and reading ~= inspect and game.phase == "prepare" and game.elapsed == 0)
+end)
+
+Test("自由查看存档保留当前教学节点，不依赖未保存的详情弹层", function()
+    local game = Game.New(1)
+    for _,step in ipairs({"inspectBall", "ballEffect"}) do
+        local state = TutorialState.FromSaved({version=1,status="active",step=step}, true)
+        local saved = TutorialState.ForSnapshot(state, game:Snapshot())
+        assert(saved.step == step and state.step == step and saved ~= state)
+        local restored = Game.Restore(game:Snapshot())
+        assert(TutorialState.Begin(saved, restored).step == step)
+        assert(TutorialState.Reconcile(state, game).step == step)
+        if step == "ballEffect" then
+            local nextState = TutorialState.Advance(saved, "continue", restored)
+            assert(nextState.step == "shakeIntro" and saved.step == "ballEffect")
+            assert(restored.phase == "prepare" and restored.elapsed == 0)
+        end
+    end
+    local old = TutorialState.FromSaved({version=1,status="active",step="shakeIntro"}, true)
+    assert(TutorialState.Reconcile(old, game).step == "shakeIntro")
+end)
 
 Test("首次玩家只在开始游戏激活，启动页存档不误判旧玩家", function()
     local game = Game.New(1)
@@ -174,7 +222,7 @@ Test("prepare回滚与旧版第二回合引导迁移不会返回候选", functio
         local state = TutorialState.FromSaved({version = 1, status = "active", step = step}, true)
         assert(TutorialState.Reconcile(state, {phase = "prepare", round = 1}).step == "shakeIntro")
     end
-    for _, step in ipairs({"welcome", "goal", "start", "shakeIntro", "running", "result",
+    for _, step in ipairs({"welcome", "goal", "start", "inspectBall", "ballEffect", "shakeIntro", "running", "result",
         "choose", "review", "refresh", "reroll", "confirm", "finish"}) do
         local state = TutorialState.FromSaved({version = 1, status = "active", step = step}, true)
         local restored = TutorialState.Reconcile(state, {phase = "prepare", round = 2})
@@ -239,7 +287,7 @@ end)
 Test("旧玩家及已完成玩家不因新增候选刷新事件重新激活", function()
     for _, status in ipairs({"legacy", "complete"}) do
         local state = TutorialState.FromSaved({version = 1, status = status}, true)
-        for _, event in ipairs({"continue", "switched", "refreshed", "chosen"}) do
+        for _, event in ipairs({"continue", "inspectedItem", "closedBall", "switched", "refreshed", "chosen"}) do
             assert(TutorialState.Advance(state, event, {phase = "draft", round = 1}).status == status)
         end
         assert(TutorialState.Reconcile(state, {phase = "prepare", round = 2}).status == status)

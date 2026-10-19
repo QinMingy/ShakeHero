@@ -4,6 +4,7 @@ local UI=require("urhox-libs/UI")
 local Audio=require("Bottle.Audio")
 local L=require("Machine.LayeredLayout")
 local HandMotion=require("Bottle.TutorialHandMotion")
+local Text=require("Bottle.TutorialText")
 ---@type any
 local Overlay={}
 Overlay.__index=Overlay
@@ -98,12 +99,12 @@ function Overlay:Init(view,onContinue)
         owner.handImages={};destroy(self)
     end
     self.layer:AddChild(self.hand)
-    self.heading=UI.Label{id="tutorialHeading",text="上帝的入职指导",fontFamily="sans",
+    self.heading=UI.Label{id="tutorialHeading",text=Text.heading,fontFamily="sans",
         fontColor={102,111,76,255},fontSize=14,textMotionDisabled=true,pointerEvents="none"}
     self.text=UI.Label{id="tutorialText",text="",fontFamily="sans",fontColor=ink,
         fontSize=19,whiteSpace="normal",width="100%",flexShrink=0,textMotionDisabled=true,
         lineHeight=1.35,pointerEvents="none"}
-    self.button=Audio.Button{id="tutorialContinue",text="继续",fontFamily="sans",
+    self.button=Audio.Button{id="tutorialContinue",text=Text.continueButton,fontFamily="sans",
         textMotionDisabled=true,height=42,width=116,alignSelf="flex-end",fontSize=17,
         backgroundColor={106,123,85,255},hoverBackgroundColor={126,143,99,255},
         pressedBackgroundColor={86,105,69,255},textColor={244,237,209,255},
@@ -141,15 +142,16 @@ function Overlay:Show(spec)
     self.closing=false;self.closeTime=0;self.maskAlpha=166
     if self.key~=spec.key then
         self.key=spec.key;self.elapsed=0
-        self.heading:SetText(spec.heading or "上帝的入职指导")
+        self.heading:SetText(spec.heading or Text.heading)
         self.text:SetText(spec.text)
-        self.button:SetText(spec.button or "继续")
+        self.button:SetText(spec.button or Text.continueButton)
         self.button:SetVisible(spec.button~=false)
     end
     -- Reviewing candidates keeps the same bubble and entrance animation.
     self.button:SetDisabled(spec.buttonDisabled==true)
     self.spec=spec
-    self.handMotion:Request(spec.key,spec)
+    if spec.hideHand then self.handMotion:Hide()
+    else self.handMotion:Request(spec.key,spec) end
     self.layer:Show()
 end
 
