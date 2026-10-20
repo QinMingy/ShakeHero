@@ -200,7 +200,8 @@ local function textFixture(work)
     local version,scale,boundsCalls=1,1,0
     local function noop() end
     nvgText,nvgTextBox,nvgTextAlign,nvgFontSize=noop,noop,noop,noop
-    nvgSave,nvgRestore,nvgGlobalAlpha,nvgFillColor,nvgRGBA=noop,noop,noop,noop,noop
+    nvgSave,nvgRestore,nvgGlobalAlpha,nvgFillColor=noop,noop,noop,noop
+    rawset(_G,"nvgRGBA",noop)
     nvgFontFace,nvgTranslate,nvgRotate,nvgScale=noop,noop,noop,noop
     nvgTextBounds=function(_,_,_,value) boundsCalls=boundsCalls+1;return #value*8,{0,0,#value*8,16} end
     NVG_ALIGN_LEFT,NVG_ALIGN_MIDDLE,NVG_ALIGN_CENTER_VISUAL,NVG_ALIGN_CENTER=1,2,4,8

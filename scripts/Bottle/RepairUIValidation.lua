@@ -51,7 +51,7 @@ _G["nvgRect"]=function(vg,x,y,w,h)
     end
     return rect(vg,x,y,w,h)
 end
-_G["nvgRGBA"]=function(r,g,b,a)
+rawset(_G,"nvgRGBA",function(r,g,b,a)
     if currentDraw then currentDraw.ink=r==10 and g==10 and b==26 end
     if currentDraw and a>0 then
         currentDraw.minAlpha = math.min(currentDraw.minAlpha or 255, a)
@@ -60,7 +60,7 @@ _G["nvgRGBA"]=function(r,g,b,a)
         else currentDraw.color=currentDraw.color+1 end
     end
     return rgba(r,g,b,a)
-end
+end)
 Art.Item=function(vg,id,x,y,r,angle,cooling,rollValue,woolCount)
     local draw={id=id,radius=r,x=x,y=y,angle=angle or 0,cooling=cooling==true,gray=0,color=0,
         rollValue=rollValue,woolCount=woolCount}
@@ -407,6 +407,6 @@ Guard(10,function()
     Check(not view.startScreen:IsActive(),"最终截图已离开开始页")
     Check(#Collect("balloon")==0,"最终真实绘制无气球残影复活")
     Check(Storage.repairIsolated==true,"全程玩家存档读写mock仍有效")
-    Art.Item=oldItem; _G["nvgRGBA"]=rgba; _G["nvgRect"]=rect; _G["nvgFill"]=fill
+    Art.Item=oldItem; rawset(_G,"nvgRGBA",rgba); _G["nvgRect"]=rect; _G["nvgFill"]=fill
     V.finish()
 end)

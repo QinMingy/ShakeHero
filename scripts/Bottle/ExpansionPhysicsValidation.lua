@@ -659,7 +659,7 @@ case("真实Game和Box2D完整生态固定步长至reveal", function(check)
                         seen[born.uid]=true;products[#products+1]=born.uid
                         cursor=cursor+1
                     end
-                    local sourceVerified=(contacts.shakeStrength or 0)>=4 or knifeTouch
+                    local sourceVerified=(contacts.shakeStrength or 0)>=4
                     local complete=valid and #products==inventory and sourceVerified
                     local trace={step=step,inventoryBeforeZero=inventory,stepWoolBefore=woolBefore,
                         buffValue=event.value,spawnCount=#products,spawnUids=products,
@@ -681,7 +681,7 @@ case("真实Game和Box2D完整生态固定步长至reveal", function(check)
     check((counts.rotate or 0)>0,"生态真实旋转累计触发指南针事件")
     check((counts.dash or 0)>0 and (counts.remove or 0)>0,"真实消费接触触发小牛冲刺与移除")
     check(sawVerifiedShed and allShedsVerified and #shedTraces>0,
-        "真实输入或刀接触使正库存归零并逐份生成对应羊毛，允许后续吃草重新积毛")
+        "真实强摇输入使正库存归零并逐份生成对应羊毛，允许后续吃草重新积毛")
     print("[ExpansionPhysics] sheepShedFinal "..cjson.encode({traceCount=#shedTraces,
         allVerified=allShedsVerified,finalWool=game:Get(1).woolCount or 0}))
     for _=1,120 do

@@ -192,7 +192,8 @@ Test("98件物品表与数据一致性", function()
     assert(Items.HasTag("apple", "水果") and Items.HasTag("apple", "食物")
         and Items.HasTag("rotten_banana", "垃圾") and not Items.HasTag("ball", "水果"))
     assert(Items.HasTag("seed", "农作物"), "种子农作物tag")
-    assert(Items.HasTag("tomato", "食物") and Items.HasTag("egg", "食物")
+    assert(Items.HasTag("tomato", "食物") and not Items.HasTag("egg", "食物")
+        and #(Items.byId.egg.tags or {}) == 0
         and Items.HasTag("tomato", "植物") and Items.byId.tomato.rarity == 1
         and Items.byId.tomato_egg.rarity == 3 and Items.HasTag("fruit_tree", "植物"), "炒蛋材料品质及植物tag")
     assert(Items.Recipe("slipper_left", "slipper_right") == "fruit_ninja", "拖鞋合成")
@@ -249,14 +250,91 @@ Test("抽取上限20件与不放回重抽", function()
     assert(#small.drawn == 2 and #small:BottleItems() == 2, "牌库不足时全部入瓶")
 end)
 
-Test("考核目标沿用40/80/140…×1.3序列", function()
-    local expected = { 40, 80, 140, 220, 320, 450, 600, 780 }
+Test("考核目标50/100/160/240/360/520/780/1000后按×1.3递增", function()
+    local expected = { 50, 100, 160, 240, 360, 520, 780, 1000, 1300, 1690, 2200 }
     for stage, value in ipairs(expected) do
         assert(Game.GetTarget(stage) == value, "阶段" .. stage .. "目标错误")
     end
-    assert(Game.GetTarget(9) == math.ceil(780 * 1.3 / 10) * 10, "第9阶段按1.3倍向上取整到10")
-    assert(Game.GetTarget(10) == math.ceil(Game.GetTarget(9) * 1.3 / 10) * 10)
+    assert(Game.New(1).target == 50 and Game.New(1).targetCurveVersion == 3)
     assert(not pcall(Game.GetTarget, 0) and not pcall(Game.GetTarget, 1001))
+    assert(not pcall(Game.GetTarget, 1, 4), "未知曲线必须拒绝")
+end)
+
+Test("上一版目标存档恢复与后续考核保持原曲线", function()
+    local expected = { 50, 100, 150, 200, 350, 500, 750, 1000, 1300, 1690 }
+    for stage, target in ipairs(expected) do
+        assert(Game.GetTarget(stage, 2) == target)
+        local snapshot = Fixture({}):Snapshot()
+        snapshot.round, snapshot.stage, snapshot.target = (stage - 1) * 5 + 1, stage, target
+        snapshot.targetCurveVersion = 2
+        local game = Game.Restore(snapshot)
+        assert(game.targetCurveVersion == 2 and game.target == target)
+        assert(Equal(game:Snapshot(), snapshot), "恢复不得更改旧局金额、随机与实例")
+        game.round, game.phase, game.score = stage * 5, "reveal", target + 7
+        assert(game:_FinishReveal() == target and game.score == 7)
+        assert(game.target == Game.GetTarget(stage + 1, 2) and game.targetCurveVersion == 2)
+        local saved = game:Snapshot()
+        assert(Equal(saved, Game.Restore(saved):Snapshot()), "上一版考核后再次恢复幂等")
+    end
+end)
+
+Test("旧目标存档严格恢复且后续考核继续沿用旧曲线", function()
+    local expected = { 40, 80, 140, 220, 320, 450, 600, 780, 1020, 1330 }
+    for stage, target in ipairs(expected) do
+        local snapshot = Fixture({}):Snapshot()
+        snapshot.round, snapshot.stage, snapshot.target = (stage - 1) * 5 + 1, stage, target
+        snapshot.targetCurveVersion = nil
+        local game = Game.Restore(snapshot)
+        assert(game.targetCurveVersion == 1 and game.target == target)
+        assert(snapshot.targetCurveVersion == nil, "恢复不修改原快照")
+        assert(Equal(game:Snapshot(), Game.Restore(game:Snapshot()):Snapshot()), "二次恢复幂等")
+        game.round, game.phase, game.score = stage * 5, "reveal", target + 7
+        assert(game:_FinishReveal() == target and game.score == 7)
+        assert(game.target == Game.GetTarget(stage + 1, 1) and game.removals == 1)
+        assert(game.targetCurveVersion == 1 and game.pendingRelicDraft)
+        assert(Game.Restore(game:Snapshot()).targetCurveVersion == 1)
+    end
+end)
+
+Test("新旧曲线存档拒绝错误目标和未知版本", function()
+    for _, version in ipairs({1, 2, 3}) do
+        local snapshot = Fixture({}):Snapshot()
+        snapshot.targetCurveVersion, snapshot.target = version, Game.GetTarget(1, version)
+        assert(Game.Restore(snapshot).targetCurveVersion == version)
+        snapshot.target = snapshot.target + 1
+        assert(not pcall(Game.Restore, snapshot), "目标必须严格匹配对应曲线")
+    end
+    for _, version in ipairs({false, "3", 0, 4, 1.5}) do
+        local snapshot = Fixture({}):Snapshot() --[[@as any]]
+        snapshot.targetCurveVersion = version
+        assert(not pcall(Game.Restore, snapshot), "未知版本不接受")
+    end
+    local snapshot = Fixture({}):Snapshot()
+    snapshot.targetCurveVersion = nil
+    assert(not pcall(Game.Restore, snapshot), "缺版本只能匹配旧目标，不能接受新目标")
+end)
+
+Test("新曲线每阶段恰好达标扣款并保留结余，差1则失败", function()
+    for stage = 1, 10 do
+        local target = Game.GetTarget(stage)
+        for _, excess in ipairs({-1, 0, 7}) do
+            local game = Fixture({})
+            game.round, game.stage, game.target = stage * 5, stage, target
+            game.phase, game.score, game.totalScore = "reveal", target + excess, target + excess
+            local paid = game:_FinishReveal()
+            if excess < 0 then
+                assert(paid == 0 and game.phase == "over" and game.stage == stage)
+                assert(game.score == target - 1 and game.removals == 0 and #game.options == 0)
+            else
+                assert(paid == target and game.phase == "draft" and game.score == excess)
+                assert(game.stage == stage + 1 and game.target == Game.GetTarget(stage + 1))
+                assert(game.removals == 1 and game.pendingRelicDraft)
+            end
+            local saved = game:Snapshot()
+            assert(Equal(saved, Game.Restore(saved):Snapshot()), "考核结果应可稳定恢复")
+            assert(game:_FinishReveal() == 0, "考核不能重复扣款或发奖")
+        end
+    end
 end)
 
 Test("摇晃10秒内不产金币，只执行效果", function()
@@ -295,7 +373,7 @@ Test("结算后价值增益清零、永久增益保留、冷却重置", function
     local game = Fixture({ "orange", "ball" })
     assert(game:Start())
     game:Step(4, { bottom = { [1] = true } })
-    Close(Item(game, 1).bonus, 2, "橘子贴底持有+2")
+    Close(Item(game, 1).bonus, 3, "橘子贴底持有+3")
     Item(game, 2).permBonus = 5 -- 模拟“永久+N”物品（如墓碑）
     game:Step(6, { bottom = { [1] = true }, wall = { [2] = true } })
     assert(game.phase == "settle")
@@ -318,19 +396,19 @@ Test("橘子贴底加成为持续状态：离开即清除", function()
     local game = Fixture({ "orange" })
     assert(game:Start())
     local events = game:Step(0, { bottom = { [1] = true } })
-    Close(Item(game, 1).bonus, 2)
+    Close(Item(game, 1).bonus, 3)
     assert(#Events(events, "buff", 1) == 1)
     -- 持续贴住：每步同步但不重复叠加。
     events = game:Step(1, { bottom = { [1] = true } })
-    Close(Item(game, 1).bonus, 2, "贴住期间保持+2不叠加")
+    Close(Item(game, 1).bonus, 3, "贴住期间保持+3不叠加")
     assert(#Events(events, "buff") == 0, "状态未变不发事件")
     -- 离开瓶底：加成清除。
     events = game:Step(1, {})
     Close(Item(game, 1).bonus, 0, "离开瓶底清除加成")
     assert(#Events(events, "buff", 1) == 1)
-    -- 再次贴住：重新+2。
+    -- 再次贴住：重新+3。
     game:Step(1, { bottom = { [1] = true } })
-    Close(Item(game, 1).bonus, 2, "再次贴底重新获得加成")
+    Close(Item(game, 1).bonus, 3, "再次贴底重新获得加成")
 end)
 
 Test("小球碰撞瓶子+1价值且受3秒冷却", function()
@@ -382,7 +460,7 @@ Test("香蕉3回合腐烂：入瓶才计数，结算时转化", function()
     assert(Item(game, 1).id == "rotten_banana", "第3回合结算后腐烂")
     assert(#Events(events, "transform", 1) == 1)
     Close(Item(game, 1).bonus, 0)
-    Close(game:_Value(Item(game, 1)), 0, "腐烂香蕉价值0")
+    Close(game:_Value(Item(game, 1)), 1, "腐烂香蕉价值1")
     -- 牌库中未入瓶的香蕉不计数。
     local deckGame = Fixture({ "banana", "banana" }, 1)
     assert(deckGame:Start())
@@ -553,8 +631,8 @@ Test("每5回合考核扣款与不足终局", function()
         end
     end
     assert(game.phase == "draft", "第5回合达标后进入三选一")
-    assert(game.stage == 2 and game.target == 80, "考核后进入阶段2目标80")
-    Close(game.score, 5 * 102 - 40, "5回合各得102，扣除40")
+    assert(game.stage == 2 and game.target == 100, "考核后进入阶段2目标100")
+    Close(game.score, 5 * 102 - 50, "5回合各得102，扣除50")
     -- 余额不足：终局。
     local poor = Fixture({ "apple" })
     for round = 1, 4 do
@@ -582,7 +660,7 @@ Test("考核回合提前Finish跳过下落直接结算", function()
     assert(game.phase == "reveal", "Finish后进入结算展示")
     FinishReveal(game)
     assert(game.phase == "draft", "第5回合外直接进三选一")
-    Close(game.roundScore, 2 + 4, "苹果2+橘子(2+2)=6")
+    Close(game.roundScore, 2 + 5, "苹果2+橘子(2+3)=7")
     assert(#Events(events, "score") == 2)
     -- 重复 Finish 无副作用。
     assert(#game:Finish() == 0)
@@ -999,7 +1077,7 @@ Test("合成优先：拖鞋合成水果忍者、鸡蛋西红柿合成炒蛋", fu
     assert(Item(dish, eggUid).id == "tomato_egg", "产物是西红柿炒蛋")
 end)
 
-Test("切割：小刀切水果、厨师产物+3、水果忍者永久+价值", function()
+Test("切割：小刀切水果、厨师加值不切果、水果忍者永久+价值", function()
     -- 小刀：相邻完整水果切两份（源转化半份 + 新生一个半份）。
     local game = Fixture({ "knife", "apple" })
     assert(game:Start())
@@ -1007,12 +1085,12 @@ Test("切割：小刀切水果、厨师产物+3、水果忍者永久+价值", fu
     assert(Item(game, 2).id == "apple_half", "源苹果被切成半份")
     assert(Item(game, 3) and Item(game, 3).id == "apple_half", "新生第二个半份")
     assert(#game:BottleItems() == 3, "小刀仍在瓶中")
-    -- 厨师：切割产物价值各永久+3。
+    -- 厨师：食物保留原形态，每批永久+1，且不产生半份。
     local chef = Fixture({ "chef", "apple" })
     assert(chef:Start())
-    chef:Step(5, { pairs = { { 1, 2 } } })
-    assert(Item(chef, 2).id == "apple_half" and Item(chef, 2).permBonus == 3, "源产物+3")
-    assert(Item(chef, 3) and Item(chef, 3).permBonus == 3, "新生产物+3")
+    chef:Step(0, { pairs = { { 1, 2 } } })
+    assert(Item(chef, 2).id == "apple" and Item(chef, 2).permBonus == 1, "原食物永久+1")
+    assert(#chef:BottleItems() == 2, "厨师不再切割或生成产物")
     -- 水果忍者：切全部相邻完整水果，自身永久+被切水果价值。
     local ninja = Fixture({ "fruit_ninja", "apple", "orange" })
     assert(ninja:Start())
@@ -1031,7 +1109,7 @@ Test("消灭：警察×4、杀手×7、警察不被杀手消灭", function()
     local killer = Fixture({ "killer", "student" })
     assert(killer:Start())
     killer:Step(1, { pairs = { { 1, 2 } } })
-    Close(killer.roundScore, 2 * 7, "杀手消灭学生(价值2)得×7金币")
+    Close(killer.roundScore, 3 * 7, "杀手消灭学生(价值3)得×7金币")
     -- 杀手不消灭警察；相邻时反被警察消灭（警察消灭杀手得价值×4）。
     local safe = Fixture({ "killer", "police" })
     assert(safe:Start())
@@ -1047,7 +1125,7 @@ Test("小偷偷取相邻人类1点价值", function()
     game:Step(0, { pairs = { { 1, 2 } } })
     Close(Item(game, 2).permBonus, -1, "被偷方永久-1")
     Close(Item(game, 1).permBonus, 1, "小偷永久+1")
-    Close(game:_Value(Item(game, 2)), 1, "学生价值 2-1=1")
+    Close(game:_Value(Item(game, 2)), 2, "学生价值 3-1=2")
 end)
 
 Test("老师催熟相邻学生且不出负面职业", function()
@@ -1058,7 +1136,7 @@ Test("老师催熟相邻学生且不出负面职业", function()
     assert(grown.id ~= "student", "学生已成长")
     assert(grown.id ~= "thief" and grown.id ~= "killer" and grown.id ~= "gambler",
         "老师催熟不出负面职业")
-    Close(grown.permBonus, 2, "成长叠加当前价值2")
+    Close(grown.permBonus, 3, "成长叠加当前价值3")
     Close(grown.settleCount, 0, "成长后结算计数清零")
 end)
 
@@ -1106,7 +1184,7 @@ Test("结算效果：种子变植物、气球爆炸、学生成长、桂冠、�
     stu:Step(10)
     SettleAndReveal(stu)
     assert(Item(stu, 1).id ~= "student", "结算5次后成长")
-    Close(Item(stu, 1).permBonus, 2, "成长叠加价值2")
+    Close(Item(stu, 1).permBonus, 3, "成长叠加价值3")
     -- 桂冠：唯一最高价值×1.5，≥20再×1.5。
     local laurel = Fixture({ "laurel", "apple" })
     Item(laurel, 2).permBonus = 20 -- 苹果价值22为唯一最高
@@ -1125,9 +1203,9 @@ Test("结算效果：种子变植物、气球爆炸、学生成长、桂冠、�
     assert(card:Start())
     card:Step(10)
     SettleAndReveal(card)
-    Close(card.lastRoundScore, 10, "信用卡首次结算产10")
+    Close(card.lastRoundScore, 15, "信用卡首次结算产15")
     Close(Item(card, 1).permBonus, -1, "结算后永久-1")
-    Close(card:_Value(Item(card, 1)), 9, "下次价值9")
+    Close(card:_Value(Item(card, 1)), 14, "下次价值14")
     -- 种子：结算时50%变植物；跑多个种子确认转化会发生且只变为植物。
     local transformed = 0
     for seed = 1, 24 do
@@ -1197,10 +1275,10 @@ Test("遗物三选一：考核达标后追加、刷新、跳过、选择", funct
     assert(game.phase == "draft" and game.relicDraft, "追加遗物三选一")
     assert(#game.options >= 1, "遗物候选非空")
     for _, id in ipairs(game.options) do assert(Relics.byId[id], "候选是遗物 id") end
-    -- 五回合普通池仍保留3次；本次遗物另有独立免费1次。
-    Close(game.refreshes, 3)
+    -- 五回合普通池仍保留6次；本次遗物另有独立免费1次。
+    Close(game.refreshes, 6)
     assert(game.relicRefreshes == 1 and game:DraftRefresh() and game.relicDraft)
-    Close(game.refreshes, 3)
+    Close(game.refreshes, 6)
     assert(game.relicRefreshes == 0 and not game:DraftRefresh(), "遗物免费次数耗尽后拒绝，不能改扣普通池")
     -- 选择遗物后加入 relics 并推进回合。
     local chosen = game.options[1]
@@ -1230,11 +1308,11 @@ Test("遗物效果：积少成多/西红柿首富/最后一秒/车厘子/贷款�
     Close(last:Duration(), 10)
     last.relics.last_second = true
     Close(last:Duration(), 11, "摇晃延长到11秒")
-    -- 贷款额度：后续信用卡初始价值25（permBonus+15）。
+    -- 贷款额度：后续信用卡初始价值25（permBonus+10）。
     local credit = Fixture({})
     credit.relics.credit_line = true
     local card = credit:_Create("credit_card")
-    Close(card.permBonus, 15, "信用卡初始永久+15")
+    Close(card.permBonus, 10, "信用卡初始永久+10")
     Close(credit:_Value(card), 25, "信用卡初始价值25")
     -- 车厘子：樱桃结算多2次（共3次）。
     local ch = Fixture({ "cherry" })
@@ -1275,13 +1353,13 @@ Test("遗物效果二：小偷手册/有教无类/金盘洗手/精进刀法/厨�
     wash:Step(0, { pairs = { { 1, 2 } } })
     Close(Item(wash, 1).permBonus, 1, "小偷共同+1")
     Close(Item(wash, 2).permBonus, 1, "对方共同+1而非被偷")
-    -- 厨师帽：厨师消耗相邻小刀，产物额外永久+1。
+    -- 厨师帽：厨师消耗相邻小刀，永久强化自身后续给食物的加值能力。
     local hat = Fixture({ "chef", "knife", "apple" })
     hat.relics.chef_hat = true
     assert(hat:Start())
-    hat:Step(5, { pairs = { { 1, 2 }, { 1, 3 } } })
+    hat:Step(0, { pairs = { { 1, 2 }, { 1, 3 } } })
     assert(Item(hat, 2).location == "discard", "小刀被消耗")
-    Close(Item(hat, 3).permBonus, 4, "产物+3(厨师)+1(厨师帽)")
+    Close(Item(hat, 3).permBonus, 2, "食物+1(厨师)+1(厨师帽)")
     -- 转基因水果：水果被消耗时10%瓶顶生成完整水果（多次采样验证钩子存在）。
     local gm = Fixture({ "apple" })
     gm.relics.gm_fruit = true
@@ -1345,7 +1423,7 @@ Test("金币与有效价值逐笔向上取整且事件余额累计回合一致",
     Close(cherry.lastRoundScore, 4); Close(cherry.bestRoundScore, 4)
 
     local card = Fixture({ "credit_card" })
-    Item(card, 1).permBonus = -11.2
+    Item(card, 1).permBonus = -16.2
     assert(card:Start())
     card:Step(10)
     events = SettleAndReveal(card)
@@ -1422,6 +1500,7 @@ end)
 Test("旧考核失败文案迁移不把39.2未达40改成40未达40", function()
     local snapshot = Fixture({}):Snapshot()
     snapshot.phase, snapshot.round, snapshot.drawn = "over", 5, {}
+    snapshot.targetCurveVersion, snapshot.target = nil, 40
     snapshot.score, snapshot.totalScore = 39.2, 39.2
     snapshot.roundScore, snapshot.lastRoundScore = 3.2, 3.2
     snapshot.lastResult = "第5回合获得3.2金币，余额39.2未达到考核目标40"
@@ -1546,7 +1625,7 @@ Test("可选cjson往返保持prepare/rollback/draft和RNG", function()
     if not json then return end -- 标准Lua无cjson也可跑其余全部纯规则测试。
     Tests.jsonRoundtripRan = true
     local game = Fixture({ "apple", "banana", "ball", "orange" }, nil, 9876)
-    game.refreshes = 3 -- 为prepare重抽、draft刷新、下回合重抽各准备一次共享余额。
+    game.refreshes = 3 -- 加上首回合结算奖励，供prepare重抽、draft刷新和下回合两次重抽。
     assert(game:Reroll())
     local prepare = game:Snapshot()
     local restored = Game.Restore(json.decode(json.encode(prepare)) --[[@as BottleSnapshot]])
@@ -1563,10 +1642,12 @@ Test("可选cjson往返保持prepare/rollback/draft和RNG", function()
     assert(Equal(draft, copy:Snapshot()))
     assert(game:DraftRefresh() and copy:DraftRefresh() and Equal(game.options, copy.options))
     local refreshed = Game.Restore(json.decode(json.encode(game:Snapshot())) --[[@as BottleSnapshot]])
-    assert(refreshed.refreshUsed and refreshed.refreshes == 1, "draft已用标记不重置共享余额")
+    assert(refreshed.refreshUsed and refreshed.refreshes == 2, "draft已用标记不重置共享余额")
     assert(game:Choose(1) and refreshed:Choose(1))
     assert(Equal(game:Snapshot(), refreshed:Snapshot()))
-    assert(game:Reroll() and refreshed:Reroll() and Equal(game:Snapshot(), refreshed:Snapshot()))
+    for _ = 1, 2 do
+        assert(game:Reroll() and refreshed:Reroll() and Equal(game:Snapshot(), refreshed:Snapshot()))
+    end
     assert(game.refreshes == 0 and refreshed.refreshes == 0)
     assert(not game:Reroll() and not refreshed:Reroll(), "共享余额耗尽后均拒绝")
     IdentityInvariant(refreshed)
@@ -1595,6 +1676,7 @@ function Tests.Run()
         + require("Bottle.DistanceTests").Run()
         + require("Bottle.RemovalTests").Run()
         + require("Bottle.RelicGrantTests").Run()
+        + require("Bottle.SourceUpdateTests").Run()
         + require("Bottle.RelicRefreshTests").Run()
 end
 

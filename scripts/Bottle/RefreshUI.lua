@@ -23,7 +23,7 @@ function RefreshUI.Hint(game)
     if game.phase == "draft" and game.relicDraft then
         return "遗物独立免费刷新剩余 " .. RefreshUI.Count(game) .. " 次 · 本次免费1次，不累计"
     end
-    return "准备/物品共享刷新剩余 " .. RefreshUI.Count(game) .. " 次 · 每完成2回合+1"
+    return "准备/物品共享刷新剩余 " .. RefreshUI.Count(game) .. " 次 · 每完成1回合+1"
 end
 
 return RefreshUI

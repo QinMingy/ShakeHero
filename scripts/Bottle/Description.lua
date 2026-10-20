@@ -239,6 +239,9 @@ function Description:Render(vg)
                 elseif run.tone=="number" then r,g,b=139,193,109
                 elseif run.tone=="chance" then r,g,b=230,179,81
                 elseif run.tone=="multiplier" then r,g,b=100,177,206 end
+                -- Ink约定始终返回三个颜色分量，收窄any模块的多返回值推导。
+                ---@cast g number
+                ---@cast b number
                 nvgFillColor(vg, nvgRGBA(r, g, b, color[4] or 255))
                 nvgText(vg, x, y + run.h / 2, run.text)
             end

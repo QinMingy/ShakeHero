@@ -108,7 +108,7 @@ for _,row in ipairs(GRANTS) do
     end)
 end
 
-Test("21项无附赠遗物不创建物品、16项源表文字和映射完整",function()
+Test("23项无附赠遗物不创建物品、16项源表文字和映射完整",function()
     local giftIds = {}
     for _,row in ipairs(GRANTS) do giftIds[row.id]=true end
     local noGiftCount, giftItemCount = 0, 0
@@ -123,7 +123,7 @@ Test("21项无附赠遗物不创建物品、16项源表文字和映射完整",fu
             assert(game:Choose(1) and #game.deck == count and game._nextUid == nextUid)
         end
     end
-    assert(#GRANTS == 16 and noGiftCount == 21 and giftItemCount == 17)
+    assert(#GRANTS == 16 and noGiftCount == 23 and giftItemCount == 17)
 end)
 
 Test("附赠创建每件正常触发积少成多、维护读档和GM不重复送",function()
@@ -155,12 +155,12 @@ Test("附赠创建每件正常触发积少成多、维护读档和GM不重复送
     end
 end)
 
-Test("贷款额度先持有再送信用卡25、原有信用卡仍10且以后获取仍25",function()
+Test("贷款额度先持有再送信用卡25、原有信用卡仍15且以后获取仍25",function()
     local game = Draft("credit_line",{"credit_card"})
-    assert(game:_Value(Item(game,1)) == 10)
+    assert(game:_Value(Item(game,1)) == 15)
     assert(game:Choose(1))
-    assert(game:_Value(Item(game,1)) == 10 and game:_Value(Item(game,2)) == 25)
-    assert(Item(game,2).permBonus == 15)
+    assert(game:_Value(Item(game,1)) == 15 and game:_Value(Item(game,2)) == 25)
+    assert(Item(game,2).permBonus == 10)
     local card = game:_Create("credit_card")
     game.revision = game.revision + 1
     assert(game:Get(card.uid) == card and Item(game,3) == card and game:_Value(card) == 25)

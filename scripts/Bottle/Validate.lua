@@ -353,8 +353,10 @@ end)
 
 V.atFrame(370, function()
     local game, physics, view = api.GetGame(), api.GetPhysics(), api.GetView()
-    V.assert(game:DraftRefresh(), "本回合允许一次刷新")
-    V.assert(not game:DraftRefresh(), "第二次刷新被拒绝")
+    local balance = game.refreshes
+    V.assert(balance > 0, "物品刷新有累计可用次数")
+    for _ = 1, balance do V.assert(game:DraftRefresh(), "每次成功刷新消耗一次累计机会") end
+    V.assert(game.refreshes == 0 and not game:DraftRefresh(), "累计刷新耗尽后拒绝继续刷新")
     V.assert(#game.options >= 1, "考核1阶段必有候选")
     V.assert(game:Choose(1), "可以选择一个物品")
     physics:Sync(game:BottleItems(), true, game.revision)

@@ -17,6 +17,7 @@ function Tests.Run(report)
     local function Contains(text, fragment) return text:find(fragment, 1, true) ~= nil end
     Check(#Items.list == 98, "目录共98件")
     local blocked = {
+        apple=true, banana=true, orange=true, droplet=true, gambling_god=true,
         rotten_banana=true, banana_peel=true, apple_half=true, banana_half=true, orange_half=true,
         fruit_ninja=true, cherry_half=true, tomato_egg=true, coin_4=true, coin_8=true,
         coin_16=true, coin_32=true, coin_64=true, coin_128=true, coin_256=true, coin_512=true,
@@ -31,7 +32,7 @@ function Tests.Run(report)
         Check(def.pool == (blocked[def.id] ~= true), def.id .. "仅按源表屏蔽列控制pool")
         if def.pool then poolCount = poolCount + 1 end
     end
-    Check(poolCount == 71, "71开放/27屏蔽，腐烂香蕉及飞盘运动员屏蔽，桂冠仍开放")
+    Check(poolCount == 66, "66开放/32屏蔽，仅限制新候选，已有实例与生成保留")
     Check(Items.byId.banana.base==6 and not Items.byId.rotten_banana.pool, "香蕉基础6、腐烂香蕉屏蔽卡池")
     Check(Items.byId.glutton.rarity==2 and Items.byId.diner.rarity==1, "大胃王优秀品质、食客普通品质")
     local appended = {
@@ -41,10 +42,10 @@ function Tests.Run(report)
         "spinning_top", "windmill", "gear", "roulette", "removal_coin",
     }
     local newBases = {3,3,4,3,3,5,1,3,8,16,4,4,5,4,3,3,3,4,2,3,4,1,10,3,4,4,4,4}
-    local newRarities = {1,1,1,1,1,1,1,3,4,5,2,1,2,1,2,3,3,2,2,1,1,1,1,1,2,2,3,2}
+    local newRarities = {1,1,1,1,1,1,1,3,4,5,2,1,2,1,2,3,3,2,2,1,1,1,1,1,2,2,2,2}
     local newTags = {"动物","动物","动物","动物","植物","植物","垃圾","垃圾","垃圾","垃圾",
         "动物","植物","","人类","人类","","食物","人类","","","","","","","","","",""}
-    local cooldowns = {5,0,2,0,1,3,1,1,0,0,1,1,0,0,3,4,0,0,0,3,2.5,1,1,0,0,4,0,0}
+    local cooldowns = {5,0,2,0,1,3,1,1,0,0,1,1,0,0,5,4,0,0,0,3,2.5,1,1,0,0,4,0,0}
     local triggers = {"timer","none","touch","none","touch","touch","touch","touch","none","none",
         "side","touch","none","none","touch","touch","none","none","none","none","touch","touch","touch",
         "none","none","none","none","none"}
@@ -167,7 +168,8 @@ function Tests.Run(report)
         Check(Shapes.Variant("sheep",stock)==expected,"羊毛库存"..stock.."统一选档")
     end
     Check(Shapes.Variant("sheep")=="sheep_0","新候选图案默认剃毛档")
-    Check(Contains(Items.byId.knife.effect,"[[sheep]]") and Contains(Items.byId.knife.effect,"羊毛脱落"), "小刀新增给羊脱毛说明")
+    Check(Contains(Items.byId.knife.effect,"[[chick]]") and Contains(Items.byId.knife.effect,"小鸡价值×2")
+        and Contains(Items.byId.knife.effect,"冷却：4秒") and not Contains(Items.byId.knife.effect,"[[sheep]]"), "小刀说明同步消耗小鸡与共用4秒冷却")
     Check(Items.byId.wool.base==1 and not Contains(Items.byId.wool.effect,"被消耗时"), "最新羊毛基础1且不再被耗结算")
     Check(Contains(Items.byId.wool.effect,"不占用抽取数量") and Contains(Items.byId.wool.effect,"临时属性"), "价值1羊毛下回合额外入场说明")
     game.relics.lucky_charm = true
@@ -178,7 +180,7 @@ function Tests.Run(report)
     Check(ItemText.Effect(game,"teacher")==Items.byId.teacher.effect, "有教无类不追加老师正文")
     Check(ItemText.Effect(game,"police")==Items.byId.police.effect, "金盘洗手不改写警察正文")
     game.relics.chef_hat = true
-    Check(ItemText.Effect(game,"chef")==Items.byId.chef.effect and Contains(Relics.byId.chef_hat.note or "","不永久累计"), "厨师帽限制保留在遗物说明而非厨师正文")
+    Check(ItemText.Effect(game,"chef")==Items.byId.chef.effect and Contains(Relics.byId.chef_hat.note or "","每位厨师独立绑定"), "候选不伪造实例强化，遗物说明明确独立累计")
     Check(RefreshUI.Count(game)==3 and RefreshUI.ButtonText(game)=="刷新 · 3 次", "物品刷新池不受准备重抽标记影响")
     game.refreshes=0
     Check(RefreshUI.Count(game)==0 and Contains(RefreshUI.Hint(game),"剩余 0 次"), "耗尽刷新次数及底部提示")
@@ -195,14 +197,15 @@ function Tests.Run(report)
     game.phase,game.rerollUsed="prepare",false
     Check(RefreshUI.Count(game)==9 and RefreshUI.ButtonText(game)=="重新抽取 · 9 次",
         "准备显示共享物品池9次，保留重新抽取文案")
-    Check(Contains(RefreshUI.Hint(game),"共享") and not Contains(RefreshUI.Hint(game),"每回合重置"),
-        "准备提示共享累计而非每回合补一次")
+    Check(Contains(RefreshUI.Hint(game),"共享") and not Contains(RefreshUI.Hint(game),"每回合重置")
+        and Contains(RefreshUI.Hint(game),"每完成1回合+1"),
+        "准备提示每完成1回合增加1次、共享累计且不重置")
     game.rerollUsed=true
     Check(RefreshUI.Count(game)==9 and RefreshUI.ButtonText(game,"重抽")=="重抽 · 9 次",
         "准备已重抽标记不限制共享余额且保留传入文案")
     game.phase,game.refreshes,game.rerollUsed="prepare",0,false
     Check(RefreshUI.Count(game)==0, "共享物品池为空即无准备重抽次数")
-    Check(#Relics.list==37, "遗物完整37项")
+    Check(#Relics.list==39, "遗物完整39项")
     local relicIds={"teacher_team","accelerator","ghost_poop","premium_grass","food_comfort",
         "bacon_network","ghost_sport","spin_reward","wool_market","wool_recycle","dice_jackpot","calf_rush","lucky_roulette"}
     local rarities={2,2,2,1,2,2,1,2,1,1,2,2,2}
@@ -211,14 +214,13 @@ function Tests.Run(report)
         Check(relic.numberId==index+24 and Relics.byNumber[index+24]==relic, id.."固定遗物编号")
         Check(relic.rarity==rarities[index] and relic.pool and relic.implemented, id.."品质/开放候选/接线")
     end
-    Check(#Relics.Available({relics={}} --[[@as any]])==37, "37遗物全部进入未拥有候选")
+    Check(#Relics.Available({relics={}} --[[@as any]])==39, "39遗物全部进入未拥有候选")
     for _,def in ipairs(Relics.list) do
         for ref in def.effect:gmatch("%[%[([%w_]+)%]%]") do
             Check(Items.byId[ref]~=nil,def.id.."遗物说明引用物品已注册："..ref)
         end
     end
     local LoadSprites=require("Bottle.RelicSprites")
-    local spriteSizes={see_you_tomorrow=128}
     local spriteCount=0
     local function VerifySprite(rows,palette)
         spriteCount=spriteCount+1
@@ -226,9 +228,9 @@ function Tests.Run(report)
     end
     ---@type table<string,{rows:string[],palette:table<string,number[]>}>
     local sprites=LoadSprites(VerifySprite,{30,32,42,255}) --[[@as any]]
-    Check(spriteCount==37,"37遗物均有独立像素徽记")
+    Check(spriteCount==39,"39遗物均有独立像素徽记")
     for id,sprite in pairs(sprites) do
-        local size=spriteSizes[id] or 16
+        local size=16
         Check(#sprite.rows==size,id.."遗物像素画布高度"..size)
         local widthValid,paletteValid=true,true
         for _,row in ipairs(sprite.rows) do
@@ -240,6 +242,24 @@ function Tests.Run(report)
         Check(widthValid,id.."遗物像素行宽一致"..size)
         Check(paletteValid,id.."遗物像素调色板完整")
     end
+    local LoadItems=require("Bottle.ItemSprites")
+    ---@type table<string,{rows:string[],palette:table<string,number[]>}>
+    local itemSprites=LoadItems(function(rows,palette)
+        return {rows=rows,palette=palette,groups={}} --[[@as any]]
+    end,{30,32,42,255}) --[[@as table<string,{rows:string[],palette:table<string,number[]>}>]]
+    local enoki=assert(itemSprites.enoki)
+    Check(#enoki.rows==16,"金针菇与多数物品统一16×16原稿高度")
+    local enokiWidthValid,enokiPaletteValid=true,true
+    for _,row in ipairs(enoki.rows) do
+        if #row~=16 then enokiWidthValid=false end
+        for glyph in row:gmatch(".") do
+            if glyph~="." and enoki.palette[glyph]==nil then enokiPaletteValid=false end
+        end
+    end
+    Check(enokiWidthValid,"金针菇16像素行宽一致")
+    Check(enokiPaletteValid,"金针菇透明区域与五色色板完整")
+    Check(Items.byId.enoki.shape=="circle" and math.abs(Items.byId.enoki.radius-.3)<1e-8,
+        "金针菇仅换图，不改圆形碰撞及0.3米半径")
     for _,id in ipairs(relicIds) do Check(sprites[id]~=nil,id.."徽记已注册") end
     game.relics.ghost_poop=true
     for _,id in ipairs({"poop","golden_poop","diamond_poop","rainbow_poop"}) do
@@ -278,10 +298,18 @@ function Tests.Run(report)
     local allRelics={relics={}}
     for _,relic in ipairs(Relics.list) do allRelics.relics[relic.id]=true end
     for _,def in ipairs(Items.list) do
-        Check(ItemText.Effect(allRelics,def.id)==ItemText.Effect(noRelics,def.id)
-            and ItemText.Effect(allRelics,def.id,first)==ItemText.Effect(noRelics,def.id,first)
-            and ItemText.Effect(allRelics,def.id,second)==ItemText.Effect(noRelics,def.id,second),
-            def.id.."全部遗物不影响候选或两个独立实例的正文")
+        if def.id == "chef" then
+            first.chefBoost,second.chefBoost=2,5
+            Check(ItemText.Effect(allRelics,def.id)==ItemText.Effect(noRelics,def.id)
+                and Contains(ItemText.Effect(allRelics,def.id,first),"当前：+2")
+                and Contains(ItemText.Effect(allRelics,def.id,second),"当前：+5"),
+                "厨师候选保留本体正文，持帽实例分别显示真实累计强化")
+        else
+            Check(ItemText.Effect(allRelics,def.id)==ItemText.Effect(noRelics,def.id)
+                and ItemText.Effect(allRelics,def.id,first)==ItemText.Effect(noRelics,def.id,first)
+                and ItemText.Effect(allRelics,def.id,second)==ItemText.Effect(noRelics,def.id,second),
+                def.id.."全部遗物不影响候选或两个独立实例的正文")
+        end
     end
     Check(Contains(Items.byId.gecko.effect,"其他壁虎") and Contains(Items.byId.gecko.effect,"0.25秒") and Contains(Items.byId.gecko.effect,"每直接连接"),"壁虎延迟和直接邻接结算说明")
     print("[ExpansionUITests] " .. count .. " checks")

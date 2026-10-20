@@ -1,7 +1,7 @@
 -- 官方运行器真实main隔离UI验收入口，同时作为-validate-test脚本。
 -- 启动先mock玩家存档；建议360x780、26帧、截图第20帧，不修改现有Tests。
 -- 默认截图扩展画廊；-expansion-ui-sheep展示绵羊三档，-expansion-ui-pig保留猪详情。
--- -expansion-ui-relics展示25–37号遗物徽记；-expansion-ui-dash展示真实冲刺残影。
+-- -expansion-ui-relics展示25–39号遗物徽记；-expansion-ui-dash展示真实冲刺残影。
 ---@type any
 local Storage = require("Bottle.Storage")
 local V = _G["V"]
@@ -283,10 +283,10 @@ Guard(5,function()
     Ready()
     local oldRGBA=_G["nvgRGBA"]
     local bubbles=0
-    _G["nvgRGBA"]=function(r,g,b,a)
+    rawset(_G,"nvgRGBA",function(r,g,b,a)
         if r==167 and g==233 and b==247 and a==164 then bubbles=bubbles+1 end
         return oldRGBA(r,g,b,a)
-    end
+    end)
     local human=assert(game:Get(bodyguardUid))
     local ok,err=pcall(function()
         human.shielded=true
@@ -297,7 +297,7 @@ Guard(5,function()
         view.board:Render(Core.GetNVGContext())
         Check(bubbles==0,"清盾后真实Board不再绘制泡泡")
     end)
-    human.shielded=false;_G["nvgRGBA"]=oldRGBA
+    human.shielded=false;rawset(_G,"nvgRGBA",oldRGBA)
     assert(ok,err)
 end)
 
@@ -364,10 +364,11 @@ Guard(8,function()
     end
     local ok,err=pcall(function()
         view.board:Render(Core.GetNVGContext())
-        Check(queried==0,"无帽厨师内部5秒不显示冷却环")
+        Check(queried>0 and game:CooldownOf("chef")==4,"无帽厨师显示明示4秒冷却环")
+        queried=0
         game.relics.chef_hat=true
         view.board:Render(Core.GetNVGContext())
-        Check(queried>0 and game:CooldownOf("chef")==1,"持帽厨师显示实际1秒冷却环")
+        Check(queried>0 and game:CooldownOf("chef")==4,"持帽厨师仍显示本体4秒冷却环")
     end)
     game.CooldownOf=original
     assert(ok,err)
@@ -376,8 +377,8 @@ end)
 
 Guard(9,function()
     Ready();view:CloseInventory()
-    Check(#Relics.list==37,"真实main加载37遗物目录")
-    for number=25,37 do
+    Check(#Relics.list==39,"真实main加载39遗物目录")
+    for number=25,39 do
         local def=Relics.byNumber[number]
         game.phase="draft";game.relicDraft=true;game.options={def.id,"lucky_charm","credit_line"}
         view.draftSelected=1;view:Update(true);UI.Layout()
@@ -504,11 +505,11 @@ Guard(10,function()
         UI.Layout()
     elseif relicScreenshot then
         view:CloseInventory()
-        local panel=view:Modal("新增遗物 · 25–37")
+        local panel=view:Modal("新增遗物 · 25–39")
         local grid=UI.Panel {width="100%",flexGrow=1,flexBasis=0,gap=8}
-        for first=25,37,3 do
+        for first=25,39,3 do
             local row=UI.Panel {width="100%",flexGrow=1,flexBasis=0,flexDirection="row",gap=6}
-            for number=first,math.min(first+2,37) do
+            for number=first,math.min(first+2,39) do
                 local def=Relics.byNumber[number]
                 local cell=UI.Panel {flexGrow=1,flexBasis=0,minWidth=0,height="100%",gap=4,alignItems="center"}
                 local icon=UI.Widget {width="100%",flexGrow=1,flexBasis=0,pointerEvents="none"} --[[@as any]]

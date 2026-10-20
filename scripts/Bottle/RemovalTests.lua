@@ -162,11 +162,11 @@ Case("回滚包括已花移除次数与UID注销、运行中新增机会回退",
     game:Step(10)
     assert(game.phase == "settle" and Equal(before,game:Snapshot()))
     game:SettleStep(2)
-    assert(game.phase == "reveal" and game.removals == 2 and Equal(before,game:Snapshot()))
+    assert(game.phase == "reveal" and game.removals == 3 and Equal(before,game:Snapshot()))
     local restored = Game.Restore(game:Snapshot())
     assert(restored.removals == 1 and not restored:Get(1) and restored:Get(2))
     game:RevealStep(100)
-    assert(Game.Restore(game:Snapshot()).removals == 2)
+    assert(Game.Restore(game:Snapshot()).removals == 3)
 end)
 
 Case("移除币目录98、先全体收益再自耗、普通弃牌生命周期与重复守卫", function()
@@ -176,7 +176,7 @@ Case("移除币目录98、先全体收益再自耗、普通弃牌生命周期与
     local game = Repair.Fixture({"removal_coin","apple"})
     assert(game:Start())
     local events = game:Finish()
-    assert(game.removals == 1 and game.roundScore == 6 and #game.discard == 1 and Item(game,1).location == "discard")
+    assert(game.removals == 2 and game.roundScore == 6 and #game.discard == 1 and Item(game,1).location == "discard")
     local removeIndex, lastScoreIndex = 0, 0
     for index, event in ipairs(events) do
         if event.kind == "score" then lastScoreIndex = index end
@@ -184,10 +184,10 @@ Case("移除币目录98、先全体收益再自耗、普通弃牌生命周期与
     end
     assert(removeIndex > lastScoreIndex and lastScoreIndex > 0)
     Expansion.AfterSettle(game,{})
-    assert(game.removals == 1, "已弃牌移除币不能再领奖")
+    assert(game.removals == 2, "已弃牌移除币不能再领奖")
     game:RevealStep(100)
-    assert(Game.Restore(game:Snapshot()).removals == 1)
-    assert(game:Skip() and not game:Get(1) and game.removals == 1)
+    assert(Game.Restore(game:Snapshot()).removals == 2)
+    assert(game:Skip() and not game:Get(1) and game.removals == 2)
 end)
 
 Case("移除币被护盾拦截或提前被耗不奖、临时产物结算后彻底删除", function()
@@ -202,7 +202,7 @@ Case("移除币被护盾拦截或提前被耗不奖、临时产物结算后彻�
     assert(temporary:Start())
     local coin = temporary:_Spawn("removal_coin",{},true)
     temporary:Finish()
-    assert(temporary.removals == 1 and not temporary:Get(coin.uid) and #temporary.discard == 0)
+    assert(temporary.removals == 2 and not temporary:Get(coin.uid) and #temporary.discard == 0)
 end)
 
 Case("满瓶排队移除币未入瓶不结算、不自耗领奖", function()

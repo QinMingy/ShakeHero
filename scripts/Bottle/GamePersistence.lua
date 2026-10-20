@@ -13,6 +13,8 @@ local MAX_COUNTER = 2147483647
 local MAX_STAGE = 1000
 local RNG_MODULUS = 2147483647
 local RULES_VERSION = 8
+-- 只允许迁移这次退出卡池的旧候选，不放宽未知物品、唯一性或重复校验。
+local RETIRED_OPTIONS = {apple=true, banana=true, orange=true, droplet=true, gambling_god=true}
 
 ---@class GamePersistenceHelpers
 ---@field Copy fun(value:any):any
@@ -89,6 +91,11 @@ function GamePersistence.Install(Game, helpers)
             "可持久化阶段残留临时生成物")
         assert(saved.shielded == nil or saved.shielded == false, "可持久化阶段残留护盾")
         local refreshCount = saved.refreshCount == nil and 0 or saved.refreshCount
+        local chefBoost = saved.chefBoost == nil and 0 or saved.chefBoost
+        assert(IsInteger(chefBoost) and chefBoost >= 0 and chefBoost <= MAX_COUNTER,
+            "无效厨师永久强化")
+        assert(item.id == "chef" or chefBoost == 0, "非厨师不能持有厨师永久强化")
+        item.chefBoost = math.floor(chefBoost)
         local woolCount = saved.woolCount == nil and 0 or saved.woolCount
         assert(IsInteger(woolCount) and woolCount >= 0 and woolCount <= MAX_COUNTER, "无效羊毛库存")
         assert(saved.woolExtraEntry == nil or type(saved.woolExtraEntry) == "boolean", "无效羊毛额外入场标记")
@@ -139,8 +146,9 @@ function GamePersistence.Install(Game, helpers)
         for _, item in ipairs(self.deck) do deck[#deck + 1] = item.uid end
         for _, item in ipairs(self.discard) do discard[#discard + 1] = item.uid end
         return {
-            version = 2, rulesVersion = RULES_VERSION,
+            version = 2, rulesVersion = RULES_VERSION, itemCatalogVersion = 1,
             phase = self.phase, round = self.round, stage = self.stage,
+            targetCurveVersion = self.targetCurveVersion,
             score = self.score, totalScore = self.totalScore, roundScore = self.roundScore,
             elapsed = self.elapsed, target = self.target,
             bestRound = self.bestRound, bestRoundScore = self.bestRoundScore,
@@ -161,6 +169,9 @@ function GamePersistence.Install(Game, helpers)
     function Game.Restore(snapshot)
         assert(type(snapshot) == "table" and getmetatable(snapshot) == nil and snapshot.version == 2,
             "存档版本不兼容（V0.3 新表需要 version=2；旧档作废）")
+        assert(snapshot.itemCatalogVersion == nil or snapshot.itemCatalogVersion == 1,
+            "物品目录版本不兼容")
+        local legacyCatalog = snapshot.itemCatalogVersion == nil
         local legacyPre7 = snapshot.rulesVersion == nil or snapshot.rulesVersion == 5 or snapshot.rulesVersion == 6
         assert(legacyPre7 or snapshot.rulesVersion == 7 or snapshot.rulesVersion == RULES_VERSION,
             "存档规则版本不兼容")
@@ -216,7 +227,11 @@ function GamePersistence.Install(Game, helpers)
             "无效最佳回合")
         assert(IsInteger(snapshot.revision) and snapshot.revision >= 0 and snapshot.revision <= 9007199254740991,
             "无效状态版本")
-        assert(snapshot.target == Game.GetTarget(snapshot.stage), "目标与阶段不符")
+        -- 曲线版本与金额一起校验，旧档缺省1并沿用旧曲线，不中途改考核要求。
+        local targetCurveVersion = snapshot.targetCurveVersion == nil and 1 or snapshot.targetCurveVersion
+        assert(targetCurveVersion == 1 or targetCurveVersion == 2 or targetCurveVersion == 3,
+            "无效考核曲线版本")
+        assert(snapshot.target == Game.GetTarget(snapshot.stage, targetCurveVersion), "目标与阶段不符")
         ArrayLength(snapshot.instances, "instances")
         ArrayLength(snapshot.deck, "deck")
         ArrayLength(snapshot.discard, "discard")
@@ -237,6 +252,7 @@ function GamePersistence.Install(Game, helpers)
         -- 先保留原值完成全部严格校验，末尾才迁移合法存档的金额字段。
         self.score, self.totalScore, self.roundScore = snapshot.score, snapshot.totalScore, snapshot.roundScore
         self.elapsed, self.target = snapshot.elapsed, snapshot.target
+        self.targetCurveVersion = targetCurveVersion
         self.bestRound, self.bestRoundScore = snapshot.bestRound, snapshot.bestRoundScore
         self.lastRoundScore, self.lastResult = snapshot.lastRoundScore, snapshot.lastResult
         self.rerollUsed, self.refreshUsed, self.revision = snapshot.rerollUsed, snapshot.refreshUsed, snapshot.revision
@@ -347,21 +363,27 @@ function GamePersistence.Install(Game, helpers)
         local optionSeen = {}
         local owned = OwnedTypes(self.deck)
         for _, id in ipairs(snapshot.options) do
+            local retired = not self.relicDraft and legacyCatalog and RETIRED_OPTIONS[id] == true
             if self.relicDraft then
                 local relic = Relics.byId[id]
                 assert(type(id) == "string" and not optionSeen[id]
                     and relic and relic.pool and not self.relics[id], "无效或已拥有的遗物三选一选项")
             else
-                assert(type(id) == "string" and not optionSeen[id]
-                    and DraftEligible(Items.byId[id], owned), "无效或已不符合资格的三选一选项")
+                local def = Items.byId[id]
+                local eligible = DraftEligible(def, owned)
+                    or (retired and def and def.implemented and (not def.unique or not owned[id]))
+                assert(type(id) == "string" and not optionSeen[id] and eligible,
+                    "无效或已不符合资格的三选一选项")
             end
             optionSeen[id] = true
             local definition = self.relicDraft and Relics.byId[id] or Items.byId[id]
+            -- 水果商人、灵魂石、转盘由蓝改绿，不改变其考核候选资格。
             local excludedCommon = not self.relicDraft and self.round % 5 == 0 and definition.rarity == 1
             if excludedCommon then
                 -- nil/5/6旧档先完整校验，再只过滤考核普通物品；遗物原样保留，不重抽。
                 assert(legacyPre7, "考核三选一不能包含普通品质")
-            else
+            end
+            if not retired and not excludedCommon then
                 self.options[#self.options + 1] = id
             end
         end

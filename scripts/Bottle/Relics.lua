@@ -1,13 +1,13 @@
--- 遗物数据与机制（docs/relic.txt，37 件）。纯 Lua，不依赖引擎。
+-- 遗物数据与机制（docs/relic.txt，39 件）。纯 Lua，不依赖引擎。
 -- 遗物是永久被动加成，通过“考核后的遗物三选一”获得，不进瓶、不参与物理。
 -- 效果多为声明式标记：Game/Effects 在相应时机查询 Relics.Has(game, id)。
--- 全部37件已接线；复杂行为由 RelicEffects / RelicExpansion 与规则/物理查询协作。
+-- 全部39件已接线；复杂行为由 RelicEffects / RelicExpansion 与规则/物理查询协作。
 -- 骰子、赌徒、云朵、兔子、灵魂石和硬币机的关联钩子已随物品实装接通。
 -- 数据来源 relic.txt 的“备注”列保留语义；本轮明确细则在各 note 中注明。
 
 ---@class RelicDef
 ---@field id string
----@field numberId integer 1..37，与 relic.txt 序号一致
+---@field numberId integer 1..39，与 relic.txt 序号一致
 ---@field name string
 ---@field rarity integer 1..5（白/绿/蓝/紫/黄）
 ---@field effect string UI 说明；@ 为金币图标，[[id]] 为物品引用
@@ -52,15 +52,15 @@ Add {
 Add {
     numberId = 5, id = "in_groups", name = "成群结队", rarity = 2, pool = true, implemented = true,
     effect = "[[rabbit]]现在会同时为场上其他兔子永久增加价值；立即获得1个[[rabbit]]",
-    note = "已接线：ExtraEffects 兔子位移为全部兔子加值",
+    note = "本兔每100米按50%永久／50%临时+1，其他瓶内兔子各固定永久+1，不重复给本兔",
 }
 Add {
-    numberId = 6, id = "soul_resonance", name = "灵魂共振", rarity = 3, pool = true, implemented = true,
+    numberId = 6, id = "soul_resonance", name = "灵魂共振", rarity = 2, pool = true, implemented = true,
     effect = "[[soul_stone]]的价值等于场上价值最高的[[tombstone]]相同",
     note = "如果有倍率，先复制最值再乘算；已接线：Game:_Value 查询",
 }
 Add {
-    numberId = 7, id = "merge_2048", name = "合成2048", rarity = 3, pool = true, implemented = true,
+    numberId = 7, id = "merge_2048", name = "合成2048", rarity = 2, pool = true, implemented = true,
     effect = "现在硬币最高可合成到[[coin_2048]]",
     note = "已接线：Items.recipes 硬币合成链开放至2048",
 }
@@ -80,7 +80,7 @@ Add {
     note = "已接线：ExtraEffects 硬币机产出池加入 coin_4",
 }
 Add {
-    numberId = 11, id = "gm_fruit", name = "转基因水果", rarity = 3, pool = true, implemented = true,
+    numberId = 11, id = "gm_fruit", name = "转基因水果", rarity = 2, pool = true, implemented = true,
     effect = "水果被消耗时，有10%几率在瓶子顶部随机生成一个新的完整水果",
     note = "V0.4 已接线：Game:_Destroy 钩子，完整水果=苹果/香蕉/橘子/樱桃",
 }
@@ -91,7 +91,7 @@ Add {
 Add {
     numberId = 13, id = "lucky_charm", name = "幸运符", rarity = 2, pool = true, implemented = true,
     effect = "所有物品描述中与价值有关的“-”号全部变为“+”号",
-    note = "垃圾桶基础-1变+1、信用卡每结算永久+1、小偷被偷方-1变+1、草堆每次触发永久-1变+1；不反转历史负加值，不改变体积、冷却或计数",
+    note = "信用卡每结算永久+1、小偷被偷方-1变+1、草堆每次触发永久-1变+1、转盘负分支变+1；垃圾桶基础为0，不额外加值；不反转历史负加值，不改变体积、冷却或计数",
 }
 Add {
     numberId = 14, id = "scramble_recipe", name = "炒蛋秘籍", rarity = 2, pool = true, implemented = true,
@@ -137,8 +137,8 @@ Add {
 }
 Add {
     numberId = 23, id = "chef_hat", name = "厨师帽", rarity = 2, pool = true, implemented = true,
-    effect = "[[chef]]现在可以消耗相邻的[[knife]]，每消耗一把小刀，为本次切割产物额外增加1点永久价值（冷却：1秒）；立即获得1个[[chef]]",
-    note = "持帽厨师1秒调度，无帽5秒；本次先消耗相邻小刀，再令本次全部切割产物永久+1/把；无切割不累计给下次，不永久累计到厨师自身",
+    effect = "[[chef]]现在可以消耗相邻的[[knife]]，该厨师后续为食物增加的价值永久+1，立即获得一个[[chef]]",
+    note = "不改变厨师自身冷却（当前4秒）；强化与每位厨师独立绑定，初始+0；每次先吃刀，再给全部相邻食物永久增加1＋该厨师累计强化的价值，无食物时吃刀也保留；跨回合及存档保留，不直接增加厨师自身价值；实例详情显示实际强化，不恢复切割效果",
 }
 Add {
     numberId = 24, id = "credit_line", name = "贷款额度", rarity = 2, pool = true, implemented = true,
@@ -210,6 +210,17 @@ Add {
     numberId = 37, id = "lucky_roulette", name = "幸运转盘", rarity = 2, pool = true, implemented = true,
     effect = "[[roulette]]每累计旋转360°时，5%概率价值临时+77；其余95%按原比例永久+3或永久-1（各47.5%）；立即获得1个[[roulette]]",
     note = "大奖与基础正负互斥；基础原50%/50%，先判1/20大奖，未中再等概率基础正负；幸运符只将基础永久-1改永久+1，不改变概率或临时大奖",
+}
+
+Add {
+    numberId = 38, id = "secret_recipe", name = "老八秘制", rarity = 1, pool = true, implemented = true,
+    effect = "[[glutton]]现在可以消耗[[poop]]、[[golden_poop]]、[[diamond_poop]]、[[rainbow_poop]]",
+    note = "仅扩展大胃王合法目标，不修改便便tag；沿用原增值、体积成长、上限与冷却，同时执行便便自身的成功被耗收益",
+}
+Add {
+    numberId = 39, id = "meteor_shower", name = "流星雨", rarity = 2, pool = true, implemented = true,
+    effect = "[[star]]现在每次触碰瓶底有20%机会生成一个临时复制",
+    note = "随星星成功触底效果独立判定；复制触底加值后的数值与物理状态，近源生成，满瓶走FIFO；新复制体不继承旧接触，回合末彻底删除",
 }
 
 --- 查询对局是否持有某遗物。

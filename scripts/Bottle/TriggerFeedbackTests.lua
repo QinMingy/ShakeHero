@@ -121,8 +121,9 @@ Test("小球碰墙显示碰撞价值且不入金币、冷却内不重复", funct
     Close(Item(game,1).bonus, 1)
 end)
 
-Test("兔子真实移动满100米显示移动永久且不入金币", function()
+Test("兔子真实移动满100米永久分支显示移动永久且不入金币", function()
     local game = Fixture({"rabbit"})
+    rawset(game, "_RandomInt", function(_, maximum) assert(maximum == 2); return 1 end)
     local all = {}
     for step = 0, 200 do
         for _, event in ipairs(game:Step(0,{positions={[1]={x=step*.5,y=1}}})) do
@@ -138,6 +139,7 @@ end)
 
 Test("成群结队兔子收益标在每个实际受益者", function()
     local game = Fixture({"rabbit","rabbit"},{in_groups=true})
+    rawset(game, "_RandomInt", function(_, maximum) assert(maximum == 2); return 1 end)
     Item(game,1).distance = 99.5
     game:Step(0,{positions={[1]={x=0,y=1},[2]={x=1,y=2}}})
     local events = game:Step(0,{positions={[1]={x=.5,y=1},[2]={x=1,y=2}}})
@@ -232,7 +234,7 @@ end)
 Test("大胃王位移缩体积使用位移标签且不改变价值", function()
     local game = Fixture({"glutton"})
     local item = Item(game,1)
-    item.scale,item.distance = 1.5,49.5
+    item.scale,item.distance = 1.5,99.5
     game:Step(0,{positions={[1]={x=0,y=1}}})
     local events = game:Step(0,{positions={[1]={x=.5,y=1}}})
     Reward(events,1,-10,"size","distance")
@@ -251,7 +253,7 @@ Test("橘子及半块橘子持续贴底不跳字且结算收益保留", function
             local events = game:Step(0,{bottom={[1]=touching},positions={[1]={x=0,y=0}}})
             assert(#Events(events,"triggerReward") == 0, "持续状态切换不显示收益跳字")
             assert(#Events(events,"score") == 0, "贴底不会即时发金币")
-            Close(item.bonus,touching and 2 or 0)
+            Close(item.bonus,touching and 3 or 0)
         end
         local contacts = {bottom={[1]=true},positions={[1]={x=0,y=0}}}
         game:Step(game:Duration(),contacts)
@@ -260,26 +262,17 @@ Test("橘子及半块橘子持续贴底不跳字且结算收益保留", function
         assert(#Events(events,"triggerReward") == 0)
         local scores = Events(events,"score",1)
         assert(#scores == 1, "结算仍产出一次金币收益提示")
-        Close(scores[1].value,base+2)
-        Close(game.roundScore,base+2)
+        Close(scores[1].value,base+3)
+        Close(game.roundScore,base+3)
     end
 end)
 
 Test("橘子的离散永久增益与即时金币反馈不被屏蔽", function()
     local game = Fixture({"chef","orange"})
     local events = game:Step(0,{pairs={{1,2}},positions={[1]={x=0,y=1},[2]={x=.5,y=1}}})
-    local halves = 0
-    for _, item in ipairs(game:BottleItems()) do
-        if item.id == "orange_half" then
-            halves = halves + 1
-            local found = false
-            for _, event in ipairs(Events(events,"triggerReward",item.uid)) do
-                if event.rewardKind == "permanent" and event.value == 3 then found = true end
-            end
-            assert(found, "厨师切半的永久+3仍显示跳字")
-        end
-    end
-    assert(halves == 2)
+    assert(Item(game,2).id == "orange" and #game:BottleItems() == 2)
+    Reward(events,2,1,"permanent","collision")
+    Close(Item(game,2).permBonus,1)
     local diner = Fixture({"diner","orange"})
     local expected = diner:_Value(Item(diner,2))*2
     local eaten = diner:Step(0,{pairs={{1,2}},positions={[1]={x=0,y=1},[2]={x=.5,y=1}}})
@@ -288,18 +281,49 @@ Test("橘子的离散永久增益与即时金币反馈不被屏蔽", function()
     Close(scores[1].value,expected)
 end)
 
-Test("持续接触光环不连续弹收益也不凭空发金币", function()
-    local game = Fixture({"chef","orange_half"})
-    local contacts = {pairs={{1,2}}}
-    local previous = game:_Value(Item(game,2))
-    local initial = game:Step(0,contacts)
-    Reward(initial,2,previous,"value","collision")
-    for _=1,4 do
-        local events = game:Step(0,contacts)
+Test("持续接触光环首次生效断开重连均不跳字且结算收益保留", function()
+    for _, source in ipairs({"chef", "fruit_merchant"}) do
+        local game = Fixture({source,"orange_half"})
+        Item(game,1).remaining = 100 -- 只隔离验证持续光环；厨师离散加值另有专项。
+        local item = Item(game,2)
+        local base = game:_Value(item)
+        for _, touching in ipairs({true,true,false,false,true,false,true}) do
+            local events = game:Step(0,{pairs=touching and {{1,2}} or {}})
+            assert(#Events(events,"triggerReward") == 0, "光环接触切换不显示碰撞收益")
+            assert(#Events(events,"score") == 0, "光环不即时发金币")
+            Close(item.mult,touching and 2 or 1)
+            Close(game:_Value(item),base*(touching and 2 or 1))
+        end
+        local contacts = {pairs={{1,2}}}
+        game:Step(game:Duration(),contacts)
+        assert(game.phase == "settle")
+        local events = game:SettleStep(2,contacts)
         assert(#Events(events,"triggerReward") == 0)
-        assert(#Events(events,"score") == 0)
+        local scores = Events(events,"score",2)
+        assert(#scores == 1, "光环加成仍纳入正常结算浮字")
+        Close(scores[1].value,base*2)
+        Close(game.roundScore,base*2+game:_Value(Item(game,1)))
     end
-    Close(Item(game,2).mult,2)
+end)
+
+Test("多光环叠加和脱离不跳字且事件倍率不被覆盖", function()
+    local game = Fixture({"chef","chef","fruit_merchant","orange_half"})
+    Item(game,1).remaining,Item(game,2).remaining = 100,100
+    local item = Item(game,4)
+    item.eventMult,item.mult = 1.5,1.5
+    for _, sample in ipairs({
+        {pairs={{1,4},{2,4},{3,4}},mult=12},
+        {pairs={{2,4},{3,4}},mult=6},
+        {pairs={{3,4}},mult=3},
+        {pairs={},mult=1.5},
+        {pairs={{1,4},{2,4},{3,4}},mult=12},
+    }) do
+        local events = game:Step(0,{pairs=sample.pairs})
+        assert(#Events(events,"triggerReward") == 0 and #Events(events,"score") == 0)
+        Close(item.mult,sample.mult)
+        Close(item.eventMult,1.5)
+        Close(game:_Value(item),math.ceil(sample.mult))
+    end
     Close(game.roundScore,0)
 end)
 
@@ -406,22 +430,24 @@ Test("保镖拦下老师合成时保护金币仍标碰撞且不重复", function
     assert(Item(game,1).location=="bottle" and Item(game,2).location=="bottle")
 end)
 
-Test("满瓶厨师产物延后入场在原位置显示永久加值且只显示一次", function()
+Test("满瓶厨师直接强化原食物且不再产生排队半果", function()
     local game=Fixture({"chef","apple","glutton","orange"})
     while #game:BottleItems()<100 do game:_Spawn("ball",{}) end
     local positions={[1]={x=0,y=1},[2]={x=.5,y=1},[3]={x=1,y=2},[4]={x=1.5,y=2}}
     local initial=game:Step(0,{pairs={{1,2}},positions=positions})
-    assert(#game.spawnQueue==1)
-    local uid=game.spawnQueue[1]
-    assert(Item(game,uid).location=="queued" and Item(game,uid).permBonus==3)
-    assert(#Events(initial,"triggerReward",uid)==0,"排队未入瓶时不显示无实体收益")
+    assert(#game.spawnQueue==0 and Item(game,2).id=="apple")
+    Reward(initial,2,1,"permanent","collision")
+    local popup=Events(initial,"triggerReward",2)[1]
+    Close(popup.x,.5); Close(popup.y,1)
+    assert(#Events(game:Step(0,{pairs={{1,2}},positions=positions}),"triggerReward",2)==0)
+    -- 通用排队入场的永久收益提示仍单独验证，不再依赖已移除的厨师切割。
+    local queued=game:_Spawn("apple_half",{},false,{x=.5,y=1})
+    queued.permBonus=3
+    assert(queued.location=="queued")
     local entered=game:Step(0,{pairs={{3,4}},positions=positions})
-    assert(Item(game,uid).location=="bottle" and #game.spawnQueue==0)
-    Reward(entered,uid,3,"permanent","collision")
-    local popup=Events(entered,"triggerReward",uid)[1]
-    Close(popup.x,.5)
-    Close(popup.y,1)
-    assert(#Events(game:Step(0,{pairs={{3,4}},positions=positions}),"triggerReward",uid)==0)
+    assert(queued.location=="bottle" and #game.spawnQueue==0)
+    Reward(entered,queued.uid,3,"permanent","collision")
+    assert(#Events(game:Step(0,{}),"triggerReward",queued.uid)==0)
 end)
 
 Test("分裂器折入基础价值的永久加成和倍率不虚报负收益", function()
@@ -444,14 +470,14 @@ Test("分裂器折入基础价值的永久加成和倍率不虚报负收益", fu
     Close(game.roundScore,0)
 end)
 
-Test("偶数回合获得刷新发一次独立提示、重复结算不重发", function()
+Test("每回合获得刷新发一次独立提示、重复结算不重发", function()
     for _, round in ipairs({1,2,3,4}) do
         local game = Fixture({"apple"})
         game.round = round
         local before = game.refreshes
         local events = game:Finish()
         local gains = Events(events, "refreshGain")
-        assert(#gains == (round % 2 == 0 and 1 or 0))
+        assert(#gains == 1)
         Close(game.refreshes, before + #gains)
         if #gains > 0 then assert(gains[1].uid == 0 and gains[1].value == 1) end
         assert(#Events(game:Finish(), "refreshGain") == 0)
@@ -538,14 +564,14 @@ Test("真实创建信用卡与积少成多同批各反馈一次，不重复入�
     local events={}
     local first=game:_Create("credit_card",false,events)
     local second=game:_Create("credit_card",false,events)
-    Close(first.permBonus,15);Close(second.permBonus,15)
+    Close(first.permBonus,10);Close(second.permBonus,10)
     Close(game:_Value(first),25);Close(game.score,score+2);Close(game.totalScore,total+2)
     Close(game.roundScore,roundScore);assert(game._rngState==rng)
     Relic(events,"credit_line",1);Relic(events,"small_savings",1)
     assert(not pcall(function() game:_Create("not_a_real_item",false,events) end))
     assert(#events==2 and game.score==score+2,"失败创建不能反馈或加钱")
     local legacy=game:_Create("credit_card")
-    Close(legacy.permBonus,15);Close(game.score,score+3);assert(#events==2)
+    Close(legacy.permBonus,10);Close(game.score,score+3);assert(#events==2)
     game.phase="settle"
     local settled={}
     game:_Create("credit_card",false,settled)
@@ -705,6 +731,7 @@ end)
 Test("成群结队须真的惠及另一兔，幽灵满30米金币才反馈",function()
     for _,multiple in ipairs({false,true}) do
         local game=Fixture(multiple and {"rabbit","rabbit"} or {"rabbit"},{in_groups=true})
+        rawset(game,"_RandomInt",function(_,maximum) assert(maximum==2); return 1 end)
         Item(game,1).distance=100
         local events=game:Step(0,{})
         Close(Item(game,1).permBonus,1)
@@ -742,7 +769,8 @@ Test("厨师帽成功吃刀本身反馈，无水果也成功，被阻止消费�
         assert(Item(game,2).location==(blocked and "bottle" or "discard"))
         Relic(events,"chef_hat",blocked and 0 or 1)
         Close(Item(game,1).permBonus,0)
-        if not blocked then Close(Item(game,1).remaining,1) end
+        Close(Item(game,1).chefBoost or 0,blocked and 0 or 1)
+        if not blocked then Close(Item(game,1).remaining,4) end
     end
 end)
 
@@ -783,7 +811,7 @@ end)
 
 Test("硬币雨替换成功与升级机真实四元产物反馈，普通产物不假报升级成功",function()
     local cloud=Fixture({"cloud"},{coin_rain=true})
-    local rainDone=Random(cloud,{{5,2}})
+    local rainDone=Random(cloud,{{100,31}})
     local rain=cloud:Step(0,{});rainDone()
     assert(#Events(rain,"spawn")==1 and Events(rain,"spawn")[1].id=="coin_1")
     Relic(rain,"coin_rain",1)

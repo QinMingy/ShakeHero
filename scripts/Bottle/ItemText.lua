@@ -1,4 +1,4 @@
--- 物品说明只展示本体效果与实例当前值；遗物效果由遗物详情展示。
+-- 物品说明展示本体与实例当前值；持帽厨师补充独立永久强化及实际冷却，遗物详情说明全局规则。
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local Text = {}
@@ -40,6 +40,11 @@ function Text.Effect(game, id, item)
             return "当前：" .. tostring(counter)
         end)
     end
+    if id == "chef" and item and Relics.Has(game, "chef_hat") then
+        local boost = item.chefBoost or 0
+        text = text .. "\n厨师帽强化（当前：+" .. tostring(boost)
+            .. "）：每次为相邻食物永久增加" .. tostring(1 + boost) .. "价值，强化与本厨师永久绑定。"
+    end
     return text
 end
 
@@ -47,7 +52,6 @@ end
 ---@param id string
 ---@return number
 function Text.InitialValue(game, id)
-    if id == "trash_can" and Relics.Has(game, "lucky_charm") then return 1 end
     local base = assert(Items.byId[id]).base
     if id == "credit_card" and Relics.Has(game, "credit_line") then return 25 end
     local foodBonus = Items.HasTag(id, "食物") and Relics.Has(game, "food_comfort") and 2 or 0

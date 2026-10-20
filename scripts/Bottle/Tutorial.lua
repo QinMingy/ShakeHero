@@ -179,6 +179,9 @@ function Tutorial:Present()
     if type(words)=="table" then
         for k,v in pairs(words) do spec[k]=v end
     end
+    if key=="goal" then
+        spec.text=spec.text:gsub("攒够50金币", "攒够"..tostring(self.view.game.target).."金币")
+    end
     if key=="inspectBall" then
         local target=self:BallTarget()
         if target then spec.windows={L.board};spec.point=target

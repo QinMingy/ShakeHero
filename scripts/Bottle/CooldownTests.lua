@@ -89,9 +89,9 @@ Test("大胃王满体积和小偷零值目标不进冷却", function()
     glutton:Step(0, {pairs={{1,2}}})
     Cooling(glutton, 1); Close(Item(glutton, 1).permBonus, 1)
     local thief = Fixture({"thief","credit_card"})
-    Item(thief, 2).permBonus = -10
+    Item(thief, 2).permBonus = -15
     thief:Step(.5, {pairs={{1,2}}}); Ready(thief, 1)
-    Item(thief, 2).permBonus = -9
+    Item(thief, 2).permBonus = -14
     thief:Step(0, {pairs={{1,2}}}); Cooling(thief, 1)
 end)
 
@@ -165,12 +165,15 @@ Test("厨师仅成功吃刀也算生效而非必须有水果", function()
     blocked:Step(.5, {pairs={{1,2}}}); Ready(blocked, 1)
 end)
 
-Test("刀只碰无库存羊不生效有库存才冷却", function()
-    local game = Fixture({"knife","sheep"})
+Test("刀碰羊不生效，成功消耗小鸡才进入共用冷却", function()
+    local game = Fixture({"knife","sheep","chick"})
     game:Step(.2, {pairs={{1,2}}}); Ready(game, 1)
     Item(game, 2).woolCount = 1
-    game:Step(0, {pairs={{1,2}}}); Cooling(game, 1)
-    Close(Item(game, 2).woolCount, 0)
+    game:Step(0, {pairs={{1,2}}}); Ready(game, 1)
+    Close(Item(game, 2).woolCount, 1)
+    game:Step(0, {pairs={{1,3}}}); Cooling(game, 1)
+    assert(Item(game, 3).location == "discard")
+    Close(Item(game, 1).remaining, 4)
 end)
 
 Test("农民已有祝福不重复生效祝福被消费后立即可重施", function()
@@ -196,17 +199,19 @@ Test("赌徒与赌神重投额度用尽不重复冷却不重抽", function()
     end
 end)
 
-Test("周期性概率失败不提前重抽且完整保留5和10秒周期", function()
+Test("周期性概率失败不提前重抽且完整保留5和8秒周期", function()
     local game = Fixture({"lucky_coin","fruit_tree"})
     local calls = Constant(game, 2) -- 幸运硬币与果树都失败。
     local before = game.roundScore
     game:Step(5)
-    Close(calls(), 1); Close(Item(game, 1).remaining, 5); Close(Item(game, 2).remaining, 5)
+    Close(calls(), 1); Close(Item(game, 1).remaining, 5); Close(Item(game, 2).remaining, 3)
     game:Step(0); Close(calls(), 1)
-    game:Step(4.99); Close(calls(), 1)
+    game:Step(2.99); Close(calls(), 1)
     game:Step(.01)
+    Close(calls(), 2); Close(Item(game, 2).remaining, 8)
+    game:Step(2)
     Close(calls(), 3); Close(game.roundScore, before)
-    Close(Item(game, 1).remaining, 5); Close(Item(game, 2).remaining, 10)
+    Close(Item(game, 1).remaining, 5); Close(Item(game, 2).remaining, 6)
 end)
 
 Test("Crop区别已判定和生效而Apply返回生效", function()
@@ -322,7 +327,7 @@ Test("小猪护盾拦截不给金币不增长不冷却且被动吃草不冒领�
     Close(Item(game, 1).scale, 1); Close(Item(game, 1).weight, 1)
     local grass = Fixture({"pig","grass"})
     Constant(grass, 1)
-    grass:Step(0, {pairs={{1,2}}})
+    assert(grass:_Destroy(2,false,{},Item(grass,1),"consume"))
     Close(grass.roundScore, 0); Close(Item(grass, 1).scale, 1.1)
     Ready(grass, 1)
 end)

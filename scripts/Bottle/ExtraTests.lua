@@ -135,9 +135,10 @@ local function Test(name, run)
     cases[#cases + 1] = { name = name, run = run }
 end
 
-Test("98件全实装、27件屏蔽与硬币配方", function()
+Test("98件全实装、32件屏蔽与硬币配方", function()
     assert(#Items.list == 98)
     local blocked = {
+        apple = true, banana = true, orange = true, droplet = true, gambling_god = true,
         rotten_banana = true, banana_peel = true, apple_half = true, banana_half = true,
         orange_half = true, cherry_half = true, fruit_ninja = true, tomato_egg = true,
         coin_4 = true, coin_8 = true, coin_16 = true, coin_32 = true, coin_64 = true,
@@ -151,7 +152,7 @@ Test("98件全实装、27件屏蔽与硬币配方", function()
         assert(def.pool == (not blocked[def.id]), "卡池与源表及追加果汁约定不一致：" .. def.id)
         if def.pool then normalCount = normalCount + 1 else blockedCount = blockedCount + 1 end
     end
-    assert(blockedCount == 27 and normalCount == 71, "源表98件中27件屏蔽、71件入池")
+    assert(blockedCount == 32 and normalCount == 66, "源表98件中32件屏蔽、66件入池")
     for _, value in ipairs({ 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024 }) do
         local id = "coin_" .. value
         assert(Items.Recipe(id, id) == "coin_" .. (value * 2), "硬币配方缺失：" .. id)
@@ -246,15 +247,15 @@ Test("再来一把只扩展赌徒为连续两投", function()
     Close(game.roundScore - before, 6)
 end)
 
-Test("果树10秒周期、概率失败也保持下一次周期调度", function()
+Test("果树8秒周期、概率失败也保持下一次周期调度", function()
     local game = Fixture({ "fruit_tree" })
     RandomConstant(game, 2)
     assert(game:Start())
-    game:Step(9)
+    game:Step(7)
     assert(#game:BottleItems() == 1)
     local events = game:Step(1)
     assert(#Events(events, "spawn") == 0, "50%失败不生成")
-    Close(Item(game, 1).remaining, 10)
+    Close(Item(game, 1).remaining, 8)
     local success = Fixture({ "fruit_tree" })
     RandomConstant(success, 1)
     assert(success:Start())
@@ -283,6 +284,22 @@ Test("农民祝福下一次保底加额外、消耗后可再获得", function()
     assert((Item(game, 2) --[[@as any]]).treeBlessed == true, "消耗后重新触碰授予")
 end)
 
+Test("水珠基础尺寸减半且保留默认物理倍率", function()
+    Close(Items.byId.droplet.radius, 0.16875, "水珠定义半径")
+    Close(Items.byId.cloud.radius, 0.3375, "云朵尺寸不变")
+    Close(Items.byId.counter.radius, 0.3375, "其他默认尺寸不变")
+    local game = Game.New(137)
+    local droplet = game:_Create("droplet")
+    Close(droplet.scale, 1, "新水珠体积倍率仍为100%")
+    Close(droplet.weight, 1, "新水珠重量倍率仍为100%")
+    Close(Items.byId.droplet.radius * droplet.scale, 0.16875, "新水珠有效半径")
+    droplet.scale = 1.5
+    local restored = Game.Restore(game:Snapshot())
+    local restoredDroplet = Item(restored, droplet.uid)
+    Close(restoredDroplet.scale, 1.5, "读档保留已有体积倍率")
+    Close(Items.byId.droplet.radius * restoredDroplet.scale, 0.253125, "读档使用新基础尺寸")
+end)
+
 Test("水珠同时触发相邻种子果树且不重置果树周期", function()
     local game = Fixture({ "droplet", "seed", "fruit_tree" })
     RandomConstant(game, 1)
@@ -307,6 +324,7 @@ end)
 
 Test("云朵5秒生成永久水珠、硬币雨替换生成", function()
     local game = Fixture({ "cloud" })
+    RandomConstant(game, 100)
     assert(game:Start())
     game:Step(4)
     assert(BottleCount(game, "droplet") == 0)
@@ -320,6 +338,7 @@ Test("云朵5秒生成永久水珠、硬币雨替换生成", function()
     assert(not Item(game, 2).temporary)
     local coins = Fixture({ "cloud" })
     coins.relics.coin_rain = true
+    RandomConstant(coins, 100)
     assert(coins:Start())
     coins:Step(5)
     assert(BottleCount(coins, "coin_1") == 1 and BottleCount(coins, "droplet") == 0)
@@ -346,7 +365,7 @@ Test("幸运硬币5秒投掷成功结算、失败不结算", function()
         game:Step(4)
         Close(game.roundScore, 0)
         game:Step(1)
-        Close(game.roundScore, face == 1 and 5 or 0)
+        Close(game.roundScore, face == 1 and 8 or 0)
         Close(Item(game, 1).remaining, 5)
     end
 end)
@@ -355,6 +374,7 @@ Test("兔子每移动100米永久加1、成群结队为其他兔子加值", func
     for _, grouped in ipairs({ false, true }) do
         local game = Fixture({ "rabbit", "rabbit" })
         game.relics.in_groups = grouped or nil
+        RandomConstant(game, 1)
         assert(game:Start())
         for sample = 0, 200 do
             game:Step(0, { positions = {
@@ -368,17 +388,17 @@ Test("兔子每移动100米永久加1、成群结队为其他兔子加值", func
     end
 end)
 
-Test("大胃王移动50米缩小、教练使缩幅翻倍且不低于1", function()
+Test("大胃王移动100米缩小、教练使缩幅翻倍且不低于1", function()
     for _, coached in ipairs({ false, true }) do
         local game = Fixture(coached and { "glutton", "fitness_coach" } or { "glutton" })
         Item(game, 1).scale = 1.5
         assert(game:Start())
-        for sample = 0, 100 do
+        for sample = 0, 200 do
             game:Step(0, { positions = { [1] = { x = sample * .5, y = 2 } } })
         end
         Close(Item(game, 1).scale, coached and 1.3 or 1.4)
         if coached then Close(Item(game, 2).permBonus, 1, "每次真实缩小教练永久+1") end
-        for sample = 101, 600 do
+        for sample = 201, 1200 do
             game:Step(0, { positions = { [1] = { x = sample * .5, y = 2 } } })
         end
         Close(Item(game, 1).scale, 1, "缩小有100%下限")
@@ -428,23 +448,23 @@ Test("死灵术士返还弃牌保永久值、不重复结算或重复返还", fu
     Close(Item(game, 4).permBonus, 9)
     assert(#Events(events, "score", 3) == 0 and #Events(events, "score", 4) == 0,
         "返还不补结算弃牌")
-    Close(game.lastRoundScore, 6, "只有两位死灵各自基础3")
+    Close(game.lastRoundScore, 10, "只有两位死灵各自基础5")
     Identity(game)
     Game.Restore(game:Snapshot())
 end)
 
 Test("培根相邻食物1.5连乘、无接触不生效", function()
-    local game = Fixture({ "bacon", "apple", "egg", "ball" })
+    local game = Fixture({ "bacon", "apple", "tomato", "ball", "egg" })
     assert(game:Start())
-    local events = Finish(game, { pairs = { { 1, 2 }, { 1, 3 }, { 1, 4 } } })
+    local events = Finish(game, { pairs = { { 1, 2 }, { 1, 3 }, { 1, 4 }, { 1, 5 } } })
     local scores = Events(events, "score", 1)
     assert(#scores == 1)
-    Close(scores[1].value, 7, "培根3×1.5×1.5=6.75向上取整7")
+    Close(scores[1].value, 12, "培根5×1.5×1.5=11.25向上取整12")
     Close(Item(game, 1).mult, 1, "结算倍率回合末复位")
     local solo = Fixture({ "bacon", "apple" })
     assert(solo:Start())
     events = Finish(solo)
-    Close(Events(events, "score", 1)[1].value, 3)
+    Close(Events(events, "score", 1)[1].value, 5)
 end)
 
 Test("幽灵被消耗立即按当前值结算并进弃牌", function()
@@ -651,15 +671,15 @@ Test("最后一秒通过固定步Game完整运行11秒", function()
     assert(game.phase == "draft")
 end)
 
-Test("厨师精进刀法第三份同样获得永久加成", function()
-    local game = Fixture({ "chef", "apple" })
+Test("小刀精进刀法产生第三份且无厨师旧切割加成", function()
+    local game = Fixture({ "knife", "apple" })
     game.relics.knife_skill = true
     RandomConstant(game, 1)
     assert(game:Start())
     game:Step(5, { pairs = { { 1, 2 } } })
     assert(BottleCount(game, "apple_half") == 3, "确定性成功必须产第三份")
     for _, item in ipairs(game:BottleItems()) do
-        if item.id == "apple_half" then Close(item.permBonus, 3) end
+        if item.id == "apple_half" then Close(item.permBonus, 0) end
     end
 end)
 

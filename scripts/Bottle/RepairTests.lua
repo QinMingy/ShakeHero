@@ -209,8 +209,8 @@ end)
 Case("真正冷却predicate逐项覆盖98件且不改定义时长", function()
     local active = {
         trash_can=2,glutton=1,fruit_ninja=5,thief=6,
-        knife=5,fruit_farmer=8,monkey=5,ball=3,coffin=4,tombstone=4,coin_machine=5,
-        pig=2,hay=3,chicken_keeper=3,splitter=4,compass=3,jelly=2.5,gear=4,
+        knife=4,fruit_farmer=7,chef=4,soul_stone=4,monkey=5,ball=3,coffin=4,tombstone=4,coin_machine=3,
+        pig=2,hay=3,chicken_keeper=5,splitter=4,compass=3,jelly=2.5,gear=4,
     }
     assert(#Items.list == 98)
     for _, def in ipairs(Items.list) do
@@ -218,23 +218,25 @@ Case("真正冷却predicate逐项覆盖98件且不改定义时长", function()
         if active[def.id] then Close(def.cooldown, active[def.id], def.id) end
     end
     assert(not Items.HasCooldown("unknown_repair_item"))
-    for _, id in ipairs({"star", "soul_jar", "soul_stone", "ghost"}) do Close(Items.byId[id].cooldown, 1, id) end
-    Close(Items.byId.fruit_tree.cooldown, 10)
+    for _, id in ipairs({"star", "soul_jar", "ghost"}) do Close(Items.byId[id].cooldown, 1, id) end
+    Close(Items.byId.fruit_tree.cooldown, 8)
     Close(Items.byId.cloud.cooldown, 5); Close(Items.byId.lucky_coin.cooldown, 5)
 end)
 
-Case("timer保留10秒和5秒原周期不提前触发", function()
+Case("timer保留8秒和5秒周期不提前触发", function()
     local game = T.Fixture({"cloud", "fruit_tree", "lucky_coin"})
+    rawset(game,"_RandomInt",function(_,maximum) return maximum end)
     assert(game:Start())
     local first = game:Step(4.99)
     assert(#T.Events(first, "spawn") == 0 and #T.Events(first, "score") == 0)
-    Close(Item(game,1).remaining, .01); Close(Item(game,2).remaining, 5.01)
+    Close(Item(game,1).remaining, .01); Close(Item(game,2).remaining, 3.01)
     local atFive = game:Step(.01)
-    assert(#T.Events(atFive, "spawn") == 1, "5秒云朵仅生成一滴水珠")
-    Close(Item(game,1).remaining, 5); Close(Item(game,2).remaining, 5)
-    game:Step(4.99); Close(Item(game,2).remaining, .01)
+    assert(#T.Events(atFive, "spawn") == 1, "5秒云朵保底生成一滴水珠")
+    Close(Item(game,1).remaining, 5); Close(Item(game,2).remaining, 3)
+    game:Step(2.99); Close(Item(game,2).remaining, .01)
     game:Step(.01)
-    Close(Item(game,2).remaining, 10); Close(Item(game,1).remaining, 5)
+    Close(Item(game,2).remaining, 8); Close(Item(game,1).remaining, 2)
+    game:Step(2)
     assert(game.phase == "settle")
 end)
 
@@ -366,17 +368,19 @@ Case("当前数值在新候选和定义中使用默认值而非同名实例", fu
     assert(Items.byId.glutton.effect:find("当前：100%",1,true), "共享正文也不可泄漏x")
 end)
 
-Case("厨师帽消除虚假当前值且保留本次而非累计加成", function()
+Case("厨师帽不伪造统一当前值且保留厨师累计加成", function()
     local text = Relics.byId.chef_hat.effect
-    assert(not text:find("当前：",1,true) and text:find("本次切割产物",1,true), text)
+    assert(text == "[[chef]]现在可以消耗相邻的[[knife]]，该厨师后续为食物增加的价值永久+1，立即获得一个[[chef]]", text)
+    assert(not text:find("当前：",1,true) and not text:find("冷却：",1,true), text)
     local game = T.Fixture({"chef", "knife", "apple"}, {chef_hat=true})
     assert(game:Start())
-    game:Step(5,{pairs={{1,2},{1,3}}})
-    Close(Item(game,3).permBonus,4)
+    game:Step(0,{pairs={{1,2},{1,3}}})
+    Close(Item(game,3).permBonus,2)
+    assert(Item(game,3).id == "apple", "厨师帽不恢复切割")
     local apple = assert(game:_Spawn("apple",{}))
     Item(game,1).remaining = 0
     game:Step(0,{pairs={{1,apple.uid}}})
-    Close(apple.permBonus,3,"下次切割无小刀不沿用上次额外加成")
+    Close(apple.permBonus,2,"下次加值无小刀仍沿用这位厨师的累计强化")
 end)
 
 Case("物理默认与普通50%到200%边界统一钳制", function()

@@ -4,8 +4,8 @@
 --   running  摇晃阶段：10秒，物品按 trigger 实时执行效果，明确即时收益当场入账
 --   settle   结算阶段：禁止摇晃，物体自然下落2秒，不执行非结算效果；
 --            2秒后全体物品按当前价值一次性结算金币
---   考核      每5回合扣除阶段目标（40/80/140…×1.3），余额不足则 over
---   draft    三选一：物品刷新池每两回合+1并累计；遗物每组独立一次免费刷新/可跳过
+--   考核      每5回合扣除阶段目标（50/100/160/240/360/520/780/1000，之后×1.3），余额不足则 over
+--   draft    三选一：物品刷新池每回合+1并累计；遗物每组独立一次免费刷新/可跳过
 -- 基础设定（docs/基础设定.txt）：
 --   价值增益默认临时（bonus，结算后回合末清零）；“永久+N”写入 permBonus。
 --   冷却下限1秒、每回合重置、不跨回合。瓶中物品上限100。消耗≠移除：进弃牌堆。
@@ -45,7 +45,9 @@ local BOTTLE_LIMIT = Items.Settings.bottleLimit
 local EPSILON = 1e-9
 local RNG_MODULUS = 2147483647
 local RNG_DOMAIN = RNG_MODULUS - 1
-local TARGETS = { 40, 80, 140, 220, 320, 450, 600, 780 }
+local TARGETS = { 50, 100, 160, 240, 360, 520, 780, 1000 }
+local PREVIOUS_TARGETS = { 50, 100, 150, 200, 350, 500, 750, 1000 }
+local LEGACY_TARGETS = { 40, 80, 140, 220, 320, 450, 600, 780 }
 -- 不提供任意精度数：超过可精确表达的整十分范围时明确拒绝，不静默封顶目标。
 local MAX_STAGE = 1000
 local MAX_TARGET = 9007199254740990
@@ -60,6 +62,7 @@ local MAX_COUNTER = 2147483647
 ---@field permBonus number 永久价值增益；描述明确“永久+N”才写入
 ---@field permMult number 永久倍率；回合清理与持续光环均不清除
 ---@field tokenAttempted boolean 赌神令牌本次归零周期是否已尝试
+---@field chefBoost integer? 厨师累计吃刀获得的永久加值能力；不计入自身价值
 ---@field mult number 临时倍率；回合末重置为1
 ---@field remaining number 秒；0 表示就绪；每回合重置，不跨回合
 ---@field bottleRounds integer 入瓶回合计数；香蕉“3回合后”以此为准
@@ -129,6 +132,7 @@ local MAX_COUNTER = 2147483647
 ---@field value number?
 ---@field weight number? resize 时的重量倍率；value 仍为体积倍率
 ---@field rollValue number? 骰子score时的点数，仅用于结算残影显示
+---@field finalItem ItemInstance? 普通结算时冻结的实例标量，仅供本回合详情回看、不持久化
 ---@field a integer? 合成材料 uid（merge 事件保留）
 ---@field b integer? 合成材料 uid
 ---@field x number? 事件位置，瓶内局部米制坐标
@@ -183,7 +187,9 @@ local MAX_COUNTER = 2147483647
 ---@field _adjacencyUids table<number,number[]>?
 
 ---@class BottleSnapshot
+---@field targetCurveVersion integer? 考核曲线版本；旧档缺省1，上一版2，当前新局3
 ---@field rulesVersion integer? 扩展规则版本，当前8；外层存档版本保持2
+---@field itemCatalogVersion integer? 物品目录版本；缺省旧表，当前1
 ---@field refreshes integer 准备/物品三选一跨回合共享刷新次数
 ---@field relicRefreshes integer 本次遗物三选一独立免费次数，0或1，不累计
 ---@field removals integer 考核达标或移除币获得的累计主动移除次数
@@ -227,6 +233,7 @@ local MAX_COUNTER = 2147483647
 ---@field phase BottlePhase
 ---@field round integer
 ---@field stage integer
+---@field targetCurveVersion integer 考核曲线版本，1原版／2上一版／3当前新局
 ---@field score number
 ---@field totalScore number
 ---@field roundScore number
@@ -360,11 +367,15 @@ local function Emit(events, kind, item, value)
 end
 
 ---@param stage integer
+---@param curveVersion integer? 缺省为当前新局曲线3；历史局显式使用1或2
 ---@return number
-function Game.GetTarget(stage)
+function Game.GetTarget(stage, curveVersion)
     assert(IsInteger(stage) and stage >= 1 and stage <= MAX_STAGE, "stage 必须是1..1000的整数")
-    local target = assert(TARGETS[math.min(stage, #TARGETS)])
-    for _ = #TARGETS + 1, stage do
+    assert(curveVersion == nil or curveVersion == 1 or curveVersion == 2 or curveVersion == 3,
+        "无效考核曲线版本")
+    local targets = curveVersion == 1 and LEGACY_TARGETS or curveVersion == 2 and PREVIOUS_TARGETS or TARGETS
+    local target = assert(targets[math.min(stage, #targets)])
+    for _ = #targets + 1, stage do
         target = math.ceil(target * 1.3 / 10) * 10
         assert(target <= MAX_TARGET, "阶段目标超过可精确保存的数值范围")
     end
@@ -400,7 +411,8 @@ function Game:_Init(seed)
     self.elapsed = 0
     self.settleElapsed = 0
     self.revealElapsed = 0
-    self.target = Game.GetTarget(1)
+    self.targetCurveVersion = 3
+    self.target = Game.GetTarget(1, self.targetCurveVersion)
     self.bestRound = 0
     self.bestRoundScore = 0
     self.lastRoundScore = 0
@@ -457,14 +469,14 @@ function Game:_Create(id, temporary, events)
         remaining = def.cooldown, bottleRounds = 0, location = "deck",
         temporary = temporary or false, generatedTemporary = false,
         scale = 1, weight = 1, counter = 0, settleCount = 0, distance = 0,
-        permMult = 1, tokenAttempted = false,
+        permMult = 1, tokenAttempted = false, chefBoost = 0,
     }
     PhysicalState.Init(item)
     Expansion.InitItem(item)
     if id == "wool" then item.woolReadyRound = self.round + 1 end
-    -- 遗物 credit_line（贷款额度）：后续获取的信用卡初始价值25（即 permBonus +15）。
+    -- 遗物 credit_line（贷款额度）：后续获取的信用卡初始价值25，按当前基础补齐差值。
     if id == "credit_card" and Relics.Has(self, "credit_line") then
-        item.permBonus = 15
+        item.permBonus = 25 - def.base
         TriggerFeedback.Relic(self, events, "credit_line")
     end
     self._nextUid = self._nextUid + 1
@@ -683,7 +695,6 @@ function Game:CooldownOf(id)
     if id == "thief" and Relics.Has(self, "thief_handbook") then
         cooldown = math.max(Items.Settings.minCooldown, cooldown - 1)
     end
-    if id == "chef" and Relics.Has(self, "chef_hat") then cooldown = 1 end
     return cooldown
 end
 
@@ -691,7 +702,6 @@ end
 ---@return number 全部加值和倍率计算完成后向上取整的当前有效价值
 function Game:_Value(item)
     local base = item.rollValue or item.valueBase or Items.byId[item.id].base
-    if item.id == "trash_can" and Relics.Has(self, "lucky_charm") then base = 1 end
     -- 灵魂共振先复制墓碑当前最值，再应用灵魂石自身的加成与倍率；不递归查询灵魂石。
     if item.id == "soul_stone" and Relics.Has(self, "soul_resonance") then
         local best = -math.huge
@@ -1242,7 +1252,8 @@ function Game:_Settle(state)
     self.lastRoundScore = self.roundScore
     self.bestRound = math.max(self.bestRound, self.round)
     self.bestRoundScore = math.max(self.bestRoundScore, self.roundScore)
-    if self.round % 2 == 0 then self.refreshes = self.refreshes + 1; TriggerFeedback.Refresh(events) end
+    self.refreshes = self.refreshes + 1
+    TriggerFeedback.Refresh(events)
     self:_CleanupRound()
     self.options = {}
     self.refreshUsed = false
@@ -1300,7 +1311,7 @@ function Game:_FinishReveal()
             return 0
         end
         local nextStage = self.stage + 1
-        local nextTarget = Game.GetTarget(nextStage)
+        local nextTarget = Game.GetTarget(nextStage, self.targetCurveVersion)
         self.score = self.score - paidTarget
         paid = paidTarget
         self.stage = nextStage

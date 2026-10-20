@@ -1,12 +1,12 @@
 -- V0.4 效果引擎：#1-31 与 #68-70 物品效果 + 已接线遗物钩子。规则保持纯 Lua，物理只提供接触与位置。
 -- 三类效果：
 --   Touch（摇晃阶段相邻触发，trigger="touch"）：
---     垃圾桶/大胃王/水果忍者/警察/小偷/老师/小刀/果农/食客/厨师切果。
+--     垃圾桶/大胃王/水果忍者/警察/小偷/老师/小刀/果农/食客/厨师加值/炊事兵。
 --     一次触发作用全部相邻合法目标并逐个计数（默认约定，待用户确认）。
 --     消灭/消耗类金币即时入账（“立刻产生的效果”；默认约定，待用户确认）。
 --   Aura（持续光环，Continuous 每步同步）：
---     橘子贴底+2；厨师相邻食物×2；水果商人钩子已留（实装时生效）。
---     光环重算前置 mult=1，不叠事件倍率（摇晃期无事件倍率可安全重置）。
+--     橘子贴底+3；厨师相邻食物×2；水果商人钩子已留（实装时生效）。
+--     光环每步重算并乘独立 eventMult，不擦掉气球／彩虹等已发生事件倍率。
 --   Settle（结算阶段，SettleEffects 于产金币前、SettleItem 产金币、PostSettle 产金币后）：
 --     种子50%变植物、气球膨胀/爆炸、学生计数成长、桂冠锁定最高价值、
 --     樱桃/半个樱桃再结算、信用卡永久-1。
@@ -51,7 +51,7 @@ local function PlantPool()
     return pool
 end
 
--- 学生正面/负面成长目标（item.txt #17；医生/士兵已入表）。
+-- 学生正面/负面成长目标（item.txt #17；医生/炊事兵保留兼容ID）。
 local STUDENT_GOOD = { "police", "chef", "teacher", "doctor", "soldier" }
 local STUDENT_BAD = { "thief", "killer", "gambler" }
 -- 警察消灭目标（#15：赌徒、小偷、杀手）。
@@ -134,33 +134,27 @@ end
 ------------------------------------------------------------------ 摇晃阶段：切割与学生成长
 
 --- 切水果公共实现：源实例原地转化为半份（保留uid），并在源位置旁生成另一份。
---- chefBonus=true（厨师#29）：两份产物价值各永久+3；extraBonus 再叠加（遗物厨师帽）。
+--- 厨师已改为强化食物，不再参与切割；这里只供小刀与水果忍者复用。
 --- 遗物 knife_skill（精进刀法）：50%概率额外再产一份半份。
 ---@param game BottleGame
 ---@param fruit ItemInstance
 ---@param contacts BottleStepContacts
 ---@param events GameEvent[]
----@param chefBonus boolean
----@param extraBonus number?
 ---@param cutter ItemInstance
 ---@return boolean
-local function CutFruit(game, fruit, contacts, events, chefBonus, extraBonus, cutter)
+local function CutFruit(game, fruit, contacts, events, cutter)
     local halfId = FULL_FRUIT[fruit.id]
     if not halfId then return false end
     local feedback = ItemFeedback(game, "cut", cutter, fruit, contacts)
     feedback.producedUids = {}
     local position = contacts.positions[fruit.uid]
-    local bonus = (chefBonus and 3 or 0) + (extraBonus or 0)
     game:_Transform(fruit, halfId, events)
-    if bonus > 0 then fruit.permBonus = fruit.permBonus + bonus end
     local extra = game:_Spawn(halfId, events, false, position)
-    if extra and bonus > 0 then extra.permBonus = extra.permBonus + bonus end
     if extra and extra.location == "bottle" then
         feedback.producedUids[#feedback.producedUids + 1] = extra.uid
     end
     if extra and Relics.Has(game, "knife_skill") and game:_RandomInt(2) == 1 then
         local third = game:_Spawn(halfId, events, false, position)
-        if third and bonus > 0 then third.permBonus = third.permBonus + bonus end
         if third and third.location == "bottle" then
             feedback.producedUids[#feedback.producedUids + 1] = third.uid
         end
@@ -229,8 +223,11 @@ local function Glutton(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
         FrameBudget.Checkpoint()
-        if other.uid ~= item.uid and Items.HasTag(other.id, "食物") then
+        if other.uid ~= item.uid and (Items.HasTag(other.id, "食物")
+            or (Relics.Has(game, "secret_recipe") and Items.IsPoop(other.id))) then
+            local secret = Items.IsPoop(other.id)
             if game:_Destroy(other.uid, other.temporary, events, item) then
+                if secret then TriggerFeedback.Relic(game, events, "secret_recipe") end
                 item.permBonus = item.permBonus + 1
                 item.scale = math.min(2, item.scale + 0.1)
                 game:ApplyScale(item, events)
@@ -254,7 +251,7 @@ local function FruitNinja(game, item, contacts, events)
         FrameBudget.Checkpoint()
         if other.uid ~= item.uid and FULL_FRUIT[other.id] then
             local value = game:_Value(other)
-            if CutFruit(game, other, contacts, events, false, nil, item) then
+            if CutFruit(game, other, contacts, events, item) then
                 item.permBonus = item.permBonus + value
                 events[#events + 1] = {
                     kind = "buff", uid = item.uid, id = item.id, value = value,
@@ -389,7 +386,7 @@ local function Teacher(game, item, contacts, events)
     return hit
 end
 
--- 小刀#24：将相邻的水果切成两份（冷却5秒）。
+-- 小刀#24：切完整水果；成功消耗小鸡获得其消费前价值×2金币，共用4秒冷却。
 ---@param game BottleGame
 ---@param item ItemInstance
 ---@param contacts BottleStepContacts
@@ -400,9 +397,13 @@ local function Knife(game, item, contacts, events)
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
         FrameBudget.Checkpoint()
         if other.uid ~= item.uid and FULL_FRUIT[other.id] then
-            if CutFruit(game, other, contacts, events, false, nil, item) then hit = true end
-        elseif other.id == "sheep" and Expansion.ShedWool(game, other, events) then
-            hit = true
+            if CutFruit(game, other, contacts, events, item) then hit = true end
+        elseif other.id == "chick" then
+            local value = game:_Value(other)
+            if game:_Destroy(other.uid, other.temporary, events, item) then
+                game:_Score(events, item, value * 2, contacts.positions[item.uid], "consume")
+                hit = true
+            end
         end
     end
     return hit
@@ -452,30 +453,52 @@ local function Diner(game, item, contacts, events)
     return hit
 end
 
--- 厨师#29：将相邻完整水果切成两份并使产物价值永久+3（光环×2在 Continuous）。
--- 遗物 chef_hat（厨师帽）：可消耗相邻小刀，为产物额外永久+1。
+-- 厨师#29：相邻食物永久+1；厨师帽吃刀永久强化这位厨师后续的加值能力。
 ---@param game BottleGame
 ---@param item ItemInstance
 ---@param contacts BottleStepContacts
 ---@param events GameEvent[]
 ---@return boolean
 local function Chef(game, item, contacts, events)
-    local extra = 0
+    local consumed = false
     if Relics.Has(game, "chef_hat") then
         for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
             FrameBudget.Checkpoint()
             if other.id == "knife" and game:_Destroy(other.uid, false, events, item) then
-                extra = extra + 1
+                item.chefBoost = (item.chefBoost or 0) + 1
+                consumed = true
             end
         end
     end
-    -- 成功吃刀本身也是效果，即使本次没有可切的水果也应进入冷却。
-    local hit = extra > 0
-    if hit then TriggerFeedback.Relic(game, events, "chef_hat") end
+    local hit = consumed
+    if consumed then TriggerFeedback.Relic(game, events, "chef_hat") end
+    local increase = 1 + (item.chefBoost or 0)
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
         FrameBudget.Checkpoint()
-        if other.uid ~= item.uid and FULL_FRUIT[other.id] then
-            if CutFruit(game, other, contacts, events, true, extra, item) then hit = true end
+        if other.uid ~= item.uid and Items.HasTag(other.id, "食物") then
+            other.permBonus = other.permBonus + increase
+            events[#events + 1] = {kind = "buff", uid = other.uid, id = other.id, value = increase}
+            hit = true
+        end
+    end
+    return hit
+end
+
+-- 炊事兵沿用soldier身份与图标；每只成功消费的小鸡各增值并生成一个幽灵。
+---@param game BottleGame
+---@param item ItemInstance
+---@param contacts BottleStepContacts
+---@param events GameEvent[]
+---@return boolean
+local function CookSoldier(game, item, contacts, events)
+    local hit = false
+    for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
+        if other.id == "chick" and game:_Destroy(other.uid, false, events, item) then
+            item.permBonus = item.permBonus + 1
+            events[#events + 1] = {kind = "buff", uid = item.uid, id = item.id, value = 1}
+            game:_Spawn("ghost", events, false, contacts.positions[item.uid])
+            hit = true
         end
     end
     return hit
@@ -494,6 +517,7 @@ local TOUCH = {
     fruit_farmer = FruitFarmer,
     diner = Diner,
     chef = Chef,
+    soldier = CookSoldier,
     killer = Killer,
 }
 
@@ -544,7 +568,7 @@ local function AuraMult(game, item, contacts, hasChef, hasMerchant)
 end
 
 --- 持续型接触效果：每个物理步同步状态，不消耗冷却。
---- 橘子/半块橘子贴底+2；光环每步重算（重算前置 mult=1，摇晃期无事件倍率可安全重置）。
+--- 橘子/半块橘子贴底+3；光环每步重算（重算前置 mult=1，摇晃期无事件倍率可安全重置）。
 ---@param game BottleGame
 ---@param contacts BottleStepContacts
 ---@param events GameEvent[]
@@ -559,7 +583,7 @@ function Effects.Continuous(game, contacts, events)
         FrameBudget.Checkpoint()
         if item.id == "orange" or item.id == "orange_half" then
             local touching = contacts.bottom[item.uid] == true
-            local wanted = touching and 2 or 0
+            local wanted = touching and 3 or 0
             if item.bonus ~= wanted then
                 item.bonus = wanted
                 events[#events + 1] = {
@@ -572,16 +596,11 @@ function Effects.Continuous(game, contacts, events)
         end
         local aura = AuraMult(game, item, contacts, hasChef, hasMerchant) * (item.eventMult or 1)
         if item.mult ~= aura then
-            local previous = item.mult
-            local previousValue = game:_Value(item)
             item.mult = aura
             events[#events + 1] = {
                 kind = "buff", uid = item.uid, id = item.id, value = aura,
             }
-            if aura > previous and aura > 0 and game.phase == "running" then
-                TriggerFeedback.Reward(events, item, game:_Value(item) - previousValue,
-                    "value", "collision", contacts.positions[item.uid])
-            end
+            -- 光环接触切换只同步倍率，不作为离散碰撞收益跳字。
         end
     end
 end
@@ -679,9 +698,16 @@ function Effects.SettleItem(game, item, events, position, contacts)
             end
         end
     end
+    -- 只读结算详情：保留清理前的实例标量，不写回牌库或存档。
+    -- 单件价值与多次结算收益分离，樱桃／壁虎不能把总收益当成价值。
+    local finalItem = {} --[[@as ItemInstance]]
+    for key, field in pairs(item) do
+        if type(field) ~= "table" then finalItem[key] = field end
+    end
     for _ = 1, times do
         FrameBudget.Checkpoint()
         game:_Score(events, item, value, position)
+        events[#events].finalItem = finalItem
     end
 end
 

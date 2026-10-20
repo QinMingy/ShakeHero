@@ -442,7 +442,7 @@ function Extra.Apply(game, item, contacts, events)
         local produced = {}
         RecordProduct(produced, first)
         -- 每周期保底永久一件，独立20%瓶顶追加六件临时；硬币雨只换类型。
-        if game:_RandomInt(5) == 1 then
+        if game:_RandomInt(100) <= 30 then
             for _ = 1, 6 do
                 FrameBudget.Checkpoint()
                 local extra = game:_SpawnTop(spawnId, events, true)
@@ -474,6 +474,15 @@ function Extra.Apply(game, item, contacts, events)
     elseif id == "star" then
         item.bonus = item.bonus + 1
         Buff(game, item, events, 1)
+        if Relics.Has(game, "meteor_shower") and game:_RandomInt(5) == 1 then
+            local copy = game:_Spawn("star", events, true, contacts.positions[item.uid])
+            copy.valueBase, copy.bonus, copy.permBonus = item.valueBase, item.bonus, item.permBonus
+            copy.mult, copy.eventMult, copy.permMult = item.mult, item.eventMult, item.permMult
+            copy.scale, copy.weight, copy.jackpotBonus = item.scale, item.weight, item.jackpotBonus
+            copy.cactusBonus = item.cactusBonus
+            if copy.location == "bottle" then game:ApplyScale(copy, events) end
+            TriggerFeedback.Relic(game, events, "meteor_shower")
+        end
         game:_TeleportTop(item, events)
         return true
     end
@@ -527,7 +536,7 @@ function Extra.AfterSettle(game, events)
     end
 end
 
---- 位移已经由 Game 按真实物理米差分累积；按源表分别消费大胃王50米、兔子100米。
+--- 位移已经由 Game 按真实物理米差分累积；按源表分别消费大胃王100米、兔子100米。
 --- 只调收益阈值，不缩放物理或硬限每回合次数。
 ---@param game BottleGame
 ---@param item ItemInstance
@@ -535,7 +544,7 @@ end
 function Extra.TrackDistance(game, item, events)
     if item.location ~= "bottle" then return end
     if item.id == "glutton" then
-        local threshold = 50
+        local threshold = 100
         local coaches = 0
         for _, other in ipairs(game:BottleItems()) do
             FrameBudget.Checkpoint()
@@ -557,20 +566,24 @@ function Extra.TrackDistance(game, item, events)
         while item.distance >= threshold do
             FrameBudget.Checkpoint()
             item.distance = item.distance - threshold
+            local permanent = game:_RandomInt(2) == 1
+            if permanent then Permanent(game, item, events, 1)
+            else
+                item.bonus = item.bonus + 1
+                Buff(game, item, events, 1)
+            end
+            TriggerFeedback.Reward(events, item, 1, permanent and "permanent" or "value", "move",
+                game._lastPositions[item.uid])
             if Relics.Has(game, "in_groups") then
                 for _, other in ipairs(game:BottleItems()) do
                     FrameBudget.Checkpoint()
-                    if other.id == "rabbit" then
+                    if other.id == "rabbit" and other.uid ~= item.uid then
                         Permanent(game, other, events, 1)
                         TriggerFeedback.Reward(events, other, 1, "permanent", "move",
                             game._lastPositions[other.uid])
-                        if other.uid ~= item.uid then TriggerFeedback.Relic(game, events, "in_groups") end
+                        TriggerFeedback.Relic(game, events, "in_groups")
                     end
                 end
-            else
-                Permanent(game, item, events, 1)
-                TriggerFeedback.Reward(events, item, 1, "permanent", "move",
-                    game._lastPositions[item.uid])
             end
         end
     end

@@ -10,12 +10,13 @@ local function Close(a, b) assert(math.abs(a - b) < 1e-7, tostring(a) .. " ~= " 
 local function Make(ids, relics)
     local game = Repair.Fixture(ids, relics)
     assert(game:Start())
+    rawset(game, "_RandomInt", function(_, maximum) return 1 end)
     return game
 end
 
-Test("说明与兔子100米、大胃王50米阈值及运动员屏蔽一致", function()
+Test("说明与兔子100米、大胃王100米阈值及运动员屏蔽一致", function()
     assert(Items.byId.rabbit.effect:find("100m", 1, true))
-    assert(Items.byId.glutton.effect:find("50m", 1, true))
+    assert(Items.byId.glutton.effect:find("100m", 1, true))
     assert(Items.byId.discus_athlete.pool == false, "飞盘运动员屏蔽卡池，不删除定义或旧实例")
 end)
 
@@ -76,19 +77,19 @@ Test("成群结队只按各兔真实达标奖励且不改群体规则", function
     Close(first.permBonus, 2); Close(second.permBonus, 2)
 end)
 
-Test("大胃王50米阈值、教练缩幅奖励和下限保留", function()
+Test("大胃王100米阈值、教练缩幅奖励和下限保留", function()
     local game = Make({"glutton", "fitness_coach"})
     local glutton, coach = assert(game:Get(1)), assert(game:Get(2))
-    glutton.scale, glutton.distance = 1.5, 49.999
+    glutton.scale, glutton.distance = 1.5, 99.999
     Extra.TrackDistance(game, glutton, {})
     Close(glutton.scale, 1.5); Close(coach.permBonus, 0)
-    glutton.distance = 50
-    Extra.TrackDistance(game, glutton, {})
-    Close(glutton.scale, 1.3); Close(coach.permBonus, 1)
     glutton.distance = 100
     Extra.TrackDistance(game, glutton, {})
+    Close(glutton.scale, 1.3); Close(coach.permBonus, 1)
+    glutton.distance = 200
+    Extra.TrackDistance(game, glutton, {})
     Close(glutton.scale, 1); Close(coach.permBonus, 3)
-    glutton.distance = 50
+    glutton.distance = 100
     Extra.TrackDistance(game, glutton, {})
     Close(glutton.scale, 1); Close(coach.permBonus, 3); Close(glutton.distance, 0)
 end)
@@ -128,7 +129,7 @@ function Tests.Run()
         local ok, err = pcall(entry.run)
         assert(ok, "[DistanceTests] " .. entry.name .. ": " .. tostring(err))
     end
-    print(string.format("[DistanceTests] %d项通过：兔子100米／大胃王50米／飞盘5米／真实位置／群体／生命周期", #cases))
+    print(string.format("[DistanceTests] %d项通过：兔子100米／大胃王100米／飞盘5米／真实位置／群体／生命周期", #cases))
     return #cases
 end
 return Tests

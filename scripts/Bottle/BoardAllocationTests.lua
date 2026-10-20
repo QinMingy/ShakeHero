@@ -65,8 +65,9 @@ local function boundary(work)
     local function noop() end
     nvgSave=function() state.depth=state.depth+1 end
     nvgRestore=function() state.depth=state.depth-1;assert(state.depth>=0) end
-    nvgIntersectScissor,nvgFontFace,nvgTextAlign,nvgTranslate,nvgRotate,nvgScale,nvgFillColor,nvgRGBA=
-        noop,noop,noop,noop,noop,noop,noop,noop
+    nvgIntersectScissor,nvgFontFace,nvgTextAlign,nvgTranslate,nvgRotate,nvgScale,nvgFillColor=
+        noop,noop,noop,noop,noop,noop,noop
+    rawset(_G,"nvgRGBA",noop)
     local currentSize=16
     nvgFontSize=function(_,size) currentSize=size end
     nvgTextBounds=function(_,_,_,text) state.bounds=state.bounds+1;return #text*currentSize*.5 end

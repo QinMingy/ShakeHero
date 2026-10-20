@@ -61,7 +61,7 @@ local function Test(name, run) cases[#cases + 1] = {name = name, run = run} end
 Test("34至37编号品质开放状态及恢复一致", function()
     local game = Fixture({})
     local ids = {"wool_recycle", "dice_jackpot", "calf_rush", "lucky_roulette"}
-    assert(#Relics.list == 37)
+    assert(#Relics.list == 39)
     for index, id in ipairs(ids) do
         local def = assert(Relics.byId[id])
         assert(def.numberId == 33 + index and Relics.byNumber[33 + index] == def)
@@ -70,7 +70,7 @@ Test("34至37编号品质开放状态及恢复一致", function()
     end
     local restored = Game.Restore(game:Snapshot())
     for _, id in ipairs(ids) do assert(restored.relics[id]) end
-    assert(#Relics.Available(restored) == 33)
+    assert(#Relics.Available(restored) == 35)
 end)
 
 Test("羊毛回收成功消费命中才临时瓶顶生成", function()
@@ -351,7 +351,7 @@ Test("尺寸复原与大胃王缩小向公共物理入口传旧尺寸", function
     RelicExpansion.OnRoll(game,Item(game,1),2,{})
     Item(game,2).scale=1.8
     RelicExpansion.OnDash(game,Item(game,2),{})
-    Item(game,3).scale,Item(game,3).distance=1.5,50
+    Item(game,3).scale,Item(game,3).distance=1.5,100
     ExtraEffects.TrackDistance(game,Item(game,3),{})
     assert(#calls==3)
     Close(calls[1].previous,2.5); Close(calls[1].current,1)

@@ -79,7 +79,7 @@ Test("四物品编号基础品质与冷却由真实目录定义", function()
         { id = "spinning_top", base = 3, rarity = 1 },
         { id = "windmill", base = 4, rarity = 2 },
         { id = "gear", base = 4, rarity = 2 },
-        { id = "roulette", base = 4, rarity = 3 },
+        { id = "roulette", base = 4, rarity = 2 },
     }) do
         local def = assert(Items.byId[row.id])
         assert(def.numberId == 93 + index and def.implemented and def.pool)
@@ -106,6 +106,7 @@ end)
 
 Test("陀螺按自然绝对角程满圈加临时值且多圈保余程", function()
     local game = Fixture({ "spinning_top" })
+    rawset(game, "_RandomInt", function(_, maximum) return math.min(maximum, 30) end)
     local top = Item(game, 1)
     game:Step(0, {angularTravel={[1]=TURN-.1}})
     Close(top.bonus, 0)
@@ -122,6 +123,7 @@ end)
 
 Test("angle回退包含反转和跨pi连续转角且排除强制offset", function()
     local game = Fixture({ "spinning_top" })
+    rawset(game, "_RandomInt", function(_, maximum) return math.min(maximum, 30) end)
     game:Step(0, {angles={[1]=0}})
     for _ = 1, 4 do
         game:Step(0, {angles={[1]=math.pi*.75}})
@@ -383,6 +385,7 @@ end)
 
 Test("时长端点仍发旋转收益而settle后不再触发", function()
     local game = Fixture({ "spinning_top" })
+    rawset(game, "_RandomInt", function(_, maximum) return math.min(maximum, 30) end)
     local events = game:Step(game:Duration(), {angularTravel={[1]=TURN}})
     assert(game.phase == "settle")
     Close(Item(game, 1).bonus, 1)

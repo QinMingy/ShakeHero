@@ -54,7 +54,7 @@ Test("新局普通一次遗物零、准备与物品仍连续共享",function()
     game.refreshes = 4
     assert(game:Reroll() and game:Reroll() and game.refreshes == 2)
     Finish(game)
-    assert(game.relicRefreshes == 0 and game:DraftRefresh() and game:DraftRefresh())
+    assert(game.relicRefreshes == 0 and game:DraftRefresh() and game:DraftRefresh() and game:DraftRefresh())
     assert(game.refreshes == 0 and not game:DraftRefresh())
 end)
 
@@ -63,6 +63,7 @@ Test("遗物免费一次普通零也可刷、普通多次也不能续刷",functi
         local game = Prepare()
         game.refreshes = balance
         Enter(game)
+        game.refreshes = balance
         assert(game.refreshes == balance and game:DraftRefresh())
         assert(game.refreshes == balance and game.relicRefreshes == 0 and game.refreshUsed)
         local spent = game:Snapshot()
@@ -230,8 +231,8 @@ Test("UI按phase和relicDraft动态选池、遗物提示不写共享",function()
     assert(RefreshUI.Count(game) == 1 and RefreshUI.ButtonText(game) == "免费刷新 · 1 次")
     assert(RefreshUI.Hint(game):find("免费1次",1,true) and not RefreshUI.Hint(game):find("共享",1,true))
     assert(game:DraftRefresh() and RefreshUI.Count(game) == 0)
-    assert(RefreshUI.ButtonText(game) == "免费刷新 · 0 次" and game.refreshes == 9)
-    assert(game:Skip() and RefreshUI.Count(game) == 9)
+    assert(RefreshUI.ButtonText(game) == "免费刷新 · 0 次" and game.refreshes == 10)
+    assert(game:Skip() and RefreshUI.Count(game) == 10)
 end)
 
 ---@return integer

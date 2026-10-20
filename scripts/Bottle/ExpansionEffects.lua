@@ -100,6 +100,9 @@ end
 local function Animal(other) return Items.HasTag(other.id, "动物") end
 ---@param other any
 ---@return boolean
+local function GrassEater(other) return other.id == "sheep" or other.id == "calf" end
+---@param other any
+---@return boolean
 local function Plant(other) return Items.HasTag(other.id, "植物") end
 ---@param contacts any
 ---@return any
@@ -144,9 +147,8 @@ function Expansion.Touches(game, item, contacts)
         return not item.anchored and (item.geckoContactTime or 0) >= 0.25 - EPSILON
             and GeckoContact(game, item, contacts)
     end
-    if id == "grass" or id == "hay" then
-        return FirstAdjacent(game, item, contacts, Animal) ~= nil
-    end
+    if id == "grass" then return FirstAdjacent(game, item, contacts, GrassEater) ~= nil end
+    if id == "hay" then return FirstAdjacent(game, item, contacts, Animal) ~= nil end
     if id == "poop" or id == "golden_poop" or id == "diamond_poop" or id == "rainbow_poop" then
         return FirstAdjacent(game, item, contacts, Plant) ~= nil
     end
@@ -403,7 +405,7 @@ function Expansion.Apply(game, item, contacts, events)
         return egg ~= nil
     elseif id == "grass" or id == "poop" or id == "golden_poop"
         or id == "diamond_poop" or id == "rainbow_poop" then
-        local consumer = FirstAdjacent(game, item, contacts, id == "grass" and Animal or Plant)
+        local consumer = FirstAdjacent(game, item, contacts, id == "grass" and GrassEater or Plant)
         if not consumer then return false end
         return game:_Destroy(item.uid, false, events, consumer, "consume") == true
     elseif id == "hay" then
@@ -451,7 +453,7 @@ function Expansion.Apply(game, item, contacts, events)
                         game:_Score(events, item, value * 2, Position(game, item.uid, contacts), "consume", id)
                     elseif id == "chicken_keeper" then
                         game:_Score(events, item, value, Position(game, item.uid, contacts), "consume", id)
-                        if game:_RandomInt(2) == 1 then
+                        if game:_RandomInt(100) <= 45 then
                             game:_Spawn("chick", events, false, Position(game, item.uid, contacts))
                         end
                     elseif id == "sweater" then Permanent(game, item, events, 1) end
@@ -577,7 +579,7 @@ function Expansion.OnRefresh(game)
     end
 end
 
---- 剧烈摇晃或小刀触碰的公共脱毛；一次脱落全部库存，产物默认永久。
+--- 剧烈摇晃触发的公共脱毛；一次脱落全部库存，产物默认永久。
 --- 先清库存再生成，满瓶时由公共生成队列承接，不能复制或丢失库存。
 ---@param game BottleGame
 ---@param sheep any
@@ -645,9 +647,9 @@ function Expansion.AfterSettle(game, events, contacts)
     for _, coin in ipairs(game:BottleItems()) do
         FrameBudget.Checkpoint()
         if coin.id == "removal_coin" and game:_Destroy(coin.uid, false, events, nil, "self") then
-            game.removals = game.removals + 1
+            game.removals = game.removals + 2
             game.revision = game.revision + 1
-            print(string.format("[移除币] #%d结算后成功自耗，机会+1，剩余%d", coin.uid, game.removals))
+            print(string.format("[移除币] #%d结算后成功自耗，机会+2，剩余%d", coin.uid, game.removals))
         end
     end
     for _, egg in ipairs(game:BottleItems()) do

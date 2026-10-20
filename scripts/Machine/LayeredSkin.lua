@@ -24,6 +24,7 @@ local RelicView=require("Bottle.RelicView")
 local DeductionNote=require("Machine.DeductionNote")
 local DeveloperOverlay=require("Machine.DeveloperOverlay")
 local RulesUI=require("Bottle.RulesUI")
+local ShakeHint=require("Bottle.ShakeHint")
 ---@type any
 local Skin={}
 local ink={226,214,174,255}
@@ -528,6 +529,7 @@ function Skin.Apply(view,title,help,gm)
     end
     panel(view,"screen",L.screen,4,true)
     ScreenAssembly.Attach(view)
+    ShakeHint.Attach(view)
     -- 数字倒计时仅随进行中的底部状态牌显示，计时灯条不再绘制。
     view.roundLabel:SetStyle({zIndex=2})
     view.goalLabel:SetStyle({zIndex=4})
@@ -673,6 +675,7 @@ function Skin.Layout(view)
     view.modal:SetStyle({padding=12*s})
     RelicView.Layout(view)
     Skin.Footer(view)
+    ShakeHint.Sync(view)
     if view.startScreen then view.startScreen:Layout() end
 end
 
@@ -763,7 +766,11 @@ function Skin.SyncPages(view)
         deck.rect=deckRect
     end
     view.footer:SetVisible(not draftPage and not deckOpen)
-    view.board:SetVisible(not draftPage)
+    view.board:SetVisible(not draftPage and not deckOpen)
+    -- Board在候选展开时不会逐帧Update；页面切回立即同步最终回合小计，避免闪现旧值。
+    if view.game.phase=="draft" then
+        view.board.roundScore:Sync("draft",view.game.lastRoundScore,0,0)
+    end
     RelicView.SetVisible(view,not draftPage and not deckOpen and view.game.phase~="over")
     local props=view.deckButton.props
     if props.left~=deckRect[1]*m.scale or props.top~=deckRect[2]*m.scale
@@ -774,6 +781,7 @@ function Skin.SyncPages(view)
     m.pageMotion:Targets(drafting,deckOpen)
 end
 function Skin.SetDraftOpen(view,open)
+    if open then view:CloseDefinition();view:CloseItemDetail() end
     view.choiceHidden=not open
     view.draft:SetVisible(open and view.machineSkin.clock.flashElapsed<0)
     Skin.SyncPages(view)
@@ -819,7 +827,7 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
     local relicDraft=view.game.relicDraft==true
     prepareDraftMotion(view,DraftValue)
     local screen=UI.Panel{id="draftDisplay",padding=0,backgroundColor={12,32,25,255},overflow="hidden"}
-    place(screen,L.board,s)
+    place(screen,{L.board[1],L.board[2],L.board[3],L.board[4]-ShakeHint.Reserve(view.game)},s)
     local icon=Icon{id="draftPreviewIcon",itemId=id,isRelic=relicDraft,
         rollValue=type(option)=="table" and option.rollValue or nil,
         woolCount=type(option)=="table" and option.woolCount or nil,
@@ -966,6 +974,7 @@ function Skin.Update(view)
     local m=view.machineSkin
     if not m then return end
     TargetSwap.Sync(view)
+    ShakeHint.Sync(view)
     RelicView.Update(view)
     if view.game.phase~="draft" then
         m.pageMotion:Clear("draft")

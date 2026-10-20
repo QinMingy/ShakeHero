@@ -31,6 +31,7 @@ end
 function RelicState.InitItem(item)
     item.permMult = 1
     item.tokenAttempted = false
+    item.chefBoost = 0
 end
 
 --- 读取旧 version=2 存档的可选对局字段。缺省字段只补本模块状态。

@@ -212,6 +212,18 @@ end
 ---@field _prefixWidth number?
 ---@field _textWidth number?
 
+---@class BottleRoundResidue
+---@field id string
+---@field x number
+---@field y number
+---@field angle number
+---@field radius number
+---@field rollValue number?
+---@field woolCount number?
+---@field soft BottleSoftPose[]?
+---@field finalItem ItemInstance? 结算时的独立标量快照
+---@field finalValue number? 本回合单次最终结算价值，不是该物品总收益
+
 ---@class BottleBoard : Widget
 ---@field layered boolean?
 ---@field game BottleGame
@@ -252,7 +264,8 @@ end
 ---@field isPaused (fun():boolean)? 主菜单覆盖时与玩法一起暂停表现
 ---@field animateAppearanceWhilePaused (fun():boolean)? 教程准备阶段仅放行物品入场，继续暂停其余表现
 ---@field pulses table<number,number>
----@field residue table<number,{id:string,x:number,y:number,angle:number,radius:number,rollValue:number?,woolCount:number?,soft:BottleSoftPose[]?}> 结算残留：物品回牌库后保留的最后姿态
+---@field residue table<number,BottleRoundResidue> 结算后按原位保留的只读姿态与详情
+---@field _residueUids integer[] 绘制与拾取共用的稳定UID顺序
 ---@field pops BottlePopPose[] 出现弹跳动效；按 uid 查表的 popByUid 与其同步维护
 ---@field popByUid table<number,BottlePopPose?>
 ---@field bursts BottlePopParticle[] 入场/爆炸的重力像素粒子（瓶内米制坐标）
@@ -561,7 +574,8 @@ function Board:Update(dt)
     if self.game.phase == "reveal" then
         for _, pending in ipairs(self.scoreQueue) do pendingScore = pendingScore + pending.value end
     end
-    local transfer = self.roundScore:Sync(self.game.phase, self.game.roundScore, pendingScore,
+    local transfer = self.roundScore:Sync(self.game.phase,
+        phase == "draft" and self.game.lastRoundScore or self.game.roundScore, pendingScore,
         self.shakeCoinsInFlight)
     if transfer then self:LaunchCoins(transfer, 32, 28, "shake") end
     if phase == "reveal" and previousPhase ~= "reveal" then
@@ -833,6 +847,14 @@ function Board:ApplyEffects(events)
                 residue.angle, residue.radius = poseAngle, def and def.radius * (item.scale or 1) or poseRadius
                 residue.rollValue, residue.woolCount = event.rollValue or item.rollValue, item.woolCount
                 residue.soft = self.physics:GetSoftPose(event.uid)
+                residue.finalItem, residue.finalValue = event.finalItem, event.finalItem and event.value or nil
+                if residue.finalItem and residue.finalItem.id ~= residue.id then
+                    -- 尾声转化后仍显示瓶中当前身份；金额保留转化前实际结算值。
+                    local displayItem = {} --[[@as ItemInstance]]
+                    for key, field in pairs(residue.finalItem) do displayItem[key] = field end
+                    displayItem.id = residue.id
+                    residue.finalItem = displayItem
+                end
                 self.residue[event.uid] = residue
             end
         elseif event.kind == "refreshGain" then
@@ -927,10 +949,37 @@ function Board:GetBottleTransform()
     return l.x + l.w / 2 + self.visualX, l.y + l.h / 2 + 3.2 * ppu + self.visualY, ppu
 end
 
+-- 只允许在已结算、候选收起后的原瓶画面回看；移除物品后旧残留立即失效。
+---@param uid integer
+---@return BottleRoundResidue?
+function Board:GetRoundResidue(uid)
+    if self.game.phase ~= "draft" then return nil end
+    local residue, owned = self.residue[uid], self.game:Get(uid)
+    if residue and residue.finalItem and residue.finalValue ~= nil
+        and owned and owned.location == "deck" then return residue end
+    return nil
+end
+
+---@return integer[]
+function Board:ResidueOrder()
+    local order = Clear(self._residueUids)
+    self._residueUids = order
+    for uid in pairs(self.residue) do order[#order + 1] = uid end
+    table.sort(order)
+    return order
+end
+
 ---@param uid integer
 ---@return {x:number,y:number,w:number,h:number}
 function Board:GetItemBounds(uid)
     local x, y, ppu = self:GetBottleTransform()
+    local residue = self:GetRoundResidue(uid)
+    if residue then
+        if residue.soft then return SoftView.PoseBounds(residue.soft, x, y, ppu) end
+        local extent = Art.ItemExtent(residue.id, residue.radius * ppu, -residue.angle, residue.woolCount) + 4
+        return {x = x + residue.x * ppu - extent, y = y - residue.y * ppu - extent,
+            w = extent * 2, h = extent * 2}
+    end
     local soft = SoftView.Bounds(self.physics, uid, x, y, ppu)
     if soft then return soft end
     local px, py, angle, radius = self.physics:GetPose(uid)
@@ -950,6 +999,21 @@ function Board:PickItem(x, y)
     local l = self:GetAbsoluteLayout()
     if x < l.x or x > l.x + l.w or y < l.y or y > l.y + l.h then return 0 end
     local originX, originY, ppu = self:GetBottleTransform()
+    if self.game.phase == "draft" then
+        local order = self:ResidueOrder()
+        for index = #order, 1, -1 do
+            local uid = order[index]
+            local res = self:GetRoundResidue(uid)
+            if res then
+                local hit = res.soft and SoftView.HitPose(res.soft,
+                    (x - originX) / ppu, (originY - y) / ppu)
+                if hit or (not res.soft and Art.HitItem(res.id,
+                    x - originX - res.x * ppu, y - originY + res.y * ppu,
+                    res.radius * ppu, -res.angle, res.woolCount)) then return uid end
+            end
+        end
+        return 0
+    end
     local items = BottleItems(self, "_pickItems")
     for i = #items, 1, -1 do
         local item = items[i]
@@ -1098,9 +1162,8 @@ function Board:Render(vg)
             PixelFrame(vg, sx, sy, sr + 5 + math.floor(age * 28), C.warning,
                 math.floor(180 * (1 - age / .45)))
         end
-        -- 厨师本体源表未写冷却，只有持帽时显示遗物明确声明的1秒。
+        -- 冷却提示按物品本体白名单，厨师帽不改变厨师冷却。
         local hasCooldown = Items.HasCooldown(item.id)
-            or (item.id == "chef" and Relics.Has(self.game, "chef_hat"))
         local cooling = self.game.phase == "running" and hasCooldown and item.remaining > 0
         local pop = self.popByUid and self.popByUid[item.uid] or nil
         -- 错峰等待中的物品保持不可见（含选中框与冷却环），轮到它时才弹跳出现。
@@ -1152,16 +1215,28 @@ function Board:Render(vg)
     end
     -- 结算残留：物品回牌库、刚体被移除后按结算瞬间的最后姿态保留绘制，
     -- 三选一/结束阶段瓶子不再瞬间清空；新回合重摆布局时由 ResetEffects 清除。
-    -- 残留只读不可点击（PickItem 仅遍历实时 BottleItems）。
-    for resUid, res in pairs(self.residue) do
-        local staged = self.simulationPending and self.game:Get(resUid)
-        if not staged or staged.location ~= "bottle" then
+    -- 残留不参与物理；收起候选时允许按保存姿态查看只读结算详情。
+    -- 绘制与拾取共用UID升序，重叠时只选最后绘制的顶层。
+    for _, resUid in ipairs(self:ResidueOrder()) do
+        local res = self.residue[resUid]
+        local owned = self.game:Get(resUid)
+        if owned and owned.location == "deck" then
             local sx, sy = x + res.x * self.ppu, y - res.y * self.ppu
             local sr = self:VisualRadius(resUid, res.radius) * self.ppu
             if self.pulses[resUid] then
                 local age = self.pulses[resUid]
                 PixelFrame(vg, sx, sy, sr + 5 + math.floor(age * 28), C.warning,
                     math.floor(180 * (1 - age / .45)))
+            end
+            if resUid == self.selectedUid and self:GetRoundResidue(resUid) then
+                if res.soft then
+                    for _, pose in ipairs(res.soft) do
+                        Art.BaconSegmentOutline(vg, x + pose.x * self.ppu, y - pose.y * self.ppu, -pose.angle,
+                            pose.halfLength * self.ppu, pose.halfWidth * self.ppu, pose.u0, pose.u1, 4)
+                    end
+                else
+                    Art.ItemOutline(vg, res.id, sx, sy, sr, -res.angle, res.rollValue, res.woolCount, 4)
+                end
             end
             if res.soft then SoftView.Draw(vg, res.soft, x, y, self.ppu)
             else Art.Item(vg, res.id, sx, sy, sr, -res.angle, false, res.rollValue, res.woolCount) end

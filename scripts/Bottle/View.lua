@@ -461,21 +461,25 @@ end
 function View:InspectItem(uid)
     if self.definitionModal:IsVisible() then return end
     local item = self.game:Get(uid)
+    local residue = self.board:GetRoundResidue(uid)
     if Busy(self.game) or self.modal:IsVisible() or self.draft:IsVisible()
-        or not item or item.location ~= "bottle" then
+        or not item or (item.location ~= "bottle" and not residue) then
         self:CloseItemDetail()
         return
     end
     if self.tutorial and not self.tutorial:AllowsInspection(item,"bottle") then return end
-    self:ShowItemNote(item, "bottle")
+    if residue then
+        self:ShowItemNote(residue.finalItem, "round", residue.finalValue)
+        print(string.format("[回合详情] 回合%d UID=%d 价值=%s", self.game.round, uid, Money.Format(residue.finalValue)))
+    else self:ShowItemNote(item, "bottle") end
     if self.tutorial then self.tutorial:OnInspected(item,"bottle") end
 end
 
-function View:ShowItemNote(item, source)
+function View:ShowItemNote(item, source, finalValue)
     local def = Items.byId[item.id]
     self.detailSource = source
     self.selectedUid = item.uid
-    self.board.selectedUid = source == "bottle" and item.uid or 0
+    self.board.selectedUid = (source == "bottle" or source == "round") and item.uid or 0
     self.deckDetailUid = source == "deck" and item.uid or 0
     if self.deckBoard then self.deckBoard.selectedUid = self.deckDetailUid end
     self.relicDetailId = ""
@@ -484,13 +488,14 @@ function View:ShowItemNote(item, source)
     self.detailIcon.isRelic = false
     self.detailTitle:SetText(def.name)
     self.itemNote:SetMeta(Items.rarityNames[def.rarity] .. " · 持有编号 #" .. item.uid)
-    self.itemNote:SetStatus(nil); self.itemNote:SetAction(nil, nil)
+    self.itemNote:SetStatus(source == "round" and "本回合最终价值" or nil)
+    self.itemNote:SetAction(nil, nil)
     if source == "deck" and self.inventoryOpen and self.inventoryTab == "items" then
         self.itemNote:SetAction("移除", function() self:ConfirmRemoveDeckItem(item.uid) end,
             {danger = true, disabled = Busy(self.game)})
     end
     self.itemNote:SetStatsVisible(true)
-    self.detailGold:SetText(Money.Format(self.game:_Value(item)))
+    self.detailGold:SetText(Money.Format(finalValue ~= nil and finalValue or self.game:_Value(item)))
     self.detailTag:SetText(Items.TagsText(def))
     self.detailTag:SetVisible(Items.TagsText(def) ~= "")
     self.detailEffect:SetText(ItemText.Effect(self.game, item.id, item))
@@ -582,6 +587,8 @@ function View:Update(force)
         local source = self.detailSource
         local invalid = source == "bottle" and (self.modal:IsVisible() or self.draft:IsVisible()
                 or not item or item.location ~= "bottle")
+            or source == "round" and (self.modal:IsVisible() or self.draft:IsVisible()
+                or not self.board:GetRoundResidue(self.selectedUid))
             or source == "deck" and (not self.inventoryOpen or self.inventoryTab ~= "items" or not item)
             or source == "relic-deck" and (not self.inventoryOpen or self.inventoryTab ~= "relics"
                 or not Relics.Has(game, self.relicDetailId))

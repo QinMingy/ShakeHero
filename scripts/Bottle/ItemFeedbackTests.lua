@@ -249,11 +249,11 @@ Test("绘制只读；杀手有红交叉刀光，警察只有原有灰烟", funct
     local oldDraw = coin.Draw
     coin.Draw = package.loaded["Bottle.CoinIcon"].Draw
     for _, name in ipairs(globals) do old[name] = rawget(_G,name); _G[name] = function() end end
-    _G.nvgRGBA = function(r,g,b,a)
+    rawset(_G,"nvgRGBA",function(r,g,b,a)
         if r >= 180 and g < 100 and b < 100 then red = red+1 end
         if r == 255 and g == 255 and b == 255 then white = white+1 end
         return {r,g,b,a}
-    end
+    end)
     local ok, err = pcall(function()
         local fx = Feedback.New()
         for _, row in ipairs({{"cut","knife"},{"jelly","jelly"},{"grow","student"},

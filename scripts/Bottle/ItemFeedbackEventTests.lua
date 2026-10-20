@@ -3,6 +3,7 @@ local Game = require("Bottle.Game")
 local Effects = require("Bottle.Effects")
 local Extra = require("Bottle.ExtraEffects")
 local Expansion = require("Bottle.ExpansionEffects")
+local Repair = require("Bottle.RepairTests")
 local Tests = {}
 
 ---@param ids string[]
@@ -66,8 +67,8 @@ local cases = {}
 ---@param run fun()
 local function Test(name, run) cases[#cases + 1] = {name = name, run = run} end
 
-Test("三种切果者保留真实来源及完整水果身份，一批多果逐个上报", function()
-    for _, source in ipairs({"knife", "chef", "fruit_ninja"}) do
+Test("两种切果者保留真实来源及完整水果身份，一批多果逐个上报", function()
+    for _, source in ipairs({"knife", "fruit_ninja"}) do
         local game = Fixture({source, "apple", "orange", "apple_half"})
         local contacts, events = Contacts({{1, 2}, {1, 3}, {1, 4}}), {}
         contacts.positions[1], contacts.positions[2], contacts.positions[3] =
@@ -99,13 +100,15 @@ Test("切果遗物第三份加入实际产物，满瓶切果不把 queued 当入
     assert(cut and #cut.producedUids == 0 and #game.spawnQueue == 1)
 end)
 
-Test("剪羊毛及碰半份水果不冒充切水果", function()
-    local game = Fixture({"knife", "sheep", "apple_half"})
+Test("消耗小鸡不冒充切水果，羊及半份不触发小刀", function()
+    local game = Fixture({"knife", "sheep", "apple_half", "chick"})
     game:Get(2).woolCount = 1
     local events = {}
-    assert(Effects.Apply(game, game:Get(1), Contacts({{1, 2}, {1, 3}}), events))
-    assert(#Feedback(events, "cut") == 0)
-    assert(not Effects.Apply(game, game:Get(1), Contacts({{1, 3}}), events))
+    assert(not Effects.Apply(game, game:Get(1), Contacts({{1, 2}, {1, 3}}), events))
+    assert(game:Get(2).woolCount == 1 and #events == 0)
+    assert(Effects.Apply(game, game:Get(1), Contacts({{1, 4}}), events))
+    assert(game:Get(4).location == "discard" and #Feedback(events, "cut") == 0)
+    assert(#Repair.Events(events, "consume", 4) == 1)
 end)
 
 Test("学生自然成长捕获变化前图案位置，成长后职业作为目标", function()
@@ -150,7 +153,7 @@ end)
 
 Test("零价值或不合法目标不发偷取事件", function()
     local game = Fixture({"thief", "student", "apple"})
-    game:Get(2).permBonus = -2
+    game:Get(2).permBonus = -3
     local events = {}
     assert(not Effects.Apply(game, game:Get(1), Contacts({{1, 2}, {1, 3}}), events))
     assert(#Feedback(events, "steal") == 0)

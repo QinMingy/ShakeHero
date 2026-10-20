@@ -77,7 +77,7 @@ local function Test(name, run) cases[#cases+1] = {name=name,run=run} end
 Test("新增9遗物逐ID编号品质已接线且候选去重", function()
     local rarities = {2,2,2,1,2,2,1,2,1}
     local game = Fixture({})
-    assert(#Relics.list == 37 and #Relics.Available(game) == 37)
+    assert(#Relics.list == 39 and #Relics.Available(game) == 39)
     for index, id in ipairs(IDS) do
         local def = assert(Relics.byId[id])
         assert(def.numberId == 24+index and def.rarity == rarities[index])
@@ -88,7 +88,7 @@ Test("新增9遗物逐ID编号品质已接线且候选去重", function()
     for _, def in ipairs(Relics.Available(game)) do
         assert(not game.relics[def.id] and not seen[def.id]); seen[def.id] = true
     end
-    assert(#Relics.Available(game) == 28)
+    assert(#Relics.Available(game) == 30)
     local restored = Game.Restore(game:Snapshot())
     for _, id in ipairs(IDS) do assert(restored.relics[id]) end
 end)
@@ -176,13 +176,13 @@ Test("优质小草动物60分母精确边界、人类仍100分母含不产出", 
     assert(#Find(human,"poop") == 0 and #Find(human,"golden_poop") == 0)
 end)
 
-Test("羊毛集市刀脱库存兑换永久硬币、不直接发钱且只奖创建一次", function()
+Test("羊毛集市强摇脱库存兑换永久硬币、不直接发钱且只奖创建一次", function()
     local game = Fixture({"knife","sheep"},{wool_market=true,small_savings=true})
     Item(game,2).woolCount = 3
     assert(game:Start())
     local done = Sequence(game,{{maximum=101,value=51},{maximum=101,value=51},{maximum=101,value=51}})
     local before = game.score
-    local events = game:Step(0,{pairs={{1,2}}}); done()
+    local events = game:Step(0,{pairs={{1,2}},shakeStrength=4}); done()
     assert(#Find(game,"wool") == 0 and #Find(game,"coin_1","bottle") == 3)
     Close(Item(game,2).woolCount,0); Close(game.score-before,3)
     for _, coin in ipairs(Find(game,"coin_1")) do
@@ -319,11 +319,11 @@ Test("培根派生邻接不触发分裂器果冻或小牛真实碰撞收益", fu
     Close(Item(calf,2).permBonus,0)
 end)
 
-Test("云周期20%分支追加6临时瓶顶、普通产物永久近源", function()
+Test("云周期30%分支追加6临时瓶顶、普通产物永久近源", function()
     for _, coinRain in ipairs({false,true}) do
         for _, outcome in ipairs({1,2}) do
             local game = Fixture({"cloud"},coinRain and {coin_rain=true} or {})
-            assert(game:Start()); local expected = {{maximum=5,value=outcome}}
+            assert(game:Start()); local expected = {{maximum=100,value=outcome == 1 and 30 or 31}}
             if outcome == 1 then for _=1,6 do expected[#expected+1]={maximum=101,value=51} end end
             local done = Sequence(game,expected)
             assert(#Repair.Events(game:Step(4.99),"spawn") == 0)
@@ -349,7 +349,7 @@ Test("云满瓶永久及临时产物FIFO且末尾仅永久保留", function()
     local game = Fixture({"cloud"})
     assert(game:Start())
     while #game:BottleItems()<100 do game:_Spawn("ball",{}) end
-    local expected = {{maximum=5,value=1}}
+    local expected = {{maximum=100,value=30}}
     for _=1,6 do expected[#expected+1]={maximum=101,value=51} end
     local done = Sequence(game,expected)
     game:Step(5); done()
@@ -472,7 +472,7 @@ Test("第5与10回合仅物品及刷新排普通、追加普通遗物可获取�
         end
         for _,id in ipairs(game.options) do assert(Relics.byId[id].rarity == 1) end
         Close(game.refreshes,balance)
-        Close(game.refreshes,round % 2 == 0 and 4 or 3) -- 遗物免费刷新不扣物品池，第10回合仍额外+1。
+        Close(game.refreshes,4) -- 每个完成的回合均+1，遗物免费刷新不扣物品池。
         Close(game.relicRefreshes,0)
         local state = game:Snapshot()
         local restored = Game.Restore(state)
@@ -572,7 +572,7 @@ Test("rules7/8仅拒绝考核普通物品、nil和5和6旧档只过滤物品保P
         snapshot.target,snapshot.drawn,snapshot.relicDraft = Game.GetTarget(2),{},relicDraft
         snapshot.instances[1].location = "deck"
         snapshot.options = relicDraft and {"gambling_token","juicer","teacher_team"}
-            or {"apple","teacher","knife"}
+            or {"ball","teacher","knife"}
         snapshot.refreshes = 7
         snapshot.relicRefreshes = relicDraft and 1 or 0
         assert(snapshot.rulesVersion == 8)
@@ -594,9 +594,9 @@ Test("rules7/8仅拒绝考核普通物品、nil和5和6旧档只过滤物品保P
             Close(restored:_Value(Item(restored,1)),old == "nil" and 0 or 3)
             local stable = restored:Snapshot()
             assert(stable.rulesVersion == 8 and Equal(stable,Game.Restore(stable):Snapshot()))
-            snapshot.options = relicDraft and {"gambling_token","gambling_token"} or {"apple","apple"}
+            snapshot.options = relicDraft and {"gambling_token","gambling_token"} or {"ball","ball"}
             assert(not pcall(Game.Restore,snapshot), "先严格拒绝旧重复普通，不能过滤后掩盖损坏")
-            snapshot.options = relicDraft and {"gambling_token"} or {"apple"}
+            snapshot.options = relicDraft and {"gambling_token"} or {"ball"}
             local oneCommon = Game.Restore(snapshot)
             assert(#oneCommon.options == (relicDraft and 1 or 0)
                 and oneCommon._rngState == snapshot.rngState and oneCommon.refreshes == 7)
@@ -606,7 +606,7 @@ Test("rules7/8仅拒绝考核普通物品、nil和5和6旧档只过滤物品保P
             assert(#ordinaryCopy.options == 1, "非考核旧候选不擅过滤")
             snapshot.round = 5
             snapshot.options = relicDraft and {"gambling_token","juicer","teacher_team"}
-                or {"apple","teacher","knife"}
+                or {"ball","teacher","knife"}
         end
     end
 end)

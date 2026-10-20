@@ -146,6 +146,12 @@ function Score:Sync(phase, total, pending, uncollected)
         end
         if uncollected > 0 then self.shakeRoot:Show(); self.shakeIdle = 0 end
         self.root:SetVisible(self.transferPhase ~= "flight" and self.transferPhase ~= "done")
+    elseif phase == "draft" then
+        -- 候选收起后，复用摇晃时左上角的小计板；只读最终回合总分，不再播放转账。
+        if self.phase ~= phase then self:Reset() end
+        self:SetShake(total)
+        self.shakeRoot:Show()
+        self.root:Hide()
     else
         if self.phase ~= phase then self:Reset() end
         self.root:Hide()
@@ -218,7 +224,7 @@ function Score:Update(dt, width)
         self.shakeNumber:SetStyle({fontSize = 16 * s, width = 74 * s, height = 26 * s,
             textStroke = {width = s, color = {0, 0, 0, 255}}})
     end
-    if self.phase ~= "running" and self.shakeTotal == 0 then
+    if self.phase ~= "running" and self.phase ~= "draft" and self.shakeTotal == 0 then
         self.shakeIdle = self.shakeIdle + math.max(0, dt)
         if self.shakeIdle > .4 then self.shakeRoot:Hide() end
     end

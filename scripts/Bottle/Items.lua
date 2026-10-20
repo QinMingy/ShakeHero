@@ -1,7 +1,7 @@
 -- Bottle 规则目录（98件）。纯 Lua；尺寸为米，RGBA 通道为 0..255。
 -- 数据来源：docs/item.txt（98件，UTF-8 TSV）、docs/基础设定.txt、docs/概率.txt。
 -- numberId 严格与源表一致；旧果汁字符串 juice 不变，数字编号从71移至87。
--- 全97件均已实装，卡池是否开放只依据源表屏蔽列，不按产物身份推断。
+-- 全98件均已实装，卡池是否开放只依据源表屏蔽列，不按产物身份推断。
 -- 价值默认临时，物理倍率默认永久；保留 PhysicalState 定义级体积/重量边界。
 -- cooldown 包括调度防抖；只有源表明确写出冷却的效果才显示冷却提示。
 
@@ -9,7 +9,7 @@
 
 ---@class ItemDef
 ---@field id string 字符串 ID，兼容存档与物品引用
----@field numberId integer? 图鉴顺序 ID，1..97；由 Add 按源表顺序自动分配
+---@field numberId integer? 图鉴顺序 ID，1..98；由 Add 按源表顺序自动分配
 ---@field tags string[]? 分类只以标签判断，不以名字、shape 或 rarity 猜测
 ---@field name string
 ---@field base number 基础价值；结算时按当前有效价值产金币
@@ -138,10 +138,10 @@ Add {
     id = "orange", name = "橘子", base = 2, cooldown = 0, rarity = 1,
     unique = false, pool = true, implemented = true, trigger = "none", shape = "circle",
     radius = 0.27, color = { 247, 148, 60, 255 }, tags = { "水果", "植物", "食物" },
-    effect = "与瓶底接触时：价值+2（离开瓶底则不再持有该加成）",
+    effect = "与瓶底接触时：价值+3（离开瓶底则不再持有该加成）",
 }
 Add {
-    id = "rotten_banana", name = "腐烂的香蕉", base = 0, cooldown = 0, rarity = 1,
+    id = "rotten_banana", name = "腐烂的香蕉", base = 1, cooldown = 0, rarity = 1,
     unique = false, pool = false, implemented = true, trigger = "none", shape = "banana",
     radius = 0.28, color = { 122, 96, 48, 255 }, tags = { "垃圾" },
     effect = "没有特殊效果",
@@ -162,7 +162,7 @@ Add {
     effect = "结算时：50%概率变为任一植物",
 }
 Add {
-    id = "trash_can", name = "垃圾桶", base = -1, cooldown = 2, rarity = 2,
+    id = "trash_can", name = "垃圾桶", base = 0, cooldown = 2, rarity = 2,
     unique = false, pool = true, implemented = true, trigger = "touch", shape = "box",
     radius = 0.28, color = { 100, 120, 140, 255 },
     effect = "消耗相邻的垃圾和临时物品，自身价值永久+1（冷却：2s）",
@@ -172,7 +172,7 @@ Add {
     unique = false, pool = true, implemented = true, trigger = "touch", shape = "circle",
     radius = 0.30, color = { 220, 120, 140, 255 }, tags = { "人类" },
     scaleMin = 1, scaleMax = 2, -- 特别说明：大胃王不随通用体积下限降至50%。
-    effect = "消耗相邻食物，自身价值永久+1，体积（当前：100%）+10%（上限：200%，冷却：1s）\n体积达到上限时：无法消耗相邻食物\n位移50m：体积-10%（下限：100%）",
+    effect = "消耗相邻食物，自身价值永久+1，体积（当前：100%）+10%（上限：200%，冷却：1s）\n体积达到上限时：无法消耗相邻食物\n位移100m：体积-10%（下限：100%）",
 }
 Add {
     id = "apple_half", name = "半个苹果", base = 1, cooldown = 0, rarity = 1,
@@ -190,7 +190,7 @@ Add {
     id = "orange_half", name = "半块橘子", base = 1, cooldown = 0, rarity = 1,
     unique = false, pool = true, implemented = true, trigger = "none", shape = "circle",
     radius = 0.22, color = { 250, 170, 90, 255 }, tags = { "水果", "植物", "食物" },
-    effect = "触碰瓶底时：价值+2",
+    effect = "触碰瓶底时：价值+3",
 }
 Add {
     id = "fruit_ninja", name = "水果忍者", base = 1, cooldown = 5, rarity = 5,
@@ -199,19 +199,19 @@ Add {
     effect = "将相邻的完整水果劈成两份，自身永久增加等同于该水果的价值（冷却：5秒）",
 }
 Add {
-    id = "slipper_left", name = "忍者的左拖鞋", base = 2, cooldown = 0, rarity = 2,
+    id = "slipper_left", name = "忍者的左拖鞋", base = 3, cooldown = 0, rarity = 2,
     unique = true, pool = true, implemented = true, trigger = "none", shape = "slipper",
     radius = 0.24, color = { 160, 120, 80, 255 },
     effect = "与相邻忍者的[[slipper_right]]合成[[fruit_ninja]]",
 }
 Add {
-    id = "slipper_right", name = "忍者的右拖鞋", base = 2, cooldown = 0, rarity = 2,
+    id = "slipper_right", name = "忍者的右拖鞋", base = 3, cooldown = 0, rarity = 2,
     unique = true, pool = true, implemented = true, trigger = "none", shape = "slipper",
     radius = 0.24, color = { 160, 120, 80, 255 },
     effect = "与相邻忍者的[[slipper_left]]合成[[fruit_ninja]]",
 }
 Add {
-    id = "police", name = "警察", base = 4, cooldown = 1, rarity = 3,
+    id = "police", name = "警察", base = 3, cooldown = 1, rarity = 3,
     unique = false, pool = true, implemented = true, trigger = "touch", shape = "circle",
     radius = 0.28, color = { 60, 100, 200, 255 }, tags = { "人类" },
     effect = "不会被杀手消灭，消灭相邻的[[gambler]]、[[thief]]、[[killer]]；获得其价值×4的金币",
@@ -223,7 +223,7 @@ Add {
     effect = "永久偷取相邻人类、硬币、[[credit_card]]的1点价值（冷却：6秒）",
 }
 Add {
-    id = "student", name = "学生", base = 2, cooldown = 0, rarity = 1,
+    id = "student", name = "学生", base = 3, cooldown = 0, rarity = 1,
     unique = false, pool = true, implemented = true, trigger = "none", shape = "circle",
     radius = 0.26, color = { 130, 180, 230, 255 }, tags = { "人类" },
     effect = "结算5次后：成长为[[police]]、[[chef]]、[[teacher]]、[[doctor]]、[[soldier]]中的一个，有10%概率成长为[[thief]]、[[killer]]、[[gambler]]；成长后叠加当前自身价值",
@@ -262,22 +262,22 @@ Add {
     effect = "结算时：再结算一次",
 }
 Add {
-    id = "credit_card", name = "信用卡", base = 10, cooldown = 0, rarity = 2,
+    id = "credit_card", name = "信用卡", base = 15, cooldown = 0, rarity = 2,
     unique = false, pool = true, implemented = true, trigger = "none", shape = "box",
     radius = 0.24, color = { 70, 130, 180, 255 },
     effect = "每次结算后：价值永久-1",
 }
 Add {
-    id = "knife", name = "小刀", base = 4, cooldown = 5, rarity = 2,
+    id = "knife", name = "小刀", base = 4, cooldown = 4, rarity = 2,
     unique = false, pool = true, implemented = true, trigger = "touch", shape = "circle",
     radius = 0.24, color = { 180, 190, 200, 255 },
-    effect = "将相邻的水果切成两份（冷却：5秒）；将相邻[[sheep]]的羊毛脱落",
+    effect = "将相邻的水果切成两份；消耗相邻的[[chick]]，并获得小鸡价值×2的金币（冷却：4秒）",
 }
 Add {
-    id = "fruit_farmer", name = "果农", base = 4, cooldown = 8, rarity = 3,
+    id = "fruit_farmer", name = "果农", base = 4, cooldown = 7, rarity = 3,
     unique = false, pool = true, implemented = true, trigger = "touch", shape = "circle",
     radius = 0.28, color = { 150, 110, 70, 255 }, tags = { "人类" },
-    effect = "结算一次相邻水果（冷却：8秒）",
+    effect = "结算一次相邻水果（冷却：7秒）",
 }
 Add {
     id = "diner", name = "食客", base = 4, cooldown = 1, rarity = 1,
@@ -298,10 +298,10 @@ Add {
     effect = "被消耗后在瓶顶重新生成，被消耗5次后消失（当前：0）",
 }
 Add {
-    id = "chef", name = "厨师", base = 4, cooldown = 5, rarity = 2,
+    id = "chef", name = "厨师", base = 4, cooldown = 4, rarity = 2,
     unique = false, pool = true, implemented = true, trigger = "touch", shape = "circle",
     radius = 0.28, color = { 240, 240, 240, 255 }, tags = { "人类" },
-    effect = "相邻食物价值×2。将相邻的完整水果切成两份，并使产物价值永久+3",
+    effect = "相邻食物价值×2。相邻食物永久增加1价值（冷却：4秒）",
 }
 Add {
     id = "enoki", name = "金针菇", base = 2, cooldown = 0, rarity = 2,
@@ -332,28 +332,28 @@ Register("gambling_god", "赌神", 8, 5,
     { trigger = "touch", tags = { "人类" }, color = { 240, 193, 83, 255 } })
 Register("fitness_coach", "健身教练", 3, 2, "所有体积缩小效果×2；每当有物品体积变小时，自身价值永久+1",
     { cooldown = 0, tags = { "人类" }, color = { 226, 129, 83, 255 } })
-Register("fruit_tree", "果树", 3, 2, "每10秒有50%概率生成一个水果",
-    { cooldown = 10, trigger = "timer", shape = "tree", tags = { "农作物", "植物" }, color = { 85, 177, 88, 255 } })
+Register("fruit_tree", "果树", 3, 2, "每8秒有50%概率生成一个水果",
+    { cooldown = 8, trigger = "timer", shape = "tree", tags = { "农作物", "植物" }, color = { 85, 177, 88, 255 } })
 Register("farmer", "农民", 3, 2,
     "使相邻[[fruit_tree]]下一次100%生成一个水果，并有50%概率额外生成一个",
     { trigger = "touch", tags = { "人类" }, color = { 186, 151, 83, 255 } })
-Register("fruit_merchant", "水果商人", 3, 3, "相邻水果价值×2",
+Register("fruit_merchant", "水果商人", 4, 2, "相邻水果价值×2",
     { cooldown = 0, tags = { "人类" }, color = { 88, 183, 132, 255 } })
 Register("counter", "计数器", 0, 2, "场上每有3个元素，价值+1",
     { cooldown = 0, shape = "counter", color = { 111, 161, 178, 255 } })
 Register("droplet", "水珠", 1, 1, "触发一次相邻农作物的效果，然后消除自身",
-    { trigger = "touch", shape = "droplet", color = { 100, 191, 240, 255 } })
-Register("cloud", "云朵", 2, 2, "每5秒：生成一个[[droplet]]；20%概率在瓶顶生成6个临时[[droplet]]",
+    { trigger = "touch", shape = "droplet", radius = 0.135, color = { 100, 191, 240, 255 } })
+Register("cloud", "云朵", 2, 2, "每5秒：生成一个[[droplet]]；30%概率在瓶顶生成6个临时[[droplet]]",
     { cooldown = 5, trigger = "timer", shape = "cloud", color = { 213, 225, 240, 255 } })
-Register("monkey", "猴子", 2, 2, "消耗相邻[[banana]]，+7金币（冷却：5秒）",
+Register("monkey", "猴子", 4, 2, "消耗相邻[[banana]]，+7金币（冷却：5秒）",
     { cooldown = 5, trigger = "touch", shape = "monkey", tags = { "动物" }, color = { 167, 116, 76, 255 } })
-Register("lucky_coin", "幸运硬币", 2, 2, "每过5秒进行一次投掷：正面则自身进行一次结算",
+Register("lucky_coin", "幸运硬币", 5, 2, "每过5秒进行一次投掷：正面则自身进行一次结算",
     { cooldown = 5, trigger = "timer", color = { 246, 208, 90, 255 } })
-Register("rabbit", "兔子", 2, 2, "每移动100m，价值永久+1",
+Register("rabbit", "兔子", 2, 2, "每移动100m，价值+1，50%机会改为永久+1",
     { cooldown = 0, shape = "rabbit", tags = { "动物" }, color = { 241, 217, 222, 255 } })
-Register("necromancer", "死灵术士", 3, 3, "结算时：将本回合消耗的一个物品添加回牌库",
+Register("necromancer", "死灵术士", 5, 3, "结算时：将本回合消耗的一个物品添加回牌库",
     { cooldown = 0, tags = { "人类" }, color = { 154, 109, 205, 255 } })
-Register("bacon", "培根", 3, 2, "结算时：每个相邻食物为其增加1.5倍率",
+Register("bacon", "培根", 5, 2, "结算时：每个相邻食物为其增加1.5倍率",
     { cooldown = 0, shape = "bacon", tags = { "食物" }, color = { 219, 129, 127, 255 } })
 
 ---------------------------------------------------------------- 48 小球（实装）
@@ -375,8 +375,8 @@ Register("coffin", "棺材", 1, 3, "碰撞[[ghost]]时：生成一个[[ghost]]�
     { cooldown = 4, shape = "coffin", trigger = "touch", color = { 141, 101, 88, 255 } })
 Register("tombstone", "墓碑", 1, 4, "碰撞[[ghost]]时：价值永久+1（冷却：4秒）",
     { cooldown = 4, shape = "tombstone", trigger = "touch", color = { 156, 168, 180, 255 } })
-Register("soul_stone", "灵魂石", 5, 3, "碰撞[[ghost]]时：消耗[[ghost]]，进行一次结算",
-    { shape = "rock", trigger = "touch", color = { 129, 188, 214, 255 } })
+Register("soul_stone", "灵魂石", 5, 2, "碰撞[[ghost]]时：消耗[[ghost]]，进行一次结算（冷却：4秒）",
+    { cooldown = 4, shape = "rock", trigger = "touch", color = { 129, 188, 214, 255 } })
 Register("coin_1", "1元硬币", 1, 1, "与另一个[[coin_1]]合成[[coin_2]]")
 Register("coin_2", "2元硬币", 2, 1, "与另一个[[coin_2]]合成[[coin_4]]")
 Register("coin_4", "4元硬币", 4, 2, "与另一个[[coin_4]]合成[[coin_8]]")
@@ -390,18 +390,18 @@ Register("coin_512", "512元硬币", 512, 4, "与另一个[[coin_512]]合成[[co
 Register("coin_1024", "1024元硬币", 1024, 4, "与另一个[[coin_1024]]合成[[coin_2048]]")
 Register("coin_2048", "2048元硬币", 2048, 5, "没有特殊效果")
 Register("coin_machine", "硬币机", 3, 2,
-    "与人类相邻时，随机获得等同于相邻人类数量的[[coin_1]]和[[coin_2]]（从瓶顶落下）（冷却：5秒）",
-    { cooldown = 5, trigger = "touch", shape = "coin_machine", color = { 174, 156, 110, 255 } })
+    "与人类相邻时，随机获得等同于相邻人类数量的[[coin_1]]和[[coin_2]]（从瓶顶落下）（冷却：3秒）",
+    { cooldown = 3, trigger = "touch", shape = "coin_machine", color = { 174, 156, 110, 255 } })
 Register("star", "星星", 3, 1, "触碰瓶底时：闪现到瓶子顶部，价值+1（本回合）",
     { trigger = "bottom", shape = "star", color = { 250, 220, 110, 255 } })
 
 ---------------------------------------------------------------- 68..70 职业与鸡蛋
 
 Add {
-    id = "soldier", name = "士兵", base = 5, cooldown = 0, rarity = 2,
-    unique = false, pool = true, implemented = true, trigger = "none", shape = "circle",
+    id = "soldier", name = "炊事兵", base = 5, cooldown = 1, rarity = 2,
+    unique = false, pool = true, implemented = true, trigger = "touch", shape = "circle",
     radius = 0.27, color = { 110, 130, 90, 255 }, tags = { "人类" },
-    effect = "没有特殊效果",
+    effect = "消耗相邻的[[chick]]，自身价值永久+1，并产生一个[[ghost]]",
 }
 Add {
     id = "doctor", name = "医生", base = 5, cooldown = 0, rarity = 2,
@@ -412,7 +412,7 @@ Add {
 Add {
     id = "egg", name = "鸡蛋", base = 3, cooldown = 0, rarity = 1,
     unique = false, pool = true, implemented = true, trigger = "none", shape = "circle",
-    radius = 0.22, color = { 245, 235, 210, 255 }, tags = { "食物" },
+    radius = 0.22, color = { 245, 235, 210, 255 }, tags = {},
     effect = "3回合后（当前：0）消耗自身：50%概率获得一次免费刷新（仅入瓶回合计数）",
 }
 
@@ -429,7 +429,7 @@ Register("pig", "小猪", 4, 1,
 Register("calf", "小牛", 3, 1, "每次消耗物品，会冲刺一段距离，期间每触碰一个物品：+1价值",
     { cooldown = 0, shape = "calf", tags = { "动物" }, color = { 228, 220, 199, 255 } })
 Register("grass", "小草", 3, 1,
-    "被相邻的一个动物消耗。被动物或人类消耗时：40%不产出便便，40%[[poop]]，15%[[golden_poop]]，4%[[diamond_poop]]，1%[[rainbow_poop]]",
+    "被相邻的[[sheep]]、[[calf]]消耗。被动物或人类消耗时：40%不产出便便，40%[[poop]]，15%[[golden_poop]]，4%[[diamond_poop]]，1%[[rainbow_poop]]",
     { cooldown = 1, trigger = "touch", shape = "grass", radius = .23, tags = { "植物" }, color = { 112, 184, 87, 255 } })
 Register("hay", "草堆", 5, 1,
     "与动物相邻时，为每个相邻动物产生一个[[grass]]，自身价值永久-1（冷却：3秒）\n自身价值小于等于0时：消耗自身\n生成的小草会自动被对应动物消耗",
@@ -454,8 +454,8 @@ Register("bodyguard", "保镖", 4, 1,
     "场上有人类即将被消耗时，为该人类提供护盾（本回合无法被消耗）并使保护对象进行一次结算；提供3次护盾后消失（当前：0）\n成长不算被消耗",
     { cooldown = 0, shape = "bodyguard", tags = { "人类" }, color = { 79, 104, 144, 255 } })
 Register("chicken_keeper", "养鸡人", 3, 2,
-    "消耗相邻[[egg]]：获得等同于鸡蛋价值的金币，50%概率产生一只[[chick]]（冷却：3s）\n每5次刷新：价值永久+1（在牌库中也生效）",
-    { cooldown = 3, trigger = "touch", shape = "chicken_keeper", tags = { "人类" }, color = { 192, 153, 100, 255 } })
+    "消耗相邻[[egg]]：获得等同于鸡蛋价值的金币，45%概率产生一只[[chick]]（冷却：5s）\n每5次刷新：价值永久+1（在牌库中也生效）",
+    { cooldown = 5, trigger = "touch", shape = "chicken_keeper", tags = { "人类" }, color = { 192, 153, 100, 255 } })
 Register("splitter", "分裂器", 3, 3, "穿过自身的物品被分为两个价值减半的物品（向上取整，冷却：4秒）\n穿过指可穿透物品与其触碰",
     { cooldown = 4, trigger = "touch", shape = "splitter", color = { 138, 160, 199, 255 } })
 Register("juice", "果汁", 3, 3, "被消耗时：消耗者价值永久增加，数值等于果汁的价值",
@@ -477,16 +477,16 @@ Register("sweater", "羊毛衫", 10, 1, "消耗相邻[[wool]]：自身价值永�
 
 ---------------------------------------------------------------- 94..97 旋转构筑
 
-Register("spinning_top", "陀螺", 3, 1, "累计旋转360°：价值+1（本回合）",
+Register("spinning_top", "陀螺", 3, 1, "累计旋转360°：30%概率价值+1（本回合）",
     { cooldown = 0, shape = "spinning_top", color = { 226, 119, 91, 255 } })
 Register("windmill", "风车", 4, 2, "每累积旋转360°：随机产生一个临时[[droplet]]、临时[[wool]]或临时[[grass]]",
     { cooldown = 0, shape = "windmill", color = { 123, 193, 210, 255 } })
 Register("gear", "齿轮", 4, 2,
     "标记相邻物品并进入4秒冷却，记录其累积旋转角度之和\n冷却结束后：自身和仍在场的标记物品在1秒内顺时针旋转同样角度，完成后重新标记并进入冷却",
     { cooldown = 4, shape = "gear", color = { 182, 164, 115, 255 } })
-Register("roulette", "转盘", 4, 3, "每累积旋转360°：50%概率价值永久+3，50%概率价值永久-1",
+Register("roulette", "转盘", 4, 2, "每累积旋转360°：50%概率价值永久+3，50%概率价值永久-1",
     { cooldown = 0, shape = "roulette", color = { 201, 102, 119, 255 } })
-Register("removal_coin", "移除币", 4, 2, "结算后：消耗自身，给予一次移除机会",
+Register("removal_coin", "移除币", 4, 2, "结算后：消耗自身，给予2次移除机会",
     { cooldown = 0, shape = "circle", color = { 91, 194, 166, 255 } })
 
 -- 骰号大奖明确允许骰子达到300%；定义是可信上限，未持遗物时不会自行增长。
@@ -495,6 +495,7 @@ Items.byId.die_d6.scaleMax = 3
 
 -- 源表第8列=1，且仅这一列决定屏蔽；腐烂香蕉屏蔽，桂冠仍开放。
 for _, id in ipairs({
+    "apple", "banana", "orange", "droplet", "gambling_god",
     "rotten_banana", "banana_peel", "apple_half", "banana_half", "orange_half",
     "fruit_ninja", "cherry_half", "tomato_egg", "coin_4", "coin_8", "coin_16", "coin_32",
     "coin_64", "coin_128", "coin_256", "coin_512", "coin_1024", "coin_2048",
@@ -520,8 +521,8 @@ Items.byId.coin_2048.cooldown = 0
 --- compass 使用专用旋转调度、trigger=none，仍须显示明确的3秒冷却。
 local cooldownHints = {
     trash_can = true, glutton = true, fruit_ninja = true, thief = true,
-    knife = true, fruit_farmer = true, monkey = true, ball = true,
-    coffin = true, tombstone = true, coin_machine = true,
+    knife = true, chef = true, fruit_farmer = true, monkey = true, ball = true,
+    coffin = true, tombstone = true, soul_stone = true, coin_machine = true,
     pig = true, hay = true, chicken_keeper = true, splitter = true, compass = true, jelly = true, gear = true,
 }
 ---@param id string

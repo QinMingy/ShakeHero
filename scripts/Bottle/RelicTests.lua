@@ -128,16 +128,16 @@ local function Test(name, run)
     cases[#cases + 1] = { name = name, run = run }
 end
 
-Test("原五遗物仍全部入候选、拥有后排除且37件耗尽", function()
+Test("原五遗物仍全部入候选、拥有后排除且39件耗尽", function()
     local game = Fixture({})
     local available = {}
     for _, def in ipairs(Relics.Available(game)) do available[def.id] = true end
-    assert(#Relics.list == 37 and #Relics.Available(game) == 37)
+    assert(#Relics.list == 39 and #Relics.Available(game) == 39)
     for _, id in ipairs({ "gambling_token", "lucky_charm", "scramble_recipe", "jungle_hunt", "juicer" }) do
         assert(Relics.byId[id].implemented and Relics.byId[id].pool and available[id], "遗物未接线：" .. id)
         game.relics[id] = true
     end
-    assert(#Relics.Available(game) == 32)
+    assert(#Relics.Available(game) == 34)
     for _, def in ipairs(Relics.Available(game)) do assert(not game.relics[def.id]) end
     for _, def in ipairs(Relics.list) do game.relics[def.id] = true end
     assert(#Relics.Available(game) == 0)
@@ -393,15 +393,15 @@ Test("令牌无遗物或非赌徒不判定、不消耗随机数", function()
     done()
 end)
 
-Test("幸运符即时基础负号翻正但不抹历史负永久值", function()
+Test("幸运符不增加零基础垃圾桶且不抹历史负永久值", function()
     local game = Fixture({ "trash_can", "credit_card", "apple" })
     Item(game, 1).permBonus, Item(game, 2).permBonus = -3, -4
-    Close(game:_Value(Item(game, 1)), -4)
+    Close(game:_Value(Item(game, 1)), -3)
     game.relics.lucky_charm = true
-    Close(game:_Value(Item(game, 1)), -2, "垃圾桶基础-1变+1，历史-3保留")
-    Close(game:_Value(Item(game, 2)), 6, "信用卡历史扣值不追溯翻转")
+    Close(game:_Value(Item(game, 1)), -3, "垃圾桶基础0不加值，历史-3保留")
+    Close(game:_Value(Item(game, 2)), 11, "信用卡历史扣值不追溯翻转")
     Close(game:_Value(Item(game, 3)), 2, "正价值物品不改变")
-    Close(Items.byId.trash_can.base, -1, "不改共享定义")
+    Close(Items.byId.trash_can.base, 0, "不改共享定义")
 end)
 
 Test("幸运符信用卡结算后永久加1、不增加本次金币", function()
@@ -410,11 +410,11 @@ Test("幸运符信用卡结算后永久加1、不增加本次金币", function()
     game.relics.lucky_charm = true
     assert(game:Start())
     local events = Finish(game)
-    Close(game.lastRoundScore, 6)
+    Close(game.lastRoundScore, 11)
     Close(Item(game, 1).permBonus, -3)
-    Close(Events(events, "score", 1)[1].value, 6)
+    Close(Events(events, "score", 1)[1].value, 11)
     local restored = Game.Restore(game:Snapshot())
-    Close(restored:_Value(Item(restored, 1)), 7)
+    Close(restored:_Value(Item(restored, 1)), 12)
 end)
 
 Test("幸运符小偷双方加值但零值目标仍不可偷", function()
@@ -440,7 +440,7 @@ Test("幸运符不反转冷却缩短与体积缩小", function()
     Close(game:CooldownOf("thief"), 5)
     Item(game, 1).scale = 1.5
     assert(game:Start())
-    for sample = 0, 100 do
+    for sample = 0, 200 do
         game:Step(0, { positions = { [1] = { x = sample * .5, y = 2 } } })
     end
     Close(Item(game, 1).scale, 1.3, "体积缩小不是价值减号")
@@ -586,9 +586,9 @@ Test("榨汁消耗四种半果、保留普通最终金币且不重复累计", fu
     game.juicerValue = 7
     assert(game:Start())
     local events = Finish(game, { bottom = { [3] = true } })
-    -- 半果当前价值：4＋1＋(1+2)＋2×1.5=11；半樱桃普通结算2次。
-    Close(RelicEffects.JuicerValue(game), 18)
-    Close(game.lastRoundScore, 4 + 1 + 3 + 6 + 2 + 3)
+    -- 半果当前价值：4＋1＋(1+3)＋2×1.5=12；半樱桃普通结算2次。
+    Close(RelicEffects.JuicerValue(game), 19)
+    Close(game.lastRoundScore, 4 + 1 + 4 + 6 + 2 + 3)
     assert(#game.discard == 4 and #game.deck == 2)
     for uid = 1, 4 do
         assert(Item(game, uid).location == "discard")
@@ -614,7 +614,7 @@ Test("榨汁在死灵返还后、不取牌库与旧弃牌半果", function()
     assert(Item(game, 3).location == "discard", "最终仍在瓶内的半果被榨取，死灵不能再返还")
     assert(Item(game, 4).location == "deck", "未入瓶半果不榨取")
     Close(game.juicerValue, 1)
-    Close(game.lastRoundScore, 4, "死灵3＋瓶内半香蕉1")
+    Close(game.lastRoundScore, 6, "死灵5＋瓶内半香蕉1")
     assert(#Events(events, "score", 2) == 0 and #Events(events, "score", 4) == 0)
 end)
 
@@ -875,8 +875,8 @@ Test("提前Finish同样使用最终接触倍率和半橘贴底加成", function
     assert(game:Start())
     -- 不先Step同步接触，直接覆盖GM/提前结束的真实入口。
     local events = game:Finish({ bottom = { [1] = true }, pairs = { { 1, 2 }, { 1, 3 } } })
-    Close(Events(events, "score", 1)[1].value, 12, "(基础1+贴底2)×厨师2×商人2")
-    Close(game.juicerValue, 12, "提前结束不能遗漏最终接触价值")
+    Close(Events(events, "score", 1)[1].value, 16, "(基础1+贴底3)×厨师2×商人2")
+    Close(game.juicerValue, 16, "提前结束不能遗漏最终接触价值")
 end)
 
 Test("榨汁与最终金币统一向上取整且保留零负方向", function()

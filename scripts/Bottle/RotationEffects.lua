@@ -141,7 +141,7 @@ end
 ---@param events GameEvent[]
 local function RewardTurn(game, item, state, events)
     if item.id == "spinning_top" then
-        Buff(game, item, events, 1, false)
+        if game:_RandomInt(100) <= 30 then Buff(game, item, events, 1, false) end
     elseif item.id == "windmill" then
         local product = assert(PRODUCTS[game:_RandomInt(#PRODUCTS)])
         local origin = state.positions and state.positions[item.uid]
