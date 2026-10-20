@@ -1523,18 +1523,32 @@ local function WithStorage(run)
     local original, globals, files = {}, {}, {}
     for key, value in pairs(storage) do original[key] = value end
     for _, name in ipairs({"File", "fileSystem", "FILE_READ", "FILE_WRITE"}) do globals[name] = rawget(_G,name) end
+    storage.slot = 0
     _G.FILE_READ, _G.FILE_WRITE = 1, 2
-    _G.fileSystem = {FileExists=function(_,name) return files[name] ~= nil end}
-    _G.File = function(name, mode)
+    rawset(_G, "fileSystem", {
+        FileExists=function(_,name) return files[name] ~= nil end,
+        Rename=function(_,source,target)
+            if not files[source] then return false end
+            files[target],files[source] = files[source],nil
+            return true
+        end,
+    })
+    rawset(_G, "File", function(name, mode)
         local buffer = files[name] or ""
         return {
             IsOpen=function() return mode == 2 or files[name] ~= nil end,
             ReadString=function() return buffer end,
-            WriteString=function(_,text) buffer=text; return true end,
+            GetSize=function() return #buffer + 1 end,
+            Write=function(_,data)
+                data:Seek(0)
+                buffer=data:ReadString()
+                return data:GetSize()
+            end,
             Flush=function() if mode == 2 then files[name]=buffer end end,
+            Close=function() end,
             Dispose=function() end,
         }
-    end
+    end)
     local ok, err = pcall(run, storage, files, json)
     for key in pairs(storage) do if original[key] == nil then storage[key] = nil end end
     for key, value in pairs(original) do storage[key] = value end

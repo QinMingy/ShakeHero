@@ -114,8 +114,21 @@ local function Sensor(notify)
     SensorStatus(ok and "waiting" or "unavailable", notify)
 end
 
-local function Save()
-    if game then Storage.Save(game) end
+local saveWarningShown = false
+
+local function Save(notify)
+    if not game then return false end
+    local saved = Storage.Save(game)
+    if saved then
+        saveWarningShown = false
+    elseif notify ~= false and view and not saveWarningShown then
+        saveWarningShown = true
+        local message = Storage.readBlocked
+            and "旧存档暂时无法读取，已禁止覆盖；请重新进入游戏重试"
+            or "本次进度未能保存，已保留上次存档；请稍后重试，暂勿退出游戏"
+        UI.Toast.Show(message, {duration = 5, variant = "warning"})
+    end
+    return saved
 end
 
 local function SyncPhysics(reset)
@@ -629,7 +642,7 @@ end
 
 function Stop()
     UnsubscribeFromEvent("PostUpdate")
-    Save()
+    Save(false)
     if simulation then simulation:Dispose(); simulation = nil end
     if sensorEnabled then TouchController.DisableAccelerometer() end
     if sensorLab then sensorLab:Dispose(); sensorLab = nil end
