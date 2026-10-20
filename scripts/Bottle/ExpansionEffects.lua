@@ -2,6 +2,7 @@
 -- 接触只消费 Physics 的真实 pairs/side/flightHits；此模块不推测物理碰撞。
 -- 冷却由 Game 调度，运动子状态由 Step 推进；所有消费统一走 _Destroy，不能绕开护盾。
 local Items = require("Bottle.Items")
+local FrameBudget = require("Bottle.FrameBudget")
 local TriggerFeedback = require("Bottle.TriggerFeedback")
 local Relics = require("Bottle.Relics")
 local RelicExpansion = require("Bottle.RelicExpansion")
@@ -86,6 +87,7 @@ end
 ---@return any
 local function FirstAdjacent(game, item, contacts, predicate)
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid and other.location == "bottle" and predicate(other) then
             return other
         end
@@ -119,6 +121,7 @@ end
 local function GeckoContact(game, item, contacts)
     if contacts.side and contacts.side[item.uid] == true then return true end
     for _, pair in ipairs(contacts.rawPairs or contacts.pairs or {}) do
+        FrameBudget.Checkpoint()
         local uid = pair[1] == item.uid and pair[2] or pair[2] == item.uid and pair[1] or nil
         local other = uid and game:Get(uid)
         if other and other.location == "bottle" and other.id == "gecko" then return true end
@@ -181,6 +184,7 @@ function Expansion.BurstBalloon(game, balloon, events, consumer)
     local first = #events + 1
     if not game:_Destroy(balloon.uid, false, events, consumer, "burst") then return false end
     for _, other in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         other.eventMult = (other.eventMult or 1) * 2
         other.mult = (other.mult or 1) * 2
     end
@@ -215,7 +219,10 @@ local function GrassProduct(game, consumer, events, origin)
     local threshold = guaranteed and roll + 40 or roll
     local id = threshold <= 40 and "" or threshold <= 80 and "poop"
         or threshold <= 95 and "golden_poop" or threshold <= 99 and "diamond_poop" or "rainbow_poop"
-    if id ~= "" then game:_Spawn(id, events, false, origin) end
+    if id ~= "" then
+        local product = game:_Spawn(id, events, false, origin)
+        if guaranteed and product then TriggerFeedback.Relic(game, events, "premium_grass") end
+    end
 end
 
 --- 只有入瓶后才吃草；满瓶的草保留对应动物 uid，排队期间不产生收益。
@@ -387,15 +394,23 @@ function Expansion.Apply(game, item, contacts, events)
     if id == "chick" then
         -- 周期到点仅判定一次；失败仍由调度器等待下一个完整5秒。
         if game:_RandomInt(100) > 30 then return false end
-        return game:_Spawn("egg", events, false, Position(game, item.uid, contacts)) ~= nil
+        local origin = Position(game, item.uid, contacts)
+        local egg = game:_Spawn("egg", events, false, origin)
+        if egg and egg.location == "bottle" then
+            events[#events + 1] = {kind = "itemFeedback", action = "produce", uid = item.uid, id = id,
+                x = origin and origin.x, y = origin and origin.y, count = 1, producedUids = {egg.uid}}
+        end
+        return egg ~= nil
     elseif id == "grass" or id == "poop" or id == "golden_poop"
         or id == "diamond_poop" or id == "rainbow_poop" then
         local consumer = FirstAdjacent(game, item, contacts, id == "grass" and Animal or Plant)
-        return consumer ~= nil and game:_Destroy(item.uid, false, events, consumer, "consume")
+        if not consumer then return false end
+        return game:_Destroy(item.uid, false, events, consumer, "consume") == true
     elseif id == "hay" then
         local animals = game:_Adjacents(item.uid, contacts)
         local count = 0
         for _, animal in ipairs(animals) do
+            FrameBudget.Checkpoint()
             if animal.location == "bottle" and Animal(animal) then
                 local grass = game:_Spawn("grass", events, false, Position(game, animal.uid, contacts))
                 if grass then
@@ -406,12 +421,15 @@ function Expansion.Apply(game, item, contacts, events)
             end
         end
         if count == 0 then return false end
-        Permanent(game, item, events, Relics.Has(game, "lucky_charm") and 1 or -1)
+        local delta = Relics.Has(game, "lucky_charm") and 1 or -1
+        Permanent(game, item, events, delta)
+        if delta > 0 then TriggerFeedback.Relic(game, events, "lucky_charm") end
         if game:_Value(item) <= 0 then game:_Destroy(item.uid, false, events, nil, "self") end
         return true
     elseif id == "pig" or id == "cactus" or id == "chicken_keeper" or id == "sweater" then
         local hit = false
         for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+            FrameBudget.Checkpoint()
             if item.id ~= id then break end -- 猪转培根后不能继续执行旧批次。
             local legal = id == "pig" and PIG_FOOD[other.id]
                 or id == "cactus" and (other.id == "droplet" or other.id == "balloon")
@@ -430,9 +448,9 @@ function Expansion.Apply(game, item, contacts, events)
                     if id == "pig" then
                         -- _Destroy可能已把香蕉转皮、猪长成培根；必须用消费前保存值，
                         -- 且按本次主动消费者身份给钱，不让转化吞掉最后一餐收益。
-                        game:_Score(events, item, value * 2, Position(game, item.uid, contacts))
+                        game:_Score(events, item, value * 2, Position(game, item.uid, contacts), "consume", id)
                     elseif id == "chicken_keeper" then
-                        game:_Score(events, item, value, Position(game, item.uid, contacts))
+                        game:_Score(events, item, value, Position(game, item.uid, contacts), "consume", id)
                         if game:_RandomInt(2) == 1 then
                             game:_Spawn("chick", events, false, Position(game, item.uid, contacts))
                         end
@@ -450,12 +468,14 @@ function Expansion.Apply(game, item, contacts, events)
     elseif id == "splitter" then
         local hit = false
         for _, other in ipairs(game:_Adjacents(item.uid, RealContacts(contacts))) do
+            FrameBudget.Checkpoint()
             if Piercing(game, other) and Split(game, other, contacts, events) then hit = true end
         end
         return hit
     elseif id == "compass" then
         item.compassProgress = math.max(0, item.compassProgress - TURN)
         for _, other in ipairs(game:BottleItems()) do
+            FrameBudget.Checkpoint()
             local ghostLike = other.id == "ghost"
                 or (Relics.Has(game, "ghost_poop") and Items.IsPoop(other.id))
             if not ghostLike then
@@ -468,6 +488,7 @@ function Expansion.Apply(game, item, contacts, events)
         local hit = false
         local origin = Position(game, item.uid, contacts)
         for _, other in ipairs(game:_Adjacents(item.uid, RealContacts(contacts))) do
+            FrameBudget.Checkpoint()
             if not Piercing(game, other) then
                 local position = Position(game, other.uid, contacts)
                 local dx = origin and position and position.x - origin.x or 0
@@ -475,6 +496,10 @@ function Expansion.Apply(game, item, contacts, events)
                 if dx * dx + dy * dy < EPSILON then dx = other.uid > item.uid and 1 or -1 end
                 events[#events + 1] = { kind = "impulse", uid = other.uid,
                     sourceUid = item.uid, dx = dx, dy = dy, strength = JELLY_PUSH_SPEED }
+                events[#events + 1] = {kind = "itemFeedback", action = "jelly", uid = item.uid, id = id,
+                    targetUid = other.uid, targetId = other.id,
+                    x = origin and origin.x, y = origin and origin.y,
+                    toX = position and position.x, toY = position and position.y}
                 hit = true
             end
         end
@@ -539,6 +564,7 @@ end
 ---@param game BottleGame
 function Expansion.OnRefresh(game)
     for _, keeper in ipairs(game:AllInstances()) do
+        FrameBudget.Checkpoint()
         if keeper.id == "chicken_keeper" and (keeper.location == "bottle"
             or keeper.location == "deck" or keeper.location == "queued") then
             keeper.refreshCount = (keeper.refreshCount or 0) + 1
@@ -563,7 +589,11 @@ function Expansion.ShedWool(game, sheep, events)
     sheep.woolCount = 0
     Buff(game, sheep, events, 0)
     local product = Relics.Has(game, "wool_market") and "coin_1" or "wool"
-    for _ = 1, count do game:_SpawnTop(product, events, false) end
+    for _ = 1, count do
+        FrameBudget.Checkpoint()
+        local spawned = game:_SpawnTop(product, events, false)
+        if spawned and product == "coin_1" then TriggerFeedback.Relic(game, events, "wool_market") end
+    end
     return true
 end
 
@@ -574,6 +604,7 @@ end
 function Expansion.ExtraEntrants(game)
     local result = {}
     for _, item in ipairs(game:AllInstances()) do
+        FrameBudget.Checkpoint()
         if item.id == "wool" and item.location == "deck"
             and (not item.woolReadyRound or item.woolReadyRound <= game.round)
             and math.abs(game:_Value(item) - 1) < EPSILON then
@@ -589,6 +620,7 @@ end
 ---@param events GameEvent[]
 function Expansion.Maintain(game, events)
     for _, item in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if item.id == "wool" and game:_Value(item) > 10 then
             game:_Transform(item, "sweater", events)
         end
@@ -600,15 +632,18 @@ end
 ---@param events GameEvent[]
 function Expansion.BeforeSettle(game, contacts, events)
     for _, item in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if item.id == "cactus" then TrackCactus(game, item, events) end
     end
 end
 
 ---@param game BottleGame
 ---@param events GameEvent[]
-function Expansion.AfterSettle(game, events)
+---@param contacts BottleStepContacts?
+function Expansion.AfterSettle(game, events, contacts)
     -- 先完成全体收益，移除币才普通自耗：成功才发次数，临时币也按同一口径。
     for _, coin in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if coin.id == "removal_coin" and game:_Destroy(coin.uid, false, events, nil, "self") then
             game.removals = game.removals + 1
             game.revision = game.revision + 1
@@ -616,10 +651,13 @@ function Expansion.AfterSettle(game, events)
         end
     end
     for _, egg in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if egg.id == "egg" and egg.bottleRounds >= 3 then
+            local position = Position(game, egg.uid, contacts)
             if game:_Destroy(egg.uid, false, events, nil, "self") and game:_RandomInt(2) == 1 then
                 game.refreshes = (game.refreshes or 0) + 1
                 game.revision = game.revision + 1
+                TriggerFeedback.Refresh(events, egg, position)
             end
         end
     end
@@ -633,6 +671,7 @@ local function ThrowDiscus(game, discus, contacts, events)
     ---@type ItemInstance[]
     local candidates = {}
     for _, other in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if other.uid ~= discus.uid and other.uid ~= discus.discusHolderUid then
             candidates[#candidates + 1] = other
         end
@@ -672,21 +711,25 @@ function Expansion.Step(game, dt, contacts, events)
     Expansion.Maintain(game, events)
     if (contacts.shakeStrength or 0) >= VIOLENT_SHAKE then
         for _, sheep in ipairs(game:BottleItems()) do
-            if sheep.id == "sheep" then Expansion.ShedWool(game, sheep, events) end
+            FrameBudget.Checkpoint()
+            if sheep.id == "sheep" and game:IsSampled(sheep) then Expansion.ShedWool(game, sheep, events) end
         end
     end
     -- 每位运动员至少拥有一枚盘；分裂额外复制的盘也保留独立飞行，不再重复补原盘。
     local owned = {}
     for _, item in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if item.id == "discus" and item.discusOwnerUid then owned[item.discusOwnerUid] = true end
     end
     for _, item in ipairs(game:AllInstances()) do
+        FrameBudget.Checkpoint()
         if item.id == "discus" and item.location == "queued" and item.discusOwnerUid then
             owned[item.discusOwnerUid] = true
         end
     end
     for _, athlete in ipairs(game:BottleItems()) do
-        if athlete.id == "discus_athlete" and not owned[athlete.uid] then
+        FrameBudget.Checkpoint()
+        if athlete.id == "discus_athlete" and game:IsSampled(athlete) and not owned[athlete.uid] then
             local discus = game:_Spawn("discus", events, true, Position(game, athlete.uid, contacts))
             if discus then
                 discus.discusOwnerUid, discus.discusState, discus.discusWait = athlete.uid, "owner_wait", 0
@@ -696,6 +739,8 @@ function Expansion.Step(game, dt, contacts, events)
         end
     end
     for _, item in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
+        if game:IsSampled(item) then
         if item.id == "gecko" and not item.anchored then
             item.geckoContactTime = GeckoContact(game, item, contacts)
                 and (item.geckoContactTime or 0) + dt or 0
@@ -705,6 +750,7 @@ function Expansion.Step(game, dt, contacts, events)
             local hits = item.calfDashHits or {}
             item.calfDashHits = hits
             for _, other in ipairs(game:_Adjacents(item.uid, RealContacts(contacts))) do
+                FrameBudget.Checkpoint()
                 if not hits[other.uid] then
                     hits[other.uid] = true
                     item.bonus = item.bonus + 1
@@ -734,6 +780,7 @@ function Expansion.Step(game, dt, contacts, events)
         elseif item.id == "discus" then
             -- 按源表每真实飞行5米结算；闪回清采样基线，不计传送路程。
             while (item.distance or 0) >= 5 - EPSILON do
+                FrameBudget.Checkpoint()
                 item.distance = math.max(0, item.distance - 5)
                 game:_Score(events, item, game:_Value(item), Position(game, item.uid, contacts))
                 events[#events].trigger = "move"
@@ -753,6 +800,7 @@ function Expansion.Step(game, dt, contacts, events)
                 if item.discusWait <= EPSILON then ThrowDiscus(game, item, contacts, events) end
             end
         end
+    end
     end
 end
 

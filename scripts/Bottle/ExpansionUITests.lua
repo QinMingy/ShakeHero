@@ -218,23 +218,28 @@ function Tests.Run(report)
         end
     end
     local LoadSprites=require("Bottle.RelicSprites")
+    local spriteSizes={see_you_tomorrow=128}
     local spriteCount=0
     local function VerifySprite(rows,palette)
         spriteCount=spriteCount+1
-        Check(#rows==16,"遗物像素画布高度16#"..spriteCount)
-        local widthValid,paletteValid=true,true
-        for _,row in ipairs(rows) do
-            if #row>16 then widthValid=false end
-            for glyph in row:gmatch(".") do
-                if glyph~="." and palette[glyph]==nil then paletteValid=false end
-            end
-        end
-        Check(widthValid,"遗物像素行不越16宽#"..spriteCount)
-        Check(paletteValid,"遗物像素调色板完整#"..spriteCount)
         return {rows=rows,palette=palette} --[[@as any]]
     end
-    local sprites=LoadSprites(VerifySprite,{30,32,42,255})
+    ---@type table<string,{rows:string[],palette:table<string,number[]>}>
+    local sprites=LoadSprites(VerifySprite,{30,32,42,255}) --[[@as any]]
     Check(spriteCount==37,"37遗物均有独立像素徽记")
+    for id,sprite in pairs(sprites) do
+        local size=spriteSizes[id] or 16
+        Check(#sprite.rows==size,id.."遗物像素画布高度"..size)
+        local widthValid,paletteValid=true,true
+        for _,row in ipairs(sprite.rows) do
+            if #row~=size then widthValid=false end
+            for glyph in row:gmatch(".") do
+                if glyph~="." and sprite.palette[glyph]==nil then paletteValid=false end
+            end
+        end
+        Check(widthValid,id.."遗物像素行宽一致"..size)
+        Check(paletteValid,id.."遗物像素调色板完整")
+    end
     for _,id in ipairs(relicIds) do Check(sprites[id]~=nil,id.."徽记已注册") end
     game.relics.ghost_poop=true
     for _,id in ipairs({"poop","golden_poop","diamond_poop","rainbow_poop"}) do

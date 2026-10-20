@@ -46,7 +46,7 @@ function Detail.Create(props)
             gap = 10 * s, backgroundColor = field,
             children = {
                 StatIcon {kind = "gain", width = 28 * s, height = 28 * s, pointerEvents = "none"},
-                UI.Label {text = props.valueCaption or "当前收益", fontSize = 12 * s,
+                UI.Label {text = props.valueCaption or "价值", fontSize = 12 * s,
                     fontColor = C.textSecondary, textMotionDisabled = true, flexGrow = 1, flexBasis = 0},
                 UI.Label {id = "goldValue", text = Money.Format(props.gold),
                     fontSize = 23 * s, fontColor = C.warning, textMotionDisabled = true,

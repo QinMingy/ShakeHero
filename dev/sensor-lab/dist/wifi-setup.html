@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#101714">
+  <title>首次 Wi-Fi 连接 · ShakeHero</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/wifi-setup.css">
+</head>
+<body>
+  <main class="setup-shell">
+    <p class="eyebrow">SHAKEHERO / WI-FI SETUP</p>
+    <h1>第一次连接，<br>先建立信任。</h1>
+    <p class="setup-intro">手机和电脑连同一个 Wi-Fi。完成下面的证书设置后，就可以直接扫码测试，不需要 USB。</p>
+    <p class="notice" id="setupStatus" role="status">正在读取本机证书信息…</p>
+    <section class="panel setup-step">
+      <p class="eyebrow">01 / 核对并下载</p>
+      <h2>下载实验台公开证书</h2>
+      <p>先与电脑上的名称、SHA-256 指纹核对，再安装。这里提供公开证书，私钥保留在电脑上。</p>
+      <strong id="setupName">—</strong>
+      <code class="setup-fingerprint" id="setupFingerprint">—</code>
+      <a class="button primary full-width" id="downloadCertificate" href="/wifi/certificate.cer" download="ShakeHero-Sensor-Lab-CA.cer">下载 CA 证书</a>
+    </section>
+    <section class="panel setup-step">
+      <p class="eyebrow">02 / ANDROID</p>
+      <h2>在手机设置中安装</h2>
+      <p>打开手机设置，搜索“安装证书”，选择“CA 证书”，再选择刚下载的 <strong>ShakeHero-Sensor-Lab-CA.cer</strong>。不同品牌菜单名称可能不同。</p>
+      <p>安装会给手机增加一个 CA 信任项。仅在名称和指纹与电脑一致时确认；测试结束可在“用户凭据 / 受信任凭据”中移除该证书。</p>
+    </section>
+    <section class="panel setup-step">
+      <p class="eyebrow">03 / 开始测试</p>
+      <h2>进入 HTTPS 采集页</h2>
+      <p>安装完成后用 Chrome 打开，点击“启用手机传感器”。电脑页面的有效样本数持续增加，就表示已经接通。</p>
+      <a class="button primary full-width" id="openPhone" aria-disabled="true">打开体感测试</a>
+      <p>若浏览器仍显示证书警告，请返回核对安装状态和电脑地址。这里的 HTTP 页面只用于首次设置，不采集传感器。</p>
+    </section>
+    <p class="microcopy">以后扫描电脑上的“开始测试”二维码即可。电脑 IP 变化后重新扫码；证书更换或到期后需重新安装。</p>
+  </main>
+  <script type="module" src="/wifi-setup.mjs"></script>
+</body>
+</html>

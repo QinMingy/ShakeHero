@@ -5,6 +5,7 @@
 -- 只在标记瞬间读_Adjacents；4秒内相邻变化不改batch，反转算角路程，离场不再采样。
 -- 冷却结束给齿轮和仍在场batch各发同一个总角；回放1秒后才重新标记完整4秒。
 local Items = require("Bottle.Items")
+local FrameBudget = require("Bottle.FrameBudget")
 local Relics = require("Bottle.Relics")
 ---@class BottleRotationSample
 ---@field initialized boolean?
@@ -149,7 +150,7 @@ local function RewardTurn(game, item, state, events)
         game:_Spawn(product, events, true, origin)
     elseif item.id == "roulette" then
         -- 幸运转盘5%大奖是互斥分支，不再叠加基础奖；概率统一由遗物模块维护。
-        local delta, permanent = require("Bottle.RelicExpansion").RollWheel(game)
+        local delta, permanent = require("Bottle.RelicExpansion").RollWheel(game, events)
         Buff(game, item, events, delta, permanent)
     end
 end
@@ -168,6 +169,7 @@ end
 local function MarkBatch(game, gear, state)
     local batch, seen = {}, {}
     for _, other in ipairs(game:_Adjacents(gear.uid, state)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= gear.uid and other.location == "bottle" and not seen[other.uid] then
             local sample = {}
             Prime(sample, other.uid, state)
@@ -186,6 +188,7 @@ end
 ---@param state any
 local function TrackBatch(game, gear, state)
     for _, entry in ipairs(gear.gearBatch) do
+        FrameBudget.Checkpoint()
         local other = game:Get(entry.uid)
         if other and other.location == "bottle" then
             entry.travel = entry.travel + NaturalDelta(entry.sample, entry.uid, state)
@@ -201,7 +204,10 @@ end
 ---@param events GameEvent[]
 local function Replay(game, gear, events)
     local total = 0
-    for _, entry in ipairs(gear.gearBatch) do total = total + entry.travel end
+    for _, entry in ipairs(gear.gearBatch) do
+        FrameBudget.Checkpoint()
+        total = total + entry.travel
+    end
     local function Rotate(item)
         if item.location ~= "bottle" or Upright(game, item) then return end
         events[#events + 1] = { kind = "rotate", uid = item.uid, delta = -total,
@@ -209,6 +215,7 @@ local function Replay(game, gear, events)
     end
     Rotate(gear)
     for _, entry in ipairs(gear.gearBatch) do
+        FrameBudget.Checkpoint()
         local other = game:Get(entry.uid)
         if other then Rotate(other) end
     end
@@ -227,16 +234,19 @@ function Rotation.Step(game, dt, state, events)
     ---@type BottleRotationItem[]
     local present = game:BottleItems()
     for _, item in ipairs(present) do
-        if item.id == "spinning_top" or item.id == "windmill" or item.id == "roulette" then
+        FrameBudget.Checkpoint()
+        if game:IsSampled(item) and (item.id == "spinning_top" or item.id == "windmill" or item.id == "roulette") then
             item.rotationProgress = (item.rotationProgress or 0) + Rotation.SampleNatural(item, state)
             while item.rotationProgress >= TURN - EPSILON do
+                FrameBudget.Checkpoint()
                 item.rotationProgress = math.max(0, item.rotationProgress - TURN)
                 RewardTurn(game, item, state, events)
             end
         end
     end
     for _, gear in ipairs(present) do
-        if gear.id == "gear" and gear.location == "bottle" then
+        FrameBudget.Checkpoint()
+        if gear.id == "gear" and gear.location == "bottle" and game:IsSampled(gear) then
             local playback = gear.gearPlayback or 0
             if playback > 0 then
                 gear.gearPlayback = math.max(0, playback - dt)

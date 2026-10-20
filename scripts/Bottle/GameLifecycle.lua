@@ -4,6 +4,8 @@ local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local RelicEffects = require("Bottle.RelicEffects")
 local Expansion = require("Bottle.ExpansionEffects")
+local FrameBudget = require("Bottle.FrameBudget")
+local TriggerFeedback = require("Bottle.TriggerFeedback")
 local Lifecycle = {}
 
 local function RemoveReference(array, uid)
@@ -24,7 +26,9 @@ local function FruitHook(game, item, events)
     if Relics.Has(game, "gm_fruit") and Items.HasTag(item.id, "水果")
         and game:_RandomInt(10) == 1 then
         local pool = { "apple", "banana", "orange", "cherry" }
-        game:_SpawnTop(pool[game:_RandomInt(#pool)], events)
+        if game:_SpawnTop(pool[game:_RandomInt(#pool)], events) then
+            TriggerFeedback.Relic(game, events, "gm_fruit")
+        end
     end
 end
 
@@ -35,7 +39,7 @@ end
 ---@param origin {x:number,y:number}?
 ---@return ItemInstance
 function Lifecycle.Spawn(game, id, events, temporary, origin)
-    local item = game:_Create(id, temporary)
+    local item = game:_Create(id, temporary, events)
     item.generatedTemporary = temporary == true
     if #game:BottleItems() >= Items.Settings.bottleLimit or #game.spawnQueue > 0 then
         item.location = "queued"
@@ -56,6 +60,7 @@ function Lifecycle.DrainQueue(game, events)
     if game._drainingQueue or game.phase ~= "running" then return end
     game._drainingQueue = true
     while #game.spawnQueue > 0 and #game:BottleItems() < Items.Settings.bottleLimit do
+        FrameBudget.Checkpoint()
         local uid = table.remove(game.spawnQueue, 1)
         local item = game:Get(uid)
         local origin = game._queueOrigins[uid]
@@ -87,9 +92,12 @@ function Lifecycle.Destroy(game, uid, temporary, events, consumer, reason)
         and not Expansion.BeforeDestroy(game, item, consumer, events, cause) then return false end
     -- 动效只记录消耗前外观；实际消耗、转化、重生和收益继续在本次调用内立即完成。
     local position = game._lastPositions[uid]
+    local destination = consumer and game._lastPositions[consumer.uid]
     events[#events + 1] = {kind = "consume", uid = uid, id = item.id, reason = cause,
         scale = item.scale, rollValue = item.rollValue, woolCount = item.woolCount,
-        x = position and position.x, y = position and position.y}
+        x = position and position.x, y = position and position.y,
+        consumerUid = consumer and consumer.uid, consumerId = consumer and consumer.id,
+        toX = destination and destination.x, toY = destination and destination.y}
     local value = game:_Value(item)
     local originalId = item.id
     local function Complete()
@@ -109,6 +117,7 @@ function Lifecycle.Destroy(game, uid, temporary, events, consumer, reason)
         item.counter = item.counter + 1
         if item.counter < RelicEffects.TomatoEggLimit(game) then
             game:_RespawnTop(item, events)
+            if item.counter >= 5 then TriggerFeedback.Relic(game, events, "scramble_recipe") end
         else
             item.location = "discard"
             RemoveReference(game.deck, uid)
@@ -121,6 +130,7 @@ function Lifecycle.Destroy(game, uid, temporary, events, consumer, reason)
         if Relics.Has(game, "see_you_tomorrow") then
             item.permBonus = item.permBonus + 1
             events[#events + 1] = {kind="buff",uid=uid,id=originalId,value=1}
+            TriggerFeedback.Relic(game, events, "see_you_tomorrow")
         end
         game:_RespawnTop(item, events)
         return Complete()

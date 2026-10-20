@@ -6,13 +6,12 @@ local Repair = require("Bottle.RepairTests")
 local DT = 1 / 60
 local Validation = {}
 
----@param mode integer
 ---@param count integer
 ---@param seed integer
 ---@param amplitude number
 ---@param id string?
 ---@return number
-local function Measure(mode, count, seed, amplitude, id)
+local function Measure(count, seed, amplitude, id)
     local subject = id or "rabbit"
     local ids = {subject}
     local pool = subject == "glutton" and {"soldier", "doctor", "ball"}
@@ -22,7 +21,6 @@ local function Measure(mode, count, seed, amplitude, id)
     if subject == "glutton" then assert(game:Get(1)).scale = 1.5 end
     local sim = Physics.New()
     sim:Sync(game:BottleItems(), true, seed)
-    sim:SetMode(mode)
     sim:BeginShake()
     assert(game:Start())
     game:Step(0, sim:Contacts())
@@ -54,8 +52,8 @@ local function Measure(mode, count, seed, amplitude, id)
     -- 夹具大胃王从150%缩回100%最多5次；路程达标但已到下限不再触发resize。
     local expected = subject == "glutton" and math.min(distanceTriggers, 5) or distanceTriggers
     local triggers = subject == "glutton" and resizeCount or item.permBonus
-    print(string.format("[DistanceValidation] mode=%d count=%d seed=%d amplitude=%.2f meters=%.5f subject=%s threshold=%d triggers=%d expected=%d resizes=%d",
-        mode, count, seed, amplitude, distance, subject, threshold, triggers, expected, resizeCount))
+    print(string.format("[DistanceValidation] count=%d seed=%d amplitude=%.2f meters=%.5f subject=%s threshold=%d triggers=%d expected=%d resizes=%d",
+        count, seed, amplitude, distance, subject, threshold, triggers, expected, resizeCount))
     assert(triggers == expected, "实际触发次数必须匹配真实路程/阈值及体积下限：" .. subject)
     if subject == "glutton" then
         assert(math.abs(item.scale - math.max(1, 1.5 - expected * .1)) < 1e-7, "大胃王实际缩幅匹配次数")
@@ -65,6 +63,7 @@ local function Measure(mode, count, seed, amplitude, id)
             "余程必须匹配真实路程：" .. subject)
     end
     assert(game.phase == "settle", "600固定步准确结束10秒摇晃")
+    sim:EndShake()
     sim:Dispose()
     return distance
 end
@@ -116,15 +115,13 @@ local function MeasureAutonomous(id, relics)
 end
 
 function Validation.Run()
-    for mode = 1, 2 do
-        for _, count in ipairs({4, 20}) do
-            for _, amplitude in ipairs({.25, .5, .8}) do
-                for _, seed in ipairs({137, 337, 739}) do Measure(mode, count, seed, amplitude) end
-            end
+    for _, count in ipairs({4, 20}) do
+        for _, amplitude in ipairs({.25, .5, .8}) do
+            for _, seed in ipairs({137, 337, 739}) do Measure(count, seed, amplitude) end
         end
-        for _, count in ipairs({4, 20}) do
-            for _, seed in ipairs({137, 337, 739}) do Measure(mode, count, seed, .5, "glutton") end
-        end
+    end
+    for _, count in ipairs({4, 20}) do
+        for _, seed in ipairs({137, 337, 739}) do Measure(count, seed, .5, "glutton") end
     end
     MeasureAutonomous("ghost", {ghost_sport = true})
     MeasureAutonomous("discus", {})
@@ -134,7 +131,7 @@ function Start()
     local ok, err = pcall(function()
         Validation.Run()
         local total = require("Bottle.DistanceTests").Run()
-        print("[DistanceValidation] PASS 50组真实物理场景；规则专项=" .. total)
+        print("[DistanceValidation] PASS 26组真实物理场景；规则专项=" .. total)
     end)
     if not ok then print("[DistanceValidation] FAIL " .. tostring(err)) end
     engine:Exit()

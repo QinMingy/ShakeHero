@@ -426,6 +426,7 @@ function Skin.Apply(view,title,help,gm)
     Skin.AttachInventoryTabs(view)
     -- 左上角返回主菜单：与牌库/重抽同一套 wood 九宫格按钮风格。
     view.mainMenuButton=GameAudio.Button{id="mainMenu",text="主菜单",onClick=function()
+        if view.simulationPending then return end
         if view.startScreen and view.startScreen.Open then view.startScreen:Open() end
     end}
     view.mainMenuButton:SetStyle({zIndex=9})
@@ -440,6 +441,10 @@ function Skin.Apply(view,title,help,gm)
     bg.Update=function(_,dt)
         m.reels:Tick(dt)
         m.clock:Tick(dt)
+        -- Idle flow remains visible during preparation/tutorial cards. A paused
+        -- live round freezes its visual phase rather than replaying stale shake input.
+        local flowPaused=view.game.phase=="running" and view.board.isPaused and view.board.isPaused() or false
+        m.litScene.screenFlow:Tick(dt,view.game.phase,view.physics.motion,flowPaused)
         m.litScene:Tick(dt)
         TargetProgress.Update(view,dt)
         TargetSwap.Sync(view)
@@ -647,7 +652,7 @@ function Skin.Layout(view)
             backgroundColor={24,30,27,235},textColor=ink,borderColor={94,96,97,255}})
     end
     RulesUI.Layout(view,m.help)
-    view.physicsButton:SetText("物理")
+    view.physicsButton:SetText("体感")
     place(m.presentationButton,{258,0,84,24},s)
     m.presentationButton:SetStyle({fontSize=11*s,padding=0,borderWidth=1,boxShadow=false,
         backgroundColor={24,30,27,235},textColor=ink,borderColor={94,96,97,255}})
@@ -658,7 +663,7 @@ function Skin.Layout(view)
         b:SetStyle({width="100%",height=40*s,fontSize=12*s,padding=0,borderWidth=1,
             boxShadow=false,backgroundColor={24,30,27,235},textColor=ink,borderColor={94,96,97,255}})
     end
-    place(view.physicsMenu,{202,60,190,234},s)
+    place(view.physicsMenu,{202,60,190,108},s)
     view.physicsMenu:SetStyle({padding=8*s,gap=6*s})
     for _,child in ipairs(view.physicsMenu:GetChildren()) do
         child:SetStyle({width="100%",fontSize=11*s})
@@ -777,6 +782,19 @@ end
 function Skin.FitNumbers(view)
     local size=math.min(22,92/math.max(2,#Reels.Literal(TargetSwap.Value(view))))*view.machineSkin.scale
     if view.goalLabel.props.fontSize~=size then view.goalLabel:SetStyle({fontSize=size}) end
+    local m,day=view.machineSkin,view.roundLabel
+    local daySize=14*m.scale
+    local options=m.dayFitOptions
+    if not options then options={};m.dayFitOptions=options end
+    options.fontSize=UI.Theme.FontSize(daySize)
+    options.fontFace=UI.Theme.FontFace(day.props.fontFamily,day.props.fontWeight)
+    options.letterSpacing=day.props.letterSpacing or 0
+    options.width,options.minFontSize=74*m.scale,UI.Theme.FontSize(6*m.scale)
+    options.cache=m.dayFitCache
+    local fitted=UI.MeasureTextFit(day:GetText(),options)
+    m.dayFitCache=fitted
+    local fittedSize=daySize*fitted.fontSize/options.fontSize
+    if day.props.fontSize~=fittedSize then day:SetStyle({fontSize=fittedSize}) end
 end
 
 function Skin.TargetValue(view) return TargetSwap.Value(view) end
@@ -810,7 +828,7 @@ function Skin.BuildDraft(view,Icon,Description,DraftValue,ItemStats)
     local detail=ItemDetail.Create{prefix="draft",scale=s,def=def,isRelic=relicDraft,icon=icon,
         caption=relicDraft and "挑选下一件遗物" or "挑选下一件物品",
         meta="候选 "..selected.." / "..#view.game.options,
-        valueCaption=type(option)=="table" and "当前收益" or "初始收益",
+        valueCaption="价值",
         gold=gold,
         descriptionId="draftDescription_"..selected,
         effect=relicDraft and def.effect or ItemText.Effect(view.game,id,
@@ -953,7 +971,7 @@ function Skin.Update(view)
         m.pageMotion:Clear("draft")
         clearDraftMotion(m)
     end
-    if view.physicsButton.props.text~="物理" then view.physicsButton:SetText("物理") end
+    if view.physicsButton.props.text~="体感" then view.physicsButton:SetText("体感") end
     -- 中央汇总完成并出币后，金币真正抵达才推动滚轮与目标进度。
     m.reels:SetValue(view.board:DisplayedBalance())
     -- 转轮音：只有分数滚轮实际滚动时起循环，停稳后收尾；开始页不响。
@@ -961,18 +979,19 @@ function Skin.Update(view)
     if view.startScreen and view.startScreen:IsActive() then reelsSpinning = false end
     GameAudio.SetReels(reelsSpinning)
     local c=m.clock
-    if c.phase~=view.game.phase then
-        if c.phase=="running" and view.game.phase=="settle" then
+    local clock=view.simulationClock or view.game
+    if c.phase~=clock.phase then
+        if c.phase=="running" and clock.phase=="settle" then
             -- 摇晃结束进入结算间隔：开始红色闪动，不再显示倒计时（用户要求）。
             c.flashElapsed=0
-        elseif view.game.phase=="prepare" or view.game.phase=="running"
-            or view.game.phase=="draft" or view.game.phase=="over" then
+        elseif clock.phase=="prepare" or clock.phase=="running"
+            or clock.phase=="draft" or clock.phase=="over" then
             -- 回到准备/摇晃或进入三选一/结束：停止闪动，恢复常亮。
             c.flashElapsed=-1;c.visible=true
         end
-        c.phase=view.game.phase
+        c.phase=clock.phase
     end
-    c.centis=Clock.Centiseconds(view.game.phase,view.game.elapsed,view.game.settleElapsed,view.game:Duration())
+    c.centis=Clock.Centiseconds(clock.phase,clock.elapsed,clock.settleElapsed,clock.duration or view.game:Duration())
     if view.game.phase=="draft" and view.currentPhase=="draft" and c.flashElapsed<0
         and not view.choiceHidden and not view.inventoryOpen
         and not view.draft:IsVisible() then view.draft:Show() end

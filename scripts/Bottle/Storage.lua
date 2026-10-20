@@ -2,14 +2,16 @@
 local Game = require("Bottle.Game")
 local Atmosphere=require("Machine.Atmosphere")
 local TutorialState = require("Bottle.TutorialState")
+local SensorTuning = require("Bottle.SensorTuning")
 ---@class BottleStorage
 ---@field status string
 ---@field sequence number
----@field physicsMode number
 ---@field atmosphereMode string
 ---@field tutorial BottleTutorialState
 ---@field runStarted boolean 玩家已经进入本局；启动页预先保存不算开始
-local Storage = { status = "未保存", sequence = 0, physicsMode = 2, atmosphereMode = "auto",
+---@field sensorGain number
+local Storage = { status = "未保存", sequence = 0, atmosphereMode = "auto",
+    sensorGain = SensorTuning.DEFAULT,
     tutorial = TutorialState.New(false), runStarted = false }
 
 ---@return BottleTutorialState
@@ -45,25 +47,9 @@ function Storage.MarkImported()
     return Storage.SetTutorial(TutorialState.MarkImported(Storage.tutorial))
 end
 
--- 物理模式是玩家设置，不进入 Game 的回合回滚快照；旧存档默认优化版。
----@param value any
----@return integer
-local function PhysicsMode(value)
-    if type(value) == "table" and value.physicsMode == 1 then return 1 end
-    return 2
-end
-
 local function AtmosphereMode(value)
     local mode=type(value)=="table" and value.atmosphereMode or nil
     return Atmosphere.Valid(mode) and mode or "auto"
-end
-
----@param mode number
----@return boolean
-function Storage.SetPhysicsMode(mode)
-    if mode ~= 1 and mode ~= 2 then return false end
-    Storage.physicsMode = mode
-    return true
 end
 
 function Storage.SetAtmosphere(mode)
@@ -72,33 +58,41 @@ function Storage.SetAtmosphere(mode)
     return true
 end
 
+---@param value number
+---@return boolean
+function Storage.SetSensorGain(value)
+    local gain = SensorTuning.Normalize(value)
+    if not gain then return false end
+    Storage.sensorGain = gain
+    return true
+end
+
 ---@param game BottleGame
 ---@return string
 function Storage.Export(game)
     return cjson.encode({ format = "bottle-lab-v1", game = game:Snapshot(),
-        settings = {physicsMode = Storage.physicsMode,atmosphereMode=Storage.atmosphereMode} })
+        settings = {atmosphereMode=Storage.atmosphereMode} })
 end
 
 ---@param text string
 ---@return table?
 ---@return string?
----@return number? physicsMode 仅在对局恢复成功后提交，失败导入不改变设置。
----@return string? atmosphereMode
+---@return string? atmosphereMode 仅在对局恢复成功后提交，失败导入不改变设置。
 function Storage.Import(text)
-    if #text > 2000000 then return nil, "存档码过长" end
+    if #text > 2000000 then return nil, "存档码过长", nil end
     local ok, value = pcall(cjson.decode, text)
     if not ok or type(value) ~= "table" or value.format ~= "bottle-lab-v1"
         or type(value.game) ~= "table" then
-        return nil, "存档码格式不正确"
+        return nil, "存档码格式不正确", nil
     end
-    return value.game, nil, PhysicsMode(value.settings), AtmosphereMode(value.settings)
+    return value.game, nil, AtmosphereMode(value.settings)
 end
 
 ---@return table?
 function Storage.Load()
     local bestSequence = -1
-    local bestMode = 2
     local bestAtmosphere = "auto"
+    local bestSensorGain = SensorTuning.DEFAULT
     local bestTutorial = TutorialState.New(false)
     local bestStarted = false
     local best = nil ---@type table?
@@ -120,8 +114,10 @@ function Storage.Load()
                     if valid then
                         best = value.game
                         bestSequence = math.floor(value.sequence)
-                        bestMode = PhysicsMode(value.settings)
                         bestAtmosphere = AtmosphereMode(value.settings)
+                        local savedSettings = type(value.settings) == "table" and value.settings or {}
+                        bestSensorGain = savedSettings.sensorGainRevision == SensorTuning.SAVE_REVISION
+                            and SensorTuning.Normalize(savedSettings.sensorGain) or SensorTuning.DEFAULT
                         bestTutorial = TutorialState.Reconcile(TutorialState.FromSaved(value.tutorial, true), best)
                         -- 旧档缺少标记时保守保留继续入口，避免丢掉第一回合的真实进度。
                         bestStarted = value.runStarted ~= false
@@ -134,8 +130,8 @@ function Storage.Load()
             end
         end
     end
-    Storage.physicsMode = bestMode
     Storage.atmosphereMode = bestAtmosphere
+    Storage.sensorGain = bestSensorGain
     Storage.tutorial = bestTutorial
     Storage.runStarted = bestStarted
     if best then
@@ -153,7 +149,8 @@ function Storage.Save(game)
     local ok, text = pcall(cjson.encode, {
         format = "bottle-lab-v1", sequence = Storage.sequence, game = snapshot,
         runStarted = Storage.runStarted,
-        settings = {physicsMode = Storage.physicsMode,atmosphereMode=Storage.atmosphereMode},
+        settings = {atmosphereMode=Storage.atmosphereMode,
+            sensorGain = Storage.sensorGain, sensorGainRevision = SensorTuning.SAVE_REVISION},
         tutorial = TutorialState.ForSnapshot(Storage.tutorial, snapshot),
     })
     if not ok then

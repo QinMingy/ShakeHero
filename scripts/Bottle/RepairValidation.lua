@@ -59,11 +59,13 @@ Case("幽灵从生成到漂移和牌库下落始终正面直立", function(check
         "不同 uid 的幽灵创建角度均为零")
     check(math.abs(select(3, sim:GetPose(3))) > .01, "普通物品保留原初始旋转")
     local upright = true
+    sim:BeginShake()
     for step = 1, 180 do
         sim:Shake(step % 2 == 0 and .3 or -.3, .2)
         sim:Step(1 / 60)
         upright = upright and select(3, sim:GetPose(1)) == 0 and select(3, sim:GetPose(2)) == 0
     end
+    sim:EndShake()
     check(upright, "摇晃和自主漂移连续三秒不倾斜")
     local PopIn = require("Bottle.PopIn")
     local pop, ordinary = PopIn.NewPose(1, "ghost"), PopIn.NewPose(3, "apple")
@@ -134,22 +136,22 @@ Case("真实幽灵全fixture为动态sensor且可穿物品不推动普通物品"
     print(string.format("[RepairPhysics] sensor trajectory_delta=%.9g ordinary_push=%.9g",maxDelta,maxPush))
 end)
 
-Case("两种摇晃和体感输入对幽灵轨迹零影响", function(check)
+Case("手势强弱体感和松手回中对幽灵轨迹零影响", function(check)
     local sims = {}
     for index=1,5 do
         local sim=NewWorld(Tests.Fixture({"ghost", "apple"}))
-        sim:SetMode((index==2 or index==5) and 1 or 2)
         Place(sim,1,0,3.5); Place(sim,2,1,1.5)
+        if index==2 or index==3 or index==5 then sim:BeginShake() end
         sims[index]=sim
     end
     local maximum, ordinaryDifference = 0, 0
     for step=1,120 do
         local direction = step%24 < 12 and 1 or -1
         sims[2]:Shake(.04*direction,.02)
-        sims[3]:BeginShake(); sims[3]:Shake(.04*direction,.02)
+        sims[3]:Shake(.12*direction,.06*direction)
         sims[4]:Sensor(direction*.7,.5,1/60)
-        -- main的物理一体感差分最终调用Shake，复现该生产入口而非用无效Sensor接口。
-        sims[5]:Shake(.12*direction,.06)
+        if step<61 then sims[5]:Shake(.12*direction,.06*direction)
+        elseif step==61 then sims[5]:EndShake() end
         for _,sim in ipairs(sims) do sim:Step(1/60) end
         local x,y = sims[1]:GetPose(1)
         for index=2,#sims do
@@ -157,12 +159,13 @@ Case("两种摇晃和体感输入对幽灵轨迹零影响", function(check)
             maximum=math.max(maximum,math.abs(x-xx),math.abs(y-yy))
         end
     end
+    for _,sim in ipairs(sims) do sim:EndShake() end
     local x,y=sims[1]:GetPose(2)
     for index=2,#sims do
         local xx,yy=sims[index]:GetPose(2)
         ordinaryDifference=math.max(ordinaryDifference,math.abs(x-xx)+math.abs(y-yy))
     end
-    check(maximum<1e-6,"无摇晃/物理一/物理二/体感轨迹逐步一致")
+    check(maximum<1e-6,"无输入/轻摇/强摇/体感/松手回中的幽灵轨迹逐步一致")
     check(ordinaryDifference>.05,"同样的输入确实推动普通物品，排除空测")
     print(string.format("[RepairPhysics] input_ghost_delta=%.9g ordinary_delta=%.9g",maximum,ordinaryDifference))
 end)
@@ -208,8 +211,9 @@ Case("幽灵底顶侧肩颈及凹角全包络有界", function(check)
     for uid,p in ipairs(points) do Place(sim,uid,p[1],p[2]) end
     local minGap, maxSpeed = math.huge,0
     local safe=true
+    sim:BeginShake()
     for step=1,360 do
-        if step%12==0 then sim:Shake(step%24==0 and .4 or -.4,.4); sim:Sensor(.8,-.8,1/60) end
+        if step%12==0 then sim:Shake(step%24==0 and .4 or -.4,.4) end
         sim:Step(1/60)
         for uid,rec in pairs(sim.bodies) do
             local x,y=sim:GetPose(uid)
@@ -220,6 +224,7 @@ Case("幽灵底顶侧肩颈及凹角全包络有界", function(check)
             maxSpeed=math.max(maxSpeed,math.sqrt(velocity.x^2+velocity.y^2))
         end
     end
+    sim:EndShake()
     check(safe and minGap>=-.001,"8处边界连续6秒整个幽灵包络留瓶内")
     check(maxSpeed<3,"自主低速漂移不被摇晃高速甩出")
     print(string.format("[RepairPhysics] boundary_min_gap=%.9g max_speed=%.9g",minGap,maxSpeed))

@@ -1,0 +1,18 @@
+Use case: stylized-concept.
+Asset type: ONE transparent PNG bottle-shaped border sprite for the EXISTING retro low-resolution pixel-art game shown in the reference screenshot.
+
+The user rejected the previous realistic translucent bottle. Their replacement request is specifically: "按照原有的尺寸，生成一个瓶子感觉的边框就行了" — make only a simple bottle-shaped FRAME matching the original dimensions. This is a game boundary frame, not a realistic physical glass object.
+
+The reference screenshot is the sole authority for the original bottle outline, proportions, restrained pixel style and dark gray-green palette. Extract no UI or objects. Produce ONLY the new border asset, on REAL transparent RGBA. Both outside and the entire inside of the bottle are alpha=0. No glass film, no body fill.
+
+CRITICAL exact silhouette: broad rectangular vertical body, straight perfectly parallel walls, completely flat horizontal bottom with SQUARE corners (a single tiny pixel bevel is permitted), straight diagonal sloping shoulders, very short centered rectangular neck with horizontal top. Outer width:height precisely 3:4. Neck width precisely 47.9167% of full body width. Neck height 5.46875% of entire bottle height. Shoulders end 14.0625% down from top, then straight walls extend to flat bottom.
+In normalized coordinates relative to outer bottle bounds, trace this polygon:
+(0,1) -> (0,0.140625) -> (0.260417,0.0546875) -> (0.260417,0) -> (0.739583,0) -> (0.739583,0.0546875) -> (1,0.140625) -> (1,1) -> close.
+Keep that EXACT silhouette. The image must NOT turn into a rounded tall jam jar. No deep neck, no elliptical mouth, no rounded bulging shoulders. Bottom stays straight, original proportions stay intact.
+
+Rendering: deliberately simple handcrafted PIXEL ART on a consistent square grid, roughly 120x160 source pixels across the bottle enlarged with nearest-neighbor. Border thickness only 1-2 source pixels, consistent narrow width all around. Main stroke a quiet desaturated medium gray-green (#617263), with a few SINGLE-pixel muted lighter gray-sage accents (#81907b) at top-left shoulder and left bottom corner. Very few dark green pixels on outer shadow side (#2f4036). Use only these 3 flat muted tones. Low contrast, integrated with the screenshot machine and CRT. No pure white, yellow-green or gold.
+Do not add a parallel inner decorative frame; this is one narrow bottle boundary. Entire interior is perfectly empty and fully transparent. Subtle bevel feeling comes only from a few neighboring darker/lighter pixels along the same very thin border; no thick material volume.
+Only a short low-key highlight near the neck may hint that this is a bottle. No long reflection strips. The border is secondary to the colorful objects that will be shown inside later.
+
+Composition: front orthographic view, perfectly centered upright, full object uncut, exactly 8% transparent margin around bottle. SINGLE asset, NO mockup, NO objects, NO game interface, NO text.
+Avoid absolutely: measurement ticks, numbers, scales, realistic glass, frosted glass, cloudy white fill, translucency over the interior, wide rim, double thick contour, curved bottom, rounded jar, cork, cap, liquid, label, ornaments, smooth gradients, haze, bloom, glow, blur, noise, glitter, floor, cast shadow, background, checkerboard baked into image. Only the simple thin pixel bottle-shaped border.

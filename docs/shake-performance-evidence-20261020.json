@@ -1,0 +1,1234 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "baselineRevision": "a0780b72b32587d1cb61dda2caaee2ad955bce76",
+  "remoteIntegration": "Preserve all four newly fetched remote commits, including refreshGain short popups and their history. Revalidated the merged source against a0780b7; the earlier 76123c2 12-case/100-item evidence remains archived.",
+  "acceptanceScope": "User confirmed 20 draws and an expected population up to 40; test 4/20/40 initial items. No game capacity or draw limit was changed. Preserve 100-item extreme failures as non-blocking evidence.",
+  "sourceManifest": {
+    "path": "outputs/frame-budget-fix-20261020/native-candidate-source-final-merged/manifest.json",
+    "sha256": "6ff904d01da137c418225df1ed24ef285b0a31e5194771689c1453fda5081139"
+  },
+  "luaSourceSha256": {
+    "scripts/main.lua": "71681114bf503f130a0494e53dda1bc054e3e28c88f8bcbcbc6d9211ab635475",
+    "scripts/PublishConfig.lua": "dd7120a6f4a7faae82b6d0da94d0397b76f9c8e4dac2a058a714ca925537fb39",
+    "scripts/Bottle/AdaptiveCCD.lua": "afd68b21bcbb83d626b04cd296a908b2ce5592100cf5b5f5976b3cac36728030",
+    "scripts/Bottle/AdaptiveCCDTests.lua": "0467bbd250aa3f5590ccb4791fbd7477ef254d4193039b9424283d2ab0e35259",
+    "scripts/Bottle/Art.lua": "d96b75d9ccdf6579f4c80b32ea4eda068d12475d6ca1b50a10ff7285e5dfd5ef",
+    "scripts/Bottle/Audio.lua": "da77505a880113f6a15238509169838c96eff55ce8567e9f46ba34d9186bdb55",
+    "scripts/Bottle/Board.lua": "f6d847333b03e527ba616507bdb34e74bbf254072d26bb56e653543ac7b986b9",
+    "scripts/Bottle/BoardEventStage.lua": "7a5700204e44378947d5377b84c1a45125694eb70c469783e585c6a3d5f94fa7",
+    "scripts/Bottle/BoardEventStageTests.lua": "d509231039ace64aae258c01a9cea2e4774f270c9bc38b4b43cdc5a12a5044b9",
+    "scripts/Bottle/BudgetSort.lua": "7fcb0142906a10db316640fe948ee13f1a09b8619f183e9c66221cf0d104bb61",
+    "scripts/Bottle/ButtonMotion.lua": "5d031bb9058f88df6e0874e3a4df978a8678f7de258842bb1ae0f6f5389dfd14",
+    "scripts/Bottle/CoinIcon.lua": "0985e331d301b81a5419c0d5f29504f5181805880d058eedc2390111634094d4",
+    "scripts/Bottle/CoinPickup.lua": "207b9d144ba0d099ef8a6a5a5f1c767d7af683a9ac96a081a95a193aac52801f",
+    "scripts/Bottle/ConsumeFeedback.lua": "6977d5f0bb8514078bafcb510b30ab3b6e6f63a7c471f4ac198122b74fd6192b",
+    "scripts/Bottle/ConsumeFeedbackTests.lua": "a4438323a992692759c755334ebbc87fae24aa989f9936a4593becdf167f5581",
+    "scripts/Bottle/ConsumeFlash.lua": "fa175df2ff3945e9926b6825bc7eb62ec880d8585c5dd152e86c2a7ea640b5bc",
+    "scripts/Bottle/ConsumeFlashTests.lua": "fd20bd730291f34fb7916fc93c728c6391514bde7d95a7aaaaf25f052768ead4",
+    "scripts/Bottle/ConsumeSmoke.lua": "dca2de4f3f306fe31d9c675eee3ed0b309842c9290dc6f9cd7fa43520a9953c2",
+    "scripts/Bottle/ConsumeStyles.lua": "2a89d72a174c8da6ba940aedc9542df8537bb39be7e5eb2d33e58b96b0b34f9c",
+    "scripts/Bottle/ContactPerformanceTests.lua": "389b23100ab715fed31d27576767fc7995fb5568bda01ba29d9288d6cb16b5e5",
+    "scripts/Bottle/CooldownTests.lua": "bce64b2ea678182a732323d727187d9c2f61e9ece14dd6e6f0b8f4ac9b84f655",
+    "scripts/Bottle/CoreUpdateTests.lua": "bbb2733bcab047fcf618eb7420469064f4b64344302b3abfa1fd67ec057e6c62",
+    "scripts/Bottle/DeckBoard.lua": "204d7cbd197ee3d4494659ff59a9da2b64e1b4bac088736d3311de3ef19359b3",
+    "scripts/Bottle/Description.lua": "5af4735b6a6a90a266980b51a79fedcf000fd6c62373f755eb0d991644f38200",
+    "scripts/Bottle/DistanceTests.lua": "c27dd40b92c08fb7b43e9c32f5229e377d610e45d72d48cb17a1439c1fa6d2f6",
+    "scripts/Bottle/DistanceValidation.lua": "076bf703c325c066f9075b50e8cb0a325cc6276df7c8f014d3a6e4a6b3faf6b3",
+    "scripts/Bottle/Effects.lua": "2dc591aa7aba67dc53a24ff7c1e92f01baf5f119677c932d9a30d3d6c6818b7f",
+    "scripts/Bottle/ExpansionEffects.lua": "bdb17b6147e1988f12724d35c8937b30796cadff16c0876b29aff8eabf6bd76b",
+    "scripts/Bottle/ExpansionPhysics.lua": "b03387839490cd7366f6956a16983abca0bcd68d841a1cfe0c9bb53fbb5c660f",
+    "scripts/Bottle/ExpansionPhysicsValidation.lua": "12ba5d615d6126e7c8d113aa53bd4f6972c3d39a62a2d2b2ca50e9560664ca9e",
+    "scripts/Bottle/ExpansionSprites.lua": "faff1e799600ac02d86969a7e513a1a07db0429054baeedc8be4a38a0e053abb",
+    "scripts/Bottle/ExpansionTests.lua": "a821e0f3ed07b652f628165012605e93b381e090efc296208a3adf20cf186cba",
+    "scripts/Bottle/ExpansionUITests.lua": "b2f98fec0ccecdb8f1846efb64ba1bd4a0e8bd81794286956cfe605d207ac20f",
+    "scripts/Bottle/ExpansionUIValidation.lua": "97cf5a160815ca25059aca3ac256c43463778fd755bc1bfcc30d421443ec0b19",
+    "scripts/Bottle/ExtraEffects.lua": "cc028bae0eede4bc3b6ea5b82a97f1451eddebfc8b1b71835d9401fece739fa8",
+    "scripts/Bottle/ExtraSprites.lua": "967169b1df77018ec0a86f98397f1007866644fad628c81c471c4d2d29daedbf",
+    "scripts/Bottle/ExtraTests.lua": "23a2b741e46684fc6579f74202c2960714ec760691662ee7bad99cba6763aa76",
+    "scripts/Bottle/FrameBudget.lua": "322255eafbef978e390259bd07a76dcd208408f80ea3a1c112c8003751ad8f74",
+    "scripts/Bottle/FrameBudgetTests.lua": "9577da88e4bb57cf44fb81fed513c5620303d941002626a6f0b02c37d80cc3dc",
+    "scripts/Bottle/GainIcon.lua": "ca5041a02770fd8eeee758e2cca9e7bc2a5fd879150f5316dbfcc28dbd014f94",
+    "scripts/Bottle/Game.lua": "ac49416362492a6d0d8c52495bdda77d00b542b98daa299e8c958cb549f428d5",
+    "scripts/Bottle/GameLifecycle.lua": "66ec99a1bdca9aeec1aac22b79143e54ffe1e2e02c099240564cbe329607faee",
+    "scripts/Bottle/GamePersistence.lua": "80da2687e204110d20efe520616bff6e0031a9eaf3ec43459a48241e80b29056",
+    "scripts/Bottle/GmCommands.lua": "b869d35e548cc32aea926c8d5d740e913689b097adf630001e8ce50576eb28e3",
+    "scripts/Bottle/ItemDetail.lua": "20f72dda7d6f69793297a012ebc023b11f718b8d51060157331f2dc4815ec347",
+    "scripts/Bottle/ItemFeedback.lua": "08c4fcbed1197b9d7c5320556a1066e4a37139ab02664032821838858b961675",
+    "scripts/Bottle/ItemFeedbackDraw.lua": "fdf5bbcc1fcd2bd61a88a6de8736011dfd0df505a814c1f7b29fedcb21fd0e7e",
+    "scripts/Bottle/ItemFeedbackEventTests.lua": "62e15080d448628dc597a7c5e6f0f2fec1f04ffdef2855a6c19406e46f5bcee4",
+    "scripts/Bottle/ItemFeedbackTests.lua": "21ce5bbadc225c41aa738d716e321725ee9cf92909c4e36adb85bda85904e358",
+    "scripts/Bottle/Items.lua": "97ebaaf55b13da9724356caec3fc2d0316bb179b5df1f04ad9449b0d02a2a40f",
+    "scripts/Bottle/ItemSounds.lua": "afa6ede0622432cbbed2dadc02287551269fc6646947c6ab5d73e474172ebf40",
+    "scripts/Bottle/ItemSoundState.lua": "b69ef88fc6cb55024feaf1edd75cd1a72425aba83ec6b22b5f157553ce10698e",
+    "scripts/Bottle/ItemSoundTests.lua": "ea1eb1095ff7e205e339ca86c3c6d6ecd43204dc90cdc1bd4917f9f8b19069d4",
+    "scripts/Bottle/ItemSprites.lua": "280732f0d8493ef556a01672a0c7aff9939bb6ea8af5f44f522676a6c7837a9a",
+    "scripts/Bottle/ItemText.lua": "3de139c2215f963e674a25412839d7fcda55fd63f7264ebf6fea2c9f829d9098",
+    "scripts/Bottle/Money.lua": "4f52a2f7bc8fe63e59bfbf465ec16b6f8115c39b80ed34c9e620de6f8b7fbac2",
+    "scripts/Bottle/MotionRotationValidation.lua": "22d88e18b388bbb3ddcfde01aa1358e5bf5bdb250b17537236919efc83b014e8",
+    "scripts/Bottle/NewRelicTests.lua": "b887a920bf412d5b571b6d2456241ab9b47aa021e0d673bef855db32fe372bc4",
+    "scripts/Bottle/PaperNote.lua": "411bfa1e0726361bbe913531932290f397812b6719854014dc9e2b1738dc34f8",
+    "scripts/Bottle/PhysicalState.lua": "9295d5b07bf0f998c56929619c68a282c00fcc608e5b047b56838aa7f01c71e3",
+    "scripts/Bottle/Physics.lua": "1611a3f53375d5cf9dd703d6bc27fefd021157309c49443c93d0f5908b6a5b2f",
+    "scripts/Bottle/PhysicsContactTests.lua": "9e29668bb17d7d2ee400f2648bfbaaf653387eded05587ec9aca1af7920d19e6",
+    "scripts/Bottle/PhysicsStepTests.lua": "5df3ddcf0cf3f3c9f16c56604ab957e83fbf4fee7fbe27b950ccba629d989749",
+    "scripts/Bottle/PixelAtlasData.lua": "22344edd5ce3a062521410fa666c0c20e6a73fc0df911d81a59f28952db50350",
+    "scripts/Bottle/PixelCache.lua": "2d831bae56ec307cf296ac11e1815145f762b3d2a64dd51c2f4f5f830b53167f",
+    "scripts/Bottle/PopIn.lua": "dc5a6e24c9fe033a482aed1f5dd210f6dbff043f5b4b93b3b0f7c95b2dc01936",
+    "scripts/Bottle/PresentationState.lua": "770935eab86e0b768c63f28d58e79256f2ba663ee157db59fde660840d21076f",
+    "scripts/Bottle/PresentationStateTests.lua": "68de98d32a691c94ed81b736d250bc1e02c1706011278af1f1dc49f92751e62f",
+    "scripts/Bottle/RefreshUI.lua": "bfbb261564f27988c9ba295b829073081e01ea016402df8758ebf3cc7b2b9bfe",
+    "scripts/Bottle/RelicEffects.lua": "f8985b860a3ef9c83f92d88b9f6772a5482094b310c2f870cfe4a004188db971",
+    "scripts/Bottle/RelicExpansion.lua": "5abec14cefd4010658ecd007b5c4f2e540fa37baf337ff486b2772fc40d0ac68",
+    "scripts/Bottle/RelicGrantTests.lua": "b860d23569f3e1ab647dcea6e03be7555893cfb5d0a58ba68e6ae5c439c7f426",
+    "scripts/Bottle/RelicRefreshTests.lua": "3c78dfcc412fe9167d81471ad6706325e3b2bd837fdb08e3ad959b1e994aba42",
+    "scripts/Bottle/Relics.lua": "f30087454f5b9fea60efbfdf138d1f7ba04ffbda00a70684a5ec5fa99364c6f3",
+    "scripts/Bottle/RelicSprites.lua": "068136b24bb2db17d23fc913635d8c3590598a3fd7de5e40850c3a05c3b34406",
+    "scripts/Bottle/RelicState.lua": "8ad5b597cbdd79ff810df63a39f9a9c96448e1d43f796eb1923836908d2b566d",
+    "scripts/Bottle/RelicTests.lua": "0ad7c994ef2471d41fd25e8ac33798f8d3286384efe3ad82fa5729cdeaf726ad",
+    "scripts/Bottle/RelicView.lua": "5fe82d3b5888baf172f1bcbb9bcc06bd78c5542af83971bc62a4f6e77c9f8bd2",
+    "scripts/Bottle/Removal.lua": "79a0fb5758a3b11bba17307e816902aaea77448d8d76e5c92563ed9d0c3d965e",
+    "scripts/Bottle/RemovalConfirm.lua": "04f5686c8d86287a274c70a9abd32d407b944bf2e954129db6c2c3898d0b54fe",
+    "scripts/Bottle/RemovalTests.lua": "c0e26d3394962a2c45267fdb733a4a9da03104685e21013b6a8f7b3c9a9df895",
+    "scripts/Bottle/RemovalValidation.lua": "5022fa28934221912b6ff60fafedbdbca978748bb83e664888165d1d2feb29fd",
+    "scripts/Bottle/RepairTests.lua": "08dd2ed66cd5d8016c680a56b124a34d73fbb0f6611e6742d8565c955bea3bda",
+    "scripts/Bottle/RepairUIValidation.lua": "8a8e2fb7941416de106602204a5500678b57ab91ec3260c65b6cc4fd4b838379",
+    "scripts/Bottle/RepairValidation.lua": "6143f70e9b9c469dbe1baa948afc3044c5aa3b23b59cc944752d3998f77b3044",
+    "scripts/Bottle/RotationEffects.lua": "7b09fc056efdd123f5404d4194a8e98ed5262a0aa1a1fe58050032d5c22adfa6",
+    "scripts/Bottle/RotationRelicTests.lua": "99b23fed4002d1be6b6e6a5fc6cfbfce42e928615952a774b24cb2f75f5bb677",
+    "scripts/Bottle/RotationTests.lua": "d19eda169d600690065c5fcde72c9010e422f01116a6ceb547e7eb5efb1a06bd",
+    "scripts/Bottle/RoundScore.lua": "230ea76e6bb81ea60af0799281aeda3c09a137e52b0bd3e04a75e749cce929e5",
+    "scripts/Bottle/RulesUI.lua": "605dfbe9c8f1f60cc8f0fe472cfc30f8169ce185e33a260d659d28c3606d7847",
+    "scripts/Bottle/SaveCodeField.lua": "cfc27f98751d938b8d23e8302bdccbf9ef4f006a430cc47b1f6f73a4a177def1",
+    "scripts/Bottle/SensorGm.lua": "22dd0a1be203e09b7c44d41991ff131870fb8a9536fdb87d4dd17982064e1cde",
+    "scripts/Bottle/SensorLab.lua": "cf20142fa1d56e011ffde768e45819e388383dfa00cbf8c021b2fc49190264ef",
+    "scripts/Bottle/SensorLabInput.lua": "d68846deff1a427d742a5fb5edc44e747818728fe951a4000c3a96ca2bf0dfb0",
+    "scripts/Bottle/SensorLabInputTests.lua": "bf61b30dfbaff8b735f3e864ed9ada29d61e7bdf61ba393c3e6576613e8813e4",
+    "scripts/Bottle/SensorTuning.lua": "927a9a66e47b255be318532ee5e2e1b3f6af262b2f5abf423343434eaa69262e",
+    "scripts/Bottle/ShakeMotion.lua": "0241acfb21a5644d2c1234eec9bdfd564e002801242851aff52f937920450f4c",
+    "scripts/Bottle/Shapes.lua": "dab2c8ea86e559f6a051963a29b52d6754640ac1f4024b086657be172b5c47dc",
+    "scripts/Bottle/Simulation.lua": "f3f1b8a0365d623281f267d038bc50d5816aa4c002f3d989d1d8fc2c2e889153",
+    "scripts/Bottle/SimulationTests.lua": "86ec58d1958809ef0344c36b23ffd51c41e0f9d1107be296757ff09ce155411e",
+    "scripts/Bottle/SoftBacon.lua": "578586fd368b6497cbaf83e596dbbadc9c9521f400e3244f387dcae76400eb89",
+    "scripts/Bottle/SoftView.lua": "cf20451058651fff1afe6e0026386ce7687d3a5a4a5b741fb6bfa676cf281813",
+    "scripts/Bottle/Sprites.lua": "2fa372b7587ec7810202462b28e44888f0b3306da77b679eac6413d9f3db360e",
+    "scripts/Bottle/StartScreen.lua": "e483cf1df954d15045794607f96fd5436d6df51fe72f6a58aab856ad1213d76f",
+    "scripts/Bottle/StepContactFacts.lua": "eb8c7fe22e5cc6132fc6b2cd4835d593c4a87973d7f3c0703ff6c82c498a3127",
+    "scripts/Bottle/StepContactFactsTests.lua": "e1767e66a432f25bae6b4037b7c7d4ec05f57bdd89f625081b55769092594a91",
+    "scripts/Bottle/Storage.lua": "ec80a14908ab03b6f0af3b1808f71e3e146154a1dc176686a2b3b2a566ecd6d0",
+    "scripts/Bottle/Tests.lua": "d8e5438f1848c02ea3d0c1447c8712d326f246b838485e7b731b2c3db7274002",
+    "scripts/Bottle/TextMotion.lua": "001e2a62e29c55fd6e30d26a180f86419a3546fb409d37eca96a9cd4facfd2f8",
+    "scripts/Bottle/Theme.lua": "fe1b70f0c5ce5774d156e1b3f444a2d7855ea47b97751171a6543d175c289a84",
+    "scripts/Bottle/TitleLogo.lua": "88301cbdef202fcd08f467ba59c7c60c1d07f8e1d9dc836972c013828c890ae8",
+    "scripts/Bottle/TriggerFeedback.lua": "067838a71cb5ed7d4524ba9169447738d4bfa0e4ba33a8e1eea8a2c0e78f0f98",
+    "scripts/Bottle/TriggerFeedbackTests.lua": "5fcf98030e7a475ba931ba0207120ea4f1204958c4a40cecba2b4f22a14fc248",
+    "scripts/Bottle/Tutorial.lua": "6575b1e1d7d273f638df710079b02727689125e3e0a764f3c546332f42f2ff78",
+    "scripts/Bottle/TutorialHandMotion.lua": "24f3e44c130e0c8db7d6e81b729f615201b1cd225ab486190e0cd933a47c66d7",
+    "scripts/Bottle/TutorialHandMotionTests.lua": "4291525338182814ec5c53f69bc23aa706bd3739c1546d0b2132a20f79c8ff7e",
+    "scripts/Bottle/TutorialOverlay.lua": "7acaa4b35341f1b83367ad2c8c1455b2ec62f485cba88ee70467e52d3cbc8bc2",
+    "scripts/Bottle/TutorialState.lua": "cd8dac00339fbc78a6bbe91c39e907abad94f26d4a94c24347af2375ef0a0f96",
+    "scripts/Bottle/TutorialStateTests.lua": "2e088698a75f23e9b9e2674cab8b9a76f17050c20c8987211d3cf874aca793b4",
+    "scripts/Bottle/TutorialText.lua": "74f3979d77eed859ffba15545cdb18c071c987ba0b1be0dce4fc474eb274aa7a",
+    "scripts/Bottle/Validate.lua": "11e01c9730579e6128a1b7f0659a123567381a9c5c09784a0ac666e9bf4c5fbf",
+    "scripts/Bottle/View.lua": "ce2cf73e1827ed8f2a44cd54b52c1a1b5241b5cc63ee2dd6f448910add815b7b",
+    "scripts/Machine/AmbientMotion.lua": "fe25da1010b50701731fc74efda7ff31404da9f83276a8451e9fff75e17cc092",
+    "scripts/Machine/Atmosphere.lua": "0a40a769eedf3634de3e95bf8c3f83852ed829cfc9285702e920f6f51081633d",
+    "scripts/Machine/BodySprite.lua": "f08cb16348628d5fb278db4eba41fa8e56aaac1ff63030b96a0b37aef7f0ba49",
+    "scripts/Machine/Cabinet.lua": "cc426479c8efc655703783aafdb2cd566255eb67ec0f67b55cc9d93c0c2be481",
+    "scripts/Machine/CinematicPost.lua": "3835d82053c639add24efcf3ddfb1035152f4c581cc272742398fa173cef0820",
+    "scripts/Machine/Clock.lua": "373cecca76d784249ac74d7ef1f2e0097aff2af8f8e856482d4c1c0799053aee",
+    "scripts/Machine/DeductionNote.lua": "513b258c4ffe8904cf48053fdb5888a013935c4b81d24740bb8a0141a22695d0",
+    "scripts/Machine/DeveloperOverlay.lua": "35fd25926cb9baf97c0d6efa7e802114628d6a91e9798d11e8f73a1969d9f859",
+    "scripts/Machine/DustField.lua": "45ab8191b84a5b0dbbdbbf632f639c1702ac002eedfc94b8a853e2f9404c76c5",
+    "scripts/Machine/EngravedLabels.lua": "fed3185ab102e13b5cb59a4b7f818b58516105875f3de2661e8d0c68c8e1802e",
+    "scripts/Machine/FlatReelState.lua": "a740f731ee2f620767b6b597d4162b9cd1223edd4a11806dd35bea1affa5df0e",
+    "scripts/Machine/Keys.lua": "29a469c0e234e780445a446084d33b1aaa26fa89ff32e745c6e17a89982ddb51",
+    "scripts/Machine/LampBloomMask.lua": "316ae3e353a9470e4ea9cd702d22faa52313a378549622401e70f72b1f75d803",
+    "scripts/Machine/LayeredLayout.lua": "dd7c49b5470b607182a41b97f482f305685afdc5c44d61bc3dfbd3903e0f277d",
+    "scripts/Machine/LayeredSkin.lua": "133a05a26783854695a2a889fc1239ed0b1b47a4731209a782e66847bd1f5484",
+    "scripts/Machine/LayeredSprites.lua": "d65187158ed73319a69ba0d83d0ce6fd634f5a15d64235405108a31fc79301f9",
+    "scripts/Machine/Lighting.lua": "7188c42ae48313af32471e1a1d0711732b5573ecd1c194b7697c310bbaeb3510",
+    "scripts/Machine/LitSpriteScene.lua": "10930a243040c01839c795e2508c1367374d3e79067f536922a5c6f87e18d659",
+    "scripts/Machine/LowerReadout.lua": "62624b9e205e544a95fe1f16f6878697315c60176d2ecc4bd402d1e40299d3c5",
+    "scripts/Machine/MeshData.lua": "cb3f2b03d7ca974f2cd30e97b567500818c8aba3bc4eb72c6c8beae77ac1ad74",
+    "scripts/Machine/PageMotion.lua": "ecd7b7bb66210d7fd7640ce9c2e84514bfedd7f453cc6d8de3715f7b7a333d5a",
+    "scripts/Machine/Palette.lua": "9e9598ebcf934c5e0fc8c03bbad1308aa6829273d016fbf93ff39ce938c226f9",
+    "scripts/Machine/PaperSway.lua": "e8cebad1b538777d463d20cb952d7dc4baf37d025abc110e4d0af1a3945e6f63",
+    "scripts/Machine/Parts.lua": "0c3db8ef2c4c896ad809db3fccd790abac82c9faeaa64fe98f661544a54af54d",
+    "scripts/Machine/ProgressLamps.lua": "5af91c22ec008c098a697d2e471cdea640c1793884c66b64d5fa514bdaf68abe",
+    "scripts/Machine/Projection.lua": "173d185682058199964016c4ed2539313f91267e9af4e028c632e25a9a66575c",
+    "scripts/Machine/RelicLighting.lua": "e4df34158c09b781491380ac56f40bae300c4bb8e2c9e6bc9da3eb7da2ee3273",
+    "scripts/Machine/RenderOrientation.lua": "09c1e09eef1a0517786dcf1d3646a539b0a72e454afd407c946affe17a924cba",
+    "scripts/Machine/SceneLayers.lua": "3ff04329b7a0d2f1286eb7d002e4fb524ee53967fcc22d8c86d5519eeda58d15",
+    "scripts/Machine/ScoreReels.lua": "8898cb280e699c4b099e6911c624557132b49e096a123bd12062c3c05c05dc02",
+    "scripts/Machine/Screen.lua": "0f5ea5235157281eb3da870e53787db234062818a58a878461a9e4f2402d7ace",
+    "scripts/Machine/ScreenAssembly.lua": "9d3873ddb0be5ff9568c252ef6680450da53b48403855912592cccf139c74ba2",
+    "scripts/Machine/ScreenMapping.lua": "6db67fd357a18a51ca21eec144821ecb47a4abd16597d1422fba244bc325331c",
+    "scripts/Machine/Skin.lua": "89bc5f5dd4afe893ceab67a4234feb6faa3037cbeeea8e4a8f2da48f870ce454",
+    "scripts/Machine/SpriteOrientation.lua": "fd1212ef5d67d828b0465fdbca2cd777edba0bdaa6e6f122b45f664e2123acc4",
+    "scripts/Machine/TargetProgress.lua": "4d99d258b0fcdcf7aa5fed6078bea9f1b53c0cc5c75549d3051c0932ec897c28",
+    "scripts/Machine/TargetSwap.lua": "fb512f5c43f0a64ff28b835da57d81bc8916cb2c3865f58ccc29f058444538fc",
+    "scripts/Machine/TargetSwapState.lua": "585807b32b5cc4c0ad19a46331b3dc90076802a48c3e27fd63172353b2838f65",
+    "scripts/Machine/TimeMeter.lua": "de41e325902550ea3e73c0e42fffbda4419ddb7816a47395be9a5cdc5af3fdb5"
+  },
+  "rules": {
+    "summary": {
+      "path": "outputs/frame-budget-fix-20261020/rules.json",
+      "sha256": "8979bbb5a9955bfadfef5d75c73cd8c46fbfa6b81ca40bb9d1560c7697862a0a"
+    },
+    "passed": true,
+    "total": 1465,
+    "suites": {
+      "Tests": 496,
+      "ExpansionUITests": 859,
+      "FrameBudgetTests": 9,
+      "SimulationTests": 11,
+      "PresentationStateTests": 8,
+      "BoardEventStageTests": 4,
+      "ContactPerformanceTests": 9,
+      "PhysicsContactTests": 3,
+      "AdaptiveCCDTests": 20,
+      "PhysicsStepTests": 4,
+      "StepContactFactsTests": 11,
+      "TutorialStateTests": 16,
+      "TutorialHandMotionTests": 15
+    },
+    "jsonRoundtripExecuted": true,
+    "inputRegression": {
+      "targetMeters": 0.31,
+      "pending": true,
+      "positionsOnlyAdvanceOnFixedStep": true,
+      "cumulativePixels": 31,
+      "inputSamples": 2,
+      "lostPixels": 0
+    }
+  },
+  "luaDiagnostics": {
+    "summary": {
+      "path": ".tmp/strict-frame-budget-lsp/official-filtered.json",
+      "sha256": "ca2c5cb48a09588db005de38beab0611e7a0891e01c5a39d4dd5f2020decf199"
+    },
+    "checkedFiles": 28,
+    "errorsAfterInstalledOfficialFilters": 0,
+    "rawDiagnostics": 83,
+    "officialCompatibilityFilters": {
+      "nullable-param-compat": 52,
+      "integer-number-compat": 31
+    }
+  },
+  "nativePerformanceMethod": "RTX 4070 SUPER, D3D11, 402x874, actual main/UI/Box2D/Board input. Production publish=true and 4ms budget. 30 render-frame warmup then 300 measured dragging/running frames per case. Real Update-to-Update clock intervals, not the fixed validation dt. Actual per-Step samples exclude idle frames; native clock has 1ms granularity.",
+  "nativePerformance": [
+    {
+      "initialItems": 4,
+      "summary": {
+        "path": "outputs/frame-budget-fix-20261020/native-final-merged-4-mixed/summary.json",
+        "sha256": "9a6506a4da106a687104a217946b93ff0d146713e60877dd2fa19ae17e4cb93b"
+      },
+      "status": {
+        "status": "PASS",
+        "conditions_passed": true,
+        "conditions": {
+          "render_interval_p95": true,
+          "render_interval_p99": true,
+          "no_measured_frame_over100ms": true,
+          "zero_lua_errors": true,
+          "business_input_animation_assertions": true,
+          "source_and_saves_unchanged": true,
+          "all_frames_actual_dragging_running": true,
+          "default4ms_budget": true
+        },
+        "limits": {
+          "render_interval_p95_ms": 33.333333333333336,
+          "render_interval_p99_ms": 50,
+          "whole_measured_frame_max_ms": 100,
+          "physics_step_p95_ms": null
+        },
+        "measured_frames_over100ms": 0,
+        "note": "Separate authorized performance gate. The official raw validation result and all errors remain unchanged."
+      },
+      "measuredFrames": 300,
+      "actualBodyCount": {
+        "count": 300,
+        "median": 4.0,
+        "p95": 4.0,
+        "p99": 4.0,
+        "max": 4.0
+      },
+      "renderIntervalMs": {
+        "count": 300,
+        "median": 17.0,
+        "p95": 18.00000000000091,
+        "p99": 31.0,
+        "max": 37.0
+      },
+      "actualPhysicsStepMs": {
+        "count": 300,
+        "median": 0.0,
+        "p95": 1.0000000000004547,
+        "p99": 1.0000000000009095,
+        "max": 2.0
+      },
+      "handleUpdateMs": {
+        "count": 300,
+        "median": 1.0,
+        "p95": 1.0000000000009095,
+        "p99": 2.0,
+        "max": 3.0
+      },
+      "nativeSceneProof": {
+        "allValid": true,
+        "lastMacroDtMs": 16.666666666666668,
+        "allowedGuardCalls": 2,
+        "steps": 331,
+        "lastSceneDtSumMs": 16.666666666666668,
+        "lastCalls": 2,
+        "expectedCalls": 2
+      },
+      "functionalAssertions": {
+        "total": 16,
+        "passed": 16,
+        "failed": 0
+      },
+      "rawOverallResult": "FAIL",
+      "rawErrors": {
+        "lua_errors": 0,
+        "resource_errors": 1,
+        "engine_errors": 0,
+        "total_errors": 1
+      },
+      "missingResources": [
+        "Cube/Day/DaySpecularHDR.dds"
+      ],
+      "sourceAndPlayerSavesUnchanged": true
+    },
+    {
+      "initialItems": 20,
+      "summary": {
+        "path": "outputs/frame-budget-fix-20261020/native-final-merged-20-mixed/summary.json",
+        "sha256": "120e781eae40d27e8ae3f89d6ed539589b8c2cab3e1fb966b650b900ea650eab"
+      },
+      "status": {
+        "status": "PASS",
+        "conditions_passed": true,
+        "conditions": {
+          "render_interval_p95": true,
+          "render_interval_p99": true,
+          "no_measured_frame_over100ms": true,
+          "zero_lua_errors": true,
+          "business_input_animation_assertions": true,
+          "source_and_saves_unchanged": true,
+          "all_frames_actual_dragging_running": true,
+          "default4ms_budget": true
+        },
+        "limits": {
+          "render_interval_p95_ms": 33.333333333333336,
+          "render_interval_p99_ms": 50,
+          "whole_measured_frame_max_ms": 100,
+          "physics_step_p95_ms": null
+        },
+        "measured_frames_over100ms": 0,
+        "note": "Separate authorized performance gate. The official raw validation result and all errors remain unchanged."
+      },
+      "measuredFrames": 300,
+      "actualBodyCount": {
+        "count": 300,
+        "median": 22.0,
+        "p95": 24.0,
+        "p99": 24.0,
+        "max": 24.0
+      },
+      "renderIntervalMs": {
+        "count": 300,
+        "median": 18.0,
+        "p95": 25.0,
+        "p99": 35.0,
+        "max": 42.0
+      },
+      "actualPhysicsStepMs": {
+        "count": 300,
+        "median": 1.0,
+        "p95": 2.0000000000004547,
+        "p99": 3.0,
+        "max": 6.000000000000455
+      },
+      "handleUpdateMs": {
+        "count": 300,
+        "median": 2.0,
+        "p95": 4.0,
+        "p99": 5.0,
+        "max": 7.0
+      },
+      "nativeSceneProof": {
+        "lastMacroDtMs": 16.666666666666668,
+        "lastCalls": 2,
+        "expectedCalls": 2,
+        "steps": 331,
+        "allValid": true,
+        "allowedGuardCalls": 2,
+        "lastSceneDtSumMs": 16.666666666666668
+      },
+      "functionalAssertions": {
+        "total": 16,
+        "passed": 16,
+        "failed": 0
+      },
+      "rawOverallResult": "FAIL",
+      "rawErrors": {
+        "lua_errors": 0,
+        "resource_errors": 1,
+        "engine_errors": 0,
+        "total_errors": 1
+      },
+      "missingResources": [
+        "Cube/Day/DaySpecularHDR.dds"
+      ],
+      "sourceAndPlayerSavesUnchanged": true
+    },
+    {
+      "initialItems": 40,
+      "summary": {
+        "path": "outputs/frame-budget-fix-20261020/native-final-merged-40-mixed/summary.json",
+        "sha256": "ec5213261a87322f75c64272eccd0c469d7e7229108a1e711cc130580e838120"
+      },
+      "status": {
+        "status": "PASS",
+        "conditions_passed": true,
+        "conditions": {
+          "render_interval_p95": true,
+          "render_interval_p99": true,
+          "no_measured_frame_over100ms": true,
+          "zero_lua_errors": true,
+          "business_input_animation_assertions": true,
+          "source_and_saves_unchanged": true,
+          "all_frames_actual_dragging_running": true,
+          "default4ms_budget": true,
+          "physics_step_p95": true,
+          "all_native_step_samples_recorded": true
+        },
+        "limits": {
+          "render_interval_p95_ms": 33.333333333333336,
+          "render_interval_p99_ms": 50,
+          "whole_measured_frame_max_ms": 100,
+          "physics_step_p95_ms": 8
+        },
+        "measured_frames_over100ms": 0,
+        "note": "Separate authorized performance gate. The official raw validation result and all errors remain unchanged."
+      },
+      "measuredFrames": 300,
+      "actualBodyCount": {
+        "count": 300,
+        "median": 42.0,
+        "p95": 47.0,
+        "p99": 47.0,
+        "max": 47.0
+      },
+      "renderIntervalMs": {
+        "count": 300,
+        "median": 22.000000000000455,
+        "p95": 32.0,
+        "p99": 38.99999999999818,
+        "max": 57.00000000000182
+      },
+      "actualPhysicsStepMs": {
+        "count": 292,
+        "median": 3.0,
+        "p95": 4.0,
+        "p99": 5.0,
+        "max": 5.0
+      },
+      "handleUpdateMs": {
+        "count": 300,
+        "median": 5.0,
+        "p95": 6.000000000001819,
+        "p99": 7.000000000001819,
+        "max": 9.0
+      },
+      "nativeSceneProof": {
+        "lastMacroDtMs": 16.666666666666668,
+        "lastCalls": 2,
+        "lastSceneDtSumMs": 16.666666666666668,
+        "allowedGuardCalls": 2,
+        "steps": 323,
+        "allValid": true,
+        "expectedCalls": 2
+      },
+      "functionalAssertions": {
+        "total": 16,
+        "passed": 16,
+        "failed": 0
+      },
+      "rawOverallResult": "FAIL",
+      "rawErrors": {
+        "lua_errors": 0,
+        "resource_errors": 1,
+        "engine_errors": 0,
+        "total_errors": 1
+      },
+      "missingResources": [
+        "Cube/Day/DaySpecularHDR.dds"
+      ],
+      "sourceAndPlayerSavesUnchanged": true
+    }
+  ],
+  "nativeCollision": {
+    "summary": {
+      "path": "outputs/frame-budget-fix-20261020/native-final-merged-collision-full/summary.json",
+      "sha256": "216a6bab27b4857b76ca879d6da18948f9b7b293a94da0c9b020eba8ac694cba"
+    },
+    "functionalResult": "PASSED",
+    "assertions": {
+      "total": 552,
+      "passed": 552,
+      "failed": 0
+    },
+    "rawOverallResult": "FAIL",
+    "rawErrors": {
+      "lua_errors": 0,
+      "resource_errors": 0,
+      "engine_errors": 1,
+      "total_errors": 1
+    },
+    "sourceAndPlayerSavesUnchanged": true,
+    "coverage": "Full production physics suite and 600-step ecology, 1rad/s native angular-unit measurement, 3600deg/s compound rotation, postguard 80m/s pairs and chains, pre-After raw native poses, real short Begin/End facts, actual dash-time CCD and sensor exclusions."
+  },
+  "ruleMatrix": {
+    "summary": {
+      "path": "outputs/frame-budget-fix-20261020/final-rules-a0780b7-summary.json",
+      "sha256": "a737f76a12eff7a947d4638f0d2d8b95fa4502e70e99f5d846d2a577b878e386"
+    },
+    "required4And40Passed": true,
+    "all8CasesFunctionalPassed": true,
+    "all8CasesOriginalGateVerdict": true,
+    "fixtureEquivalenceComparisons": 2400,
+    "repetitions": 3,
+    "method": "Lupa Lua5.4 isolated real rules, synthetic physics/Board/UI/audio/rendering. CPU/clock measurements, not native/browser FPS.",
+    "performanceGates": "Median over repeats: candidate p95/p99 <= baseline +1ms (local timer granularity), total clock <=110% baseline. Outliers and >16.67/>33.33ms counts always retained. Functional state, RNG, flat event order, batches, fixed steps must exactly match.",
+    "timerComparisonEpsilonMs": 1e-07,
+    "rows": [
+      {
+        "key": "4-balls-grid",
+        "pressure100": false,
+        "gates": {
+          "functional": true,
+          "p95": true,
+          "p99": true,
+          "total": true
+        },
+        "allGateChecksPassed": true,
+        "baselineTotalMs": 59.00000000000016,
+        "candidateTotalMs": 40.000000000000036,
+        "totalImprovementPercent": 32.2033898305086,
+        "baseline": {
+          "busyFrames": 0,
+          "drainFrames": 0,
+          "maxBacklog": 7.555414627269386e-14,
+          "initialLuaKB": 4235.7548828125,
+          "peakLuaKB": 8508.3583984375,
+          "retainedLuaKB": 4276.7080078125,
+          "committedSteps": 600,
+          "events": 32,
+          "captureCalls": 600,
+          "frames": {
+            "p50Ms": 0.0,
+            "p95Ms": 1.000000000000334,
+            "p99Ms": 1.000000000000334,
+            "maxMs": 3.0000000000001137
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 3.0000000000001137,
+          "worstDrainFrameMs": 0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "candidate": {
+          "busyFrames": 0,
+          "drainFrames": 0,
+          "maxBacklog": 7.555414627269386e-14,
+          "initialLuaKB": 4384.9755859375,
+          "peakLuaKB": 8775.3837890625,
+          "retainedLuaKB": 4434.2724609375,
+          "committedSteps": 600,
+          "events": 32,
+          "captureCalls": 600,
+          "frames": {
+            "p50Ms": 0.0,
+            "p95Ms": 0.9999999999994458,
+            "p99Ms": 1.000000000000334,
+            "maxMs": 1.9999999999997797
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 5.000000000000782,
+          "worstDrainFrameMs": 0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "numericGateAudit": {
+          "p95": {
+            "actual": 0.9999999999994458,
+            "limitWithoutEpsilon": 2.000000000000334,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0000000000008882
+          },
+          "p99": {
+            "actual": 1.000000000000334,
+            "limitWithoutEpsilon": 2.000000000000334,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0
+          },
+          "total": {
+            "actual": 40.000000000000036,
+            "limitWithoutEpsilon": 64.90000000000019,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -24.900000000000155
+          }
+        }
+      },
+      {
+        "key": "40-balls-grid",
+        "pressure100": false,
+        "gates": {
+          "functional": true,
+          "p95": true,
+          "p99": true,
+          "total": true
+        },
+        "allGateChecksPassed": true,
+        "baselineTotalMs": 695.9999999999998,
+        "candidateTotalMs": 402.000000000001,
+        "totalImprovementPercent": 42.24137931034466,
+        "baseline": {
+          "busyFrames": 27,
+          "drainFrames": 0,
+          "maxBacklog": 0.05,
+          "initialLuaKB": 4326.0048828125,
+          "peakLuaKB": 9078.9951171875,
+          "retainedLuaKB": 4427.4892578125,
+          "committedSteps": 600,
+          "events": 280,
+          "captureCalls": 600,
+          "frames": {
+            "p50Ms": 0.9999999999994458,
+            "p95Ms": 3.0000000000001137,
+            "p99Ms": 4.000000000001336,
+            "maxMs": 5.000000000000782
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 5.000000000000782,
+          "worstDrainFrameMs": 0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "candidate": {
+          "busyFrames": 8,
+          "drainFrames": 0,
+          "maxBacklog": 0.016666666666666666,
+          "initialLuaKB": 4475.2255859375,
+          "peakLuaKB": 9309.9970703125,
+          "retainedLuaKB": 4643.3349609375,
+          "committedSteps": 600,
+          "events": 280,
+          "captureCalls": 600,
+          "frames": {
+            "p50Ms": 0.9999999999994458,
+            "p95Ms": 1.0000000000012221,
+            "p99Ms": 3.9999999999995595,
+            "maxMs": 4.000000000001336
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 5.000000000000782,
+          "worstDrainFrameMs": 0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "numericGateAudit": {
+          "p95": {
+            "actual": 1.0000000000012221,
+            "limitWithoutEpsilon": 4.000000000000114,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -2.9999999999988916
+          },
+          "p99": {
+            "actual": 3.9999999999995595,
+            "limitWithoutEpsilon": 5.000000000001336,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0000000000017764
+          },
+          "total": {
+            "actual": 402.000000000001,
+            "limitWithoutEpsilon": 765.5999999999998,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -363.5999999999988
+          }
+        }
+      },
+      {
+        "key": "4-mixed-grid",
+        "pressure100": false,
+        "gates": {
+          "functional": true,
+          "p95": true,
+          "p99": true,
+          "total": true
+        },
+        "allGateChecksPassed": true,
+        "baselineTotalMs": 64.00000000000006,
+        "candidateTotalMs": 44.00000000000048,
+        "totalImprovementPercent": 31.249999999999307,
+        "baseline": {
+          "busyFrames": 0,
+          "drainFrames": 0,
+          "maxBacklog": 7.555414627269386e-14,
+          "initialLuaKB": 4235.8955078125,
+          "peakLuaKB": 8521.9638671875,
+          "retainedLuaKB": 4272.0595703125,
+          "committedSteps": 600,
+          "events": 9,
+          "captureCalls": 600,
+          "frames": {
+            "p50Ms": 0.0,
+            "p95Ms": 0.9999999999994458,
+            "p99Ms": 1.0000000000012221,
+            "maxMs": 2.000000000000668
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 3.0000000000001137,
+          "worstDrainFrameMs": 0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "candidate": {
+          "busyFrames": 0,
+          "drainFrames": 0,
+          "maxBacklog": 7.555414627269386e-14,
+          "initialLuaKB": 4385.1162109375,
+          "peakLuaKB": 8769.8720703125,
+          "retainedLuaKB": 4429.6240234375,
+          "committedSteps": 600,
+          "events": 9,
+          "captureCalls": 600,
+          "frames": {
+            "p50Ms": 0.0,
+            "p95Ms": 0.9999999999994458,
+            "p99Ms": 1.0000000000012221,
+            "maxMs": 2.9999999999983373
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 3.0000000000001137,
+          "worstDrainFrameMs": 0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "numericGateAudit": {
+          "p95": {
+            "actual": 0.9999999999994458,
+            "limitWithoutEpsilon": 1.9999999999994458,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0
+          },
+          "p99": {
+            "actual": 1.0000000000012221,
+            "limitWithoutEpsilon": 2.000000000001222,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0
+          },
+          "total": {
+            "actual": 44.00000000000048,
+            "limitWithoutEpsilon": 70.40000000000006,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -26.39999999999958
+          }
+        }
+      },
+      {
+        "key": "40-mixed-grid",
+        "pressure100": false,
+        "gates": {
+          "functional": true,
+          "p95": true,
+          "p99": true,
+          "total": true
+        },
+        "allGateChecksPassed": true,
+        "baselineTotalMs": 823.9999999999998,
+        "candidateTotalMs": 495.99999999999864,
+        "totalImprovementPercent": 39.8058252427186,
+        "baseline": {
+          "busyFrames": 20,
+          "drainFrames": 2,
+          "maxBacklog": 0.016666666666666666,
+          "initialLuaKB": 4326.1455078125,
+          "peakLuaKB": 9033.2548828125,
+          "retainedLuaKB": 4423.6767578125,
+          "committedSteps": 600,
+          "events": 182,
+          "captureCalls": 600,
+          "frames": {
+            "p50Ms": 0.9999999999994458,
+            "p95Ms": 3.0000000000001137,
+            "p99Ms": 3.9999999999995595,
+            "maxMs": 4.000000000001336
+          },
+          "drain": {
+            "p95Ms": 3.9999999999995595,
+            "p99Ms": 3.9999999999995595,
+            "maxMs": 3.9999999999995595
+          },
+          "worstMeasuredFrameMs": 5.000000000000782,
+          "worstDrainFrameMs": 4.000000000001336,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "candidate": {
+          "busyFrames": 7,
+          "drainFrames": 0,
+          "maxBacklog": 0.016666666666666666,
+          "initialLuaKB": 4475.3662109375,
+          "peakLuaKB": 9306.9833984375,
+          "retainedLuaKB": 4645.7099609375,
+          "committedSteps": 600,
+          "events": 182,
+          "captureCalls": 600,
+          "frames": {
+            "p50Ms": 0.9999999999994458,
+            "p95Ms": 1.0000000000012221,
+            "p99Ms": 3.9999999999995595,
+            "maxMs": 4.000000000001336
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 6.000000000000227,
+          "worstDrainFrameMs": 0.0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "numericGateAudit": {
+          "p95": {
+            "actual": 1.0000000000012221,
+            "limitWithoutEpsilon": 4.000000000000114,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -2.9999999999988916
+          },
+          "p99": {
+            "actual": 3.9999999999995595,
+            "limitWithoutEpsilon": 4.9999999999995595,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0
+          },
+          "total": {
+            "actual": 495.99999999999864,
+            "limitWithoutEpsilon": 906.3999999999999,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -410.4000000000012
+          }
+        }
+      },
+      {
+        "key": "4-balls-dense",
+        "pressure100": false,
+        "gates": {
+          "functional": true,
+          "p95": true,
+          "p99": true,
+          "total": true
+        },
+        "allGateChecksPassed": true,
+        "baselineTotalMs": 18.000000000000682,
+        "candidateTotalMs": 12.9999999999999,
+        "totalImprovementPercent": 27.777777777781065,
+        "baseline": {
+          "busyFrames": 0,
+          "drainFrames": 0,
+          "maxBacklog": 0,
+          "initialLuaKB": 4789.2548828125,
+          "peakLuaKB": 9447.1787109375,
+          "retainedLuaKB": 4802.9580078125,
+          "committedSteps": 180,
+          "events": 16,
+          "captureCalls": 180,
+          "frames": {
+            "p50Ms": 0.0,
+            "p95Ms": 0.9999999999994458,
+            "p99Ms": 1.0000000000012221,
+            "maxMs": 1.0000000000012221
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 1.0000000000012221,
+          "worstDrainFrameMs": 0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "candidate": {
+          "busyFrames": 0,
+          "drainFrames": 0,
+          "maxBacklog": 0,
+          "initialLuaKB": 4938.4755859375,
+          "peakLuaKB": 6923.5712890625,
+          "retainedLuaKB": 4960.5224609375,
+          "committedSteps": 180,
+          "events": 16,
+          "captureCalls": 180,
+          "frames": {
+            "p50Ms": 0.0,
+            "p95Ms": 0.9999999999994458,
+            "p99Ms": 1.0000000000012221,
+            "maxMs": 1.0000000000012221
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 1.0000000000012221,
+          "worstDrainFrameMs": 0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "numericGateAudit": {
+          "p95": {
+            "actual": 0.9999999999994458,
+            "limitWithoutEpsilon": 1.9999999999994458,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0
+          },
+          "p99": {
+            "actual": 1.0000000000012221,
+            "limitWithoutEpsilon": 2.000000000001222,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0
+          },
+          "total": {
+            "actual": 12.9999999999999,
+            "limitWithoutEpsilon": 19.80000000000075,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -6.80000000000085
+          }
+        }
+      },
+      {
+        "key": "40-balls-dense",
+        "pressure100": false,
+        "gates": {
+          "functional": true,
+          "p95": true,
+          "p99": true,
+          "total": true
+        },
+        "allGateChecksPassed": true,
+        "baselineTotalMs": 1304.000000000002,
+        "candidateTotalMs": 529.9999999999976,
+        "totalImprovementPercent": 59.35582822085914,
+        "baseline": {
+          "busyFrames": 180,
+          "drainFrames": 147,
+          "maxBacklog": 1.2333333333333338,
+          "initialLuaKB": 4879.5048828125,
+          "peakLuaKB": 10666.328125,
+          "retainedLuaKB": 4939.7392578125,
+          "committedSteps": 180,
+          "events": 120,
+          "captureCalls": 180,
+          "frames": {
+            "p50Ms": 4.000000000001336,
+            "p95Ms": 4.000000000001336,
+            "p99Ms": 6.000000000000227,
+            "maxMs": 7.0000000000014495
+          },
+          "drain": {
+            "p95Ms": 4.000000000001336,
+            "p99Ms": 4.999999999999005,
+            "maxMs": 7.0000000000014495
+          },
+          "worstMeasuredFrameMs": 7.0000000000014495,
+          "worstDrainFrameMs": 7.0000000000014495,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "candidate": {
+          "busyFrames": 43,
+          "drainFrames": 2,
+          "maxBacklog": 0.016666666666666666,
+          "initialLuaKB": 5028.7255859375,
+          "peakLuaKB": 10821.173828125,
+          "retainedLuaKB": 5151.6162109375,
+          "committedSteps": 180,
+          "events": 120,
+          "captureCalls": 180,
+          "frames": {
+            "p50Ms": 3.0000000000001137,
+            "p95Ms": 4.000000000001336,
+            "p99Ms": 4.999999999999005,
+            "maxMs": 5.000000000002558
+          },
+          "drain": {
+            "p95Ms": 4.000000000001336,
+            "p99Ms": 4.000000000001336,
+            "maxMs": 4.000000000001336
+          },
+          "worstMeasuredFrameMs": 5.000000000002558,
+          "worstDrainFrameMs": 4.000000000001336,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "numericGateAudit": {
+          "p95": {
+            "actual": 4.000000000001336,
+            "limitWithoutEpsilon": 5.000000000001336,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0
+          },
+          "p99": {
+            "actual": 4.999999999999005,
+            "limitWithoutEpsilon": 7.000000000000227,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -2.000000000001222
+          },
+          "total": {
+            "actual": 529.9999999999976,
+            "limitWithoutEpsilon": 1434.4000000000024,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -904.4000000000048
+          }
+        }
+      },
+      {
+        "key": "4-mixed-dense",
+        "pressure100": false,
+        "gates": {
+          "functional": true,
+          "p95": true,
+          "p99": true,
+          "total": true
+        },
+        "allGateChecksPassed": true,
+        "baselineTotalMs": 19.999999999999574,
+        "candidateTotalMs": 12.000000000000455,
+        "totalImprovementPercent": 39.99999999999645,
+        "baseline": {
+          "busyFrames": 0,
+          "drainFrames": 0,
+          "maxBacklog": 0,
+          "initialLuaKB": 4789.3955078125,
+          "peakLuaKB": 9542.484375,
+          "retainedLuaKB": 4800.7783203125,
+          "committedSteps": 180,
+          "events": 5,
+          "captureCalls": 180,
+          "frames": {
+            "p50Ms": 0.0,
+            "p95Ms": 1.0000000000012221,
+            "p99Ms": 1.0000000000012221,
+            "maxMs": 1.0000000000012221
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 1.0000000000012221,
+          "worstDrainFrameMs": 0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "candidate": {
+          "busyFrames": 0,
+          "drainFrames": 0,
+          "maxBacklog": 0,
+          "initialLuaKB": 4938.6162109375,
+          "peakLuaKB": 6906.986328125,
+          "retainedLuaKB": 4958.3427734375,
+          "committedSteps": 180,
+          "events": 5,
+          "captureCalls": 180,
+          "frames": {
+            "p50Ms": 0.0,
+            "p95Ms": 0.9999999999976694,
+            "p99Ms": 1.0000000000012221,
+            "maxMs": 1.0000000000012221
+          },
+          "drain": {
+            "p95Ms": 0,
+            "p99Ms": 0,
+            "maxMs": 0
+          },
+          "worstMeasuredFrameMs": 1.0000000000012221,
+          "worstDrainFrameMs": 0,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "numericGateAudit": {
+          "p95": {
+            "actual": 0.9999999999976694,
+            "limitWithoutEpsilon": 2.000000000001222,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0000000000035527
+          },
+          "p99": {
+            "actual": 1.0000000000012221,
+            "limitWithoutEpsilon": 2.000000000001222,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0
+          },
+          "total": {
+            "actual": 12.000000000000455,
+            "limitWithoutEpsilon": 21.99999999999953,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -9.999999999999076
+          }
+        }
+      },
+      {
+        "key": "40-mixed-dense",
+        "pressure100": false,
+        "gates": {
+          "functional": true,
+          "p95": true,
+          "p99": true,
+          "total": true
+        },
+        "allGateChecksPassed": true,
+        "baselineTotalMs": 1471.0,
+        "candidateTotalMs": 687.9999999999989,
+        "totalImprovementPercent": 53.22909585316119,
+        "baseline": {
+          "busyFrames": 180,
+          "drainFrames": 188,
+          "maxBacklog": 1.566666666666666,
+          "initialLuaKB": 4879.6455078125,
+          "peakLuaKB": 10705.2919921875,
+          "retainedLuaKB": 4926.8330078125,
+          "committedSteps": 180,
+          "events": 58,
+          "captureCalls": 180,
+          "frames": {
+            "p50Ms": 4.000000000001336,
+            "p95Ms": 4.000000000001336,
+            "p99Ms": 6.000000000000227,
+            "maxMs": 6.000000000000227
+          },
+          "drain": {
+            "p95Ms": 4.000000000001336,
+            "p99Ms": 5.000000000002558,
+            "maxMs": 6.000000000000227
+          },
+          "worstMeasuredFrameMs": 6.000000000000227,
+          "worstDrainFrameMs": 7.0000000000014495,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "candidate": {
+          "busyFrames": 180,
+          "drainFrames": 17,
+          "maxBacklog": 0.2333333333333333,
+          "initialLuaKB": 5028.8662109375,
+          "peakLuaKB": 10959.6611328125,
+          "retainedLuaKB": 5139.1787109375,
+          "committedSteps": 180,
+          "events": 58,
+          "captureCalls": 180,
+          "frames": {
+            "p50Ms": 3.0000000000001137,
+            "p95Ms": 4.000000000001336,
+            "p99Ms": 4.999999999999005,
+            "maxMs": 5.000000000002558
+          },
+          "drain": {
+            "p95Ms": 4.000000000001336,
+            "p99Ms": 4.999999999999005,
+            "maxMs": 4.999999999999005
+          },
+          "worstMeasuredFrameMs": 7.0000000000014495,
+          "worstDrainFrameMs": 6.000000000000227,
+          "over16_67msTotal": 0,
+          "over33_33msTotal": 0
+        },
+        "numericGateAudit": {
+          "p95": {
+            "actual": 4.000000000001336,
+            "limitWithoutEpsilon": 5.000000000001336,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -1.0
+          },
+          "p99": {
+            "actual": 4.999999999999005,
+            "limitWithoutEpsilon": 7.000000000000227,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -2.000000000001222
+          },
+          "total": {
+            "actual": 687.9999999999989,
+            "limitWithoutEpsilon": 1618.1000000000001,
+            "passedWithoutEpsilon": true,
+            "passedWithEpsilon": true,
+            "differenceFromLimit": -930.1000000000013
+          }
+        }
+      }
+    ]
+  },
+  "validationMigrations": [
+    "Preserve the failed baseline/current reports. Six baseline jelly fixtures wrongly rejected the existing itemFeedback; now require the exact single jelly feedback plus the exact impulse and reject other events.",
+    "Replace the obsolete stationary final bullet=true assumption with protection throughout actual dash steps, a protected real wall hit, global CCD, solid fixtures and original boundedness.",
+    "Trace positive sheep wool inventory to buff=0 and one distinct real wool spawn per unit, with actual shake/knife evidence. Later legitimate grass consumption may grow new wool.",
+    "Low-speed native measurement confirms angularVelocity is rad/s while node.rotation2D is degrees. The selector now uses radians directly; high-angular tests convert intended degrees to radians."
+  ],
+  "limitations": [
+    "Native Windows results are not browser or phone FPS measurements.",
+    "The main validation raw overall results retain the existing missing Cube/Day/DaySpecularHDR.dds. Do not describe these raw reports as overall PASS.",
+    "The batch functional suite retains 1 Frame time spike engine errors in its raw overall report; all 552 functional assertions passed. Continuous-shaking performance is measured separately.",
+    "Historical 100-item overlap/blanket-newborn-CCD tests produced severe spikes. They are outside the user-confirmed submission performance scope and remain archived; no universal 100-item performance claim is made."
+  ]
+}

@@ -87,9 +87,9 @@ function Lighting:Transform(widget)
         if type(child.GetAbsoluteLayout) ~= "function" then return nil end
         local rect = child:GetAbsoluteLayout()
         if not ValidRect(rect) then return nil end
-        ---@type table
+        ---@type any
         local props = child.props or {}
-        ---@type table
+        ---@type any
         local rendered = child.renderProps_ or {}
         local scale = rendered.scale or props.scale or 1
         local rotate = rendered.rotate or props.rotate or 0

@@ -1,8 +1,8 @@
 -- 瓶内局部坐标的 Box2D 世界，基于 templates/scaffold-2d-physics.lua。
--- 主程序负责绘制、全局事件订阅与固定步长时钟；本模块不创建相机或 UI。
+-- 主程序负责绘制与引擎物理前后事件订阅；本模块不创建相机或 UI。
 -- 所有长度单位为米，+Y 向上；视觉偏移只能在主程序/Render 中处理。
 -- V0.4：幽灵使用真实动态 sensor 接触，自主漂移，不接受碰撞或摇瓶冲量；
--- 保留瓶体、接触计数、随机散布、近源生成搜索、两种摇晃物理与体感接入。
+-- 保留瓶体、接触计数、随机散布、近源生成搜索、摇晃惯性与体感接入。
 --
 -- 碰撞设计（实现碰撞体前先画图）：
 --                        x=-1.15       x=1.15
@@ -24,7 +24,7 @@
 -- 瓶壁不再实体挡幽灵；有限轮廓近壁转向 + 下一步安全点限速 + 解锁后几何兜底。
 -- 边界包含底/封口、肩颈接缝与凹角：整个旋转包络留在瓶中，不以几何距离伪造接触。
 -- 墙体内表面沿瓶子轮廓，厚度向外，相邻接缝重叠；瓶肩/瓶颈凹角不延长。
--- 全局 CCD 与各物品 bullet 均开启。
+-- 保留全局CCD；单体bullet按相对位移/角点扫掠/最薄fixture自适应，危险动作短时强制保护。
 -- 新物品零初速度并有短时 CCD/速度缓冲，拥挤位置由真实物理解算排开。
 -- 接触回调内绝不 Remove/Dispose：先标记待删除，scene 更新返回后再销毁。
 -- 非运行期只用 dt=0 的删除屏障，不预结算重力、不消耗任何回合时间。
@@ -35,6 +35,10 @@ local ShakeMotion = require "Bottle.ShakeMotion"
 local SoftBacon = require "Bottle.SoftBacon"
 local PhysicalState = require "Bottle.PhysicalState"
 local ExpansionPhysics = require "Bottle.ExpansionPhysics"
+local FrameBudget = require("Bottle.FrameBudget")
+local BudgetSort = require("Bottle.BudgetSort")
+local AdaptiveCCD = require("Bottle.AdaptiveCCD")
+local StepContactFacts = require("Bottle.StepContactFacts")
 
 ---@class BottleBodyPart
 ---@field node Node
@@ -42,6 +46,8 @@ local ExpansionPhysics = require "Bottle.ExpansionPhysics"
 
 ---@class BottleBody
 ---@field uid number
+---@field pathGeneration integer 物理累计路程代际，不随传送/姿态命令改变
+---@field generation integer 每次创建替代刚体均递增，不能只凭uid消费旧物理快照。
 ---@field node Node
 ---@field body RigidBody2D
 ---@field parts BottleBodyPart[] 包含中心刚体；普通物品1段、培根5段
@@ -56,12 +62,19 @@ local ExpansionPhysics = require "Bottle.ExpansionPhysics"
 ---@field sensor boolean 实际穿透体态，不修改全局物品定义
 ---@field ghostLike boolean 幽灵/幽灵便便自主流场、直立且免摇晃
 ---@field newbornRemaining number
+---@field ccdGuardRemaining number 运行态短时CCD保护，不进入玩法或存档
 ---@field lastX number 上次采样的中心 x（米），用于累计位移。
 ---@field lastY number 上次采样的中心 y（米），用于累计位移。
+---@field pathLength number 本代刚体逐真实物理步累计的中心路程；传送不计。
 
 ---@class BottlePhysicsSpawn
 ---@field x number
 ---@field y number
+
+---@class BottlePhysicsPose : BottlePhysicsSpawn
+---@field angle number 逆时针弧度，与GetPose一致。
+---@field radius number 米。
+---@field soft BottleSoftPose[]? 独立数值段姿态，无Node/Body引用。
 
 ---@class BottlePhysicsPair
 ---@field a number
@@ -85,6 +98,11 @@ local ExpansionPhysics = require "Bottle.ExpansionPhysics"
 ---@field top table<number, boolean> 只计横向 top 封口，不包括瓶肩/瓶颈
 ---@field wall table<number, boolean> 全部静态内壁，含 floor/top/side/shoulder/neck
 ---@field positions table<number, BottlePhysicsSpawn> 所有当前存活 body 的中心坐标（米）
+---@field poses table<number, BottlePhysicsPose> 可冻结供表现读取的纯值姿态。
+---@field members table<number, string> 本次快照采入的物品定义id。
+---@field generations table<number, integer> 本次快照采入的刚体代际。
+---@field pathLengths table<number, number> 本代累计真实中心路程（米）。
+---@field pathGeneration table<number, integer> 对应路程累计所属代际。
 ---@field side table<number, boolean> 左右侧壁，含肩颈、不含底顶
 ---@field angles table<number, number> 逆时针角度（弧度）
 ---@field rotateOffsets table<number, number> 累计强制角差，不计指南针自然转角
@@ -128,6 +146,8 @@ local ExpansionPhysics = require "Bottle.ExpansionPhysics"
 ---@field world PhysicsWorld2D
 ---@field bodies table<number, BottleBody>
 ---@field _walls Node[]
+---@field ccdWalls BottleCCDWall[] 原生墙盒真实内侧边，含切向延伸
+---@field stepContactFacts BottleStepContactFacts
 ---@field _pairs table<string, BottlePhysicsPair>
 ---@field _bottom table<number, number>
 ---@field _top table<number, number>
@@ -138,11 +158,19 @@ local ExpansionPhysics = require "Bottle.ExpansionPhysics"
 ---@field expansion BottleExpansionPhysics 扩展动作与真实输入采样
 ---@field _exactSpawns table<number, BottlePhysicsSpawn>
 ---@field _retired BottleBody[]
+---@field _retiredSpare BottleBody[]
+---@field _syncScratch table Private containers, used only while Sync owns the world.
 ---@field _mergeSpawns table<number, BottlePhysicsSpawn>
 ---@field _nearSpawns table<number, BottlePhysicsSpawn>
 ---@field _eventRemoved table<number, boolean>
 ---@field _respawned table<number, boolean> 明确重生的位置/行为语义，不能与resize重建混淆
 ---@field _updating boolean
+---@field autoUpdate boolean 仅主瓶场景开启引擎自动步进，详情/测试默认手动。
+---@field _manualStep boolean 同步Step期间屏蔽主程序自动前后钩子。
+---@field _activeStepDt number? 已开启而尚未完成的原生步。
+---@field _accelerated BottleAcceleratedPart[]? 本步速度屏障，不能跨步重复应用。
+---@field _stepMultiplier number? 本步使用的倍率，After不得读取下一批规则的新值。
+---@field _nextGeneration integer 单调刚体代际；Clear/布局重置不回退。
 ---@field _flushing boolean
 ---@field _disposed boolean
 ---@field _disposeRequested boolean
@@ -150,8 +178,10 @@ local ExpansionPhysics = require "Bottle.ExpansionPhysics"
 ---@field _pendingSync BottlePhysicsSyncRequest?
 ---@field _layoutSeed number 私有散布种子
 ---@field clock number 只由正 dt 的 Step 推进；Clear/重置布局归零，普通 Sync 保留
----@field mode number
 ---@field motion BottleShakeMotion
+---@field ccdState BottleCCDState?
+---@field ccdEnabledCount integer
+---@field ccdBodyCount integer
 local Physics = {}
 Physics.__index = Physics
 
@@ -167,8 +197,6 @@ local SCATTER_TRIES = 32
 local SHOULDER_SLOPE = (HALF_WIDTH - NECK_HALF_WIDTH) / (NECK_Y - SHOULDER_Y)
 local NEWBORN_SECONDS = 0.10
 local NEWBORN_MAX_SPEED = 8.0
-local SHAKE_GAIN = 18.0 -- 拖动米数 -> 速度变化量（米/秒）
-local MAX_SHAKE_DELTA = 0.45
 local DEFAULT_RADIUS = 0.27
 local RNG_MODULUS = 2147483647
 local RNG_DOMAIN = RNG_MODULUS - 1
@@ -176,6 +204,52 @@ local WALL_CATEGORY = 1
 local ITEM_CATEGORY = 2
 local ITEM_MASK = WALL_CATEGORY | ITEM_CATEGORY
 local IMPACT_SEPARATION = .025 -- 同一对必须真正分开至少25ms才重新发声；不限制其他接触
+
+---@param values table?
+---@return table
+local function Clear(values)
+    if not values then return {} end
+    for key in pairs(values) do values[key] = nil end
+    return values
+end
+
+---@param a ItemInstance
+---@param b ItemInstance
+---@return boolean
+local function ByUid(a, b) return a.uid < b.uid end
+
+-- Kept outside the returned snapshot: default Contacts() still has exactly its
+-- original fields, and callers opting into reuse own all overwritten values.
+---@type table<table,table>
+local contactBuffers = setmetatable({}, {__mode = "k"})
+local CONTACT_MAPS = {"bottom", "top", "wall", "side", "angles", "rotateOffsets",
+    "angularTravel", "flightArrived", "flightHits", "poses", "members", "generations",
+    "pathLengths", "pathGeneration"}
+
+---@param result BottlePhysicsContacts
+---@return table
+local function ContactBuffer(result)
+    local buffer = contactBuffers[result]
+    if not buffer then
+        buffer = {pairs = {}, positions = {}, pairRows = {}, positionRows = {}, poseRows = {}, maps = {}, seen = {}}
+        for _, field in ipairs(CONTACT_MAPS) do buffer.maps[field] = {} end
+        contactBuffers[result] = buffer
+    end
+    -- Facts.Merge may have added transient contact rows last time. Retain them
+    -- as slots before clearing the public array, without retaining old UIDs.
+    for index, row in ipairs(buffer.pairs) do buffer.pairRows[index] = row end
+    Clear(result)
+    Clear(buffer.pairs)
+    Clear(buffer.positions)
+    result.pairs, result.positions = buffer.pairs, buffer.positions
+    for _, field in ipairs(CONTACT_MAPS) do
+        local map = buffer.maps[field]
+        Clear(map)
+        result[field] = map
+    end
+    result.shakeStrength = 0
+    return buffer
+end
 
 ---@param name string
 ---@param fallback number
@@ -394,6 +468,8 @@ function Physics:_Init()
     self.world.warmStarting = true
     self.bodies = {}
     self._walls = {}
+    self.ccdWalls = {}
+    self.stepContactFacts = StepContactFacts.New()
     self._pairs = {}
     self._bottom = {}
     self._top = {}
@@ -405,11 +481,17 @@ function Physics:_Init()
     self.speedMultiplier, self.ghostPoop = 1, false
     self._impacts = {}
     self._retired = {}
+    self._retiredSpare = {}
+    self._syncScratch = {ordered = {}, wanted = {}, definitions = {}, scales = {}, weights = {},
+        variants = {}, rebuilt = {}}
     self._mergeSpawns = {}
     self._nearSpawns = {}
     self._eventRemoved = {}
     self._respawned = {}
     self._updating = false
+    self.autoUpdate, self._manualStep = false, false
+    self._activeStepDt, self._accelerated, self._stepMultiplier = nil, nil, nil
+    self._nextGeneration = 0
     self._flushing = false
     self._disposed = false
     self._disposeRequested = false
@@ -417,8 +499,8 @@ function Physics:_Init()
     self._pendingSync = nil
     self._layoutSeed = 1
     self.clock = 0
-    self.mode = 2
     self.motion = ShakeMotion.New()
+    self.ccdEnabledCount,self.ccdBodyCount=0,0
 
     -- 沿逆时针内边界建墙，向外法线为 (dy, -dx)/length。
     self:_Wall("floor", -HALF_WIDTH, 0, HALF_WIDTH, 0)
@@ -456,10 +538,27 @@ function Physics:_Wall(name, ax, ay, bx, by, extendStart, extendEnd)
     box:SetSize(length + start + finish, WALL_THICKNESS)
     setSurface(box, WALL_CATEGORY, 0xFFFF)
     self._walls[#self._walls + 1] = node
+    self.ccdWalls[#self.ccdWalls + 1] = {
+        ax=ax-dx/length*start,ay=ay-dy/length*start,
+        bx=bx+dx/length*finish,by=by+dy/length*finish,
+        nx=dy/length,ny=-dx/length,
+    }
+end
+
+-- 只作废排队的历史采样；仍然接触的原生fixture计数保持有效。
+---@param uid number
+function Physics:_InvalidateSamples(uid)
+    local record = self.bodies[uid]
+    if not record then return end
+    record.pathGeneration = record.pathGeneration or record.generation
+    self._nextGeneration = math.max(self._nextGeneration or 0, record.generation or 0) + 1
+    record.generation = self._nextGeneration
 end
 
 ---@param uid number
 function Physics:_ForgetContacts(uid)
+    self:_InvalidateSamples(uid)
+    self.stepContactFacts:Forget(uid)
     self._bottom[uid] = nil
     self._top[uid] = nil
     self._wall[uid] = nil
@@ -485,15 +584,18 @@ end
 -- 仅在 scene:Update 返回、Box2D 世界解锁后调用。
 function Physics:_DrainRetired()
     local retired = self._retired
-    self._retired = {}
+    if #retired == 0 then return end
+    self._retired = self._retiredSpare or {}
+    self._retiredSpare = retired
     self._flushing = true
-    for _, record in ipairs(retired) do
+    for index, record in ipairs(retired) do
         if record.soft then
             record.soft:Dispose()
         else
             record.node:Remove()
             record.node:Dispose()
         end
+        retired[index] = nil
     end
     self._flushing = false
 end
@@ -614,6 +716,8 @@ end
 ---@param x number
 ---@param y number
 function Physics:_CreateItem(item, x, y)
+    self._nextGeneration = (self._nextGeneration or 0) + 1
+    local generation = self._nextGeneration
     local radius, shape, envelope = dimensions(item.id, item.woolCount)
     -- 体积倍率（大胃王/气球）：碰撞与包络同步缩放，显示尺寸由 View 用同一 scale。
     local scale = PhysicalState.Clamp(item.id, "scale", item.scale)
@@ -630,11 +734,12 @@ function Physics:_CreateItem(item, x, y)
             parts[#parts + 1] = {node = segment.node, body = segment.body}
         end
         self.bodies[item.uid] = {
-            uid = item.uid, node = center.node, body = center.body, soft = soft,
+            uid = item.uid, generation = generation, pathGeneration = generation, node = center.node, body = center.body, soft = soft,
             parts = parts, radius = radius, kind = item.id, shape = shape,
             envelope = envelope, scale = scale, weight = weight, shapes = {}, sensor = false, ghostLike = false,
             newbornRemaining = NEWBORN_SECONDS,
-            lastX = x, lastY = y,
+            ccdGuardRemaining = NEWBORN_SECONDS,
+            lastX = x, lastY = y, pathLength = 0,
         }
         return
     end
@@ -681,12 +786,13 @@ function Physics:_CreateItem(item, x, y)
     body.angularVelocity = 0
     body.awake = true
     self.bodies[item.uid] = {
-        uid = item.uid, node = node, body = body, radius = radius,
+        uid = item.uid, generation = generation, pathGeneration = generation, node = node, body = body, radius = radius,
         parts = {{node = node, body = body}},
         kind = item.id, shape = shape, envelope = envelope, scale = scale,
         weight = weight, shapes = shapes, sensor = sensor, ghostLike = ghost,
         newbornRemaining = NEWBORN_SECONDS,
-        lastX = x, lastY = y,
+        ccdGuardRemaining = NEWBORN_SECONDS,
+        lastX = x, lastY = y, pathLength = 0,
     }
 end
 
@@ -697,24 +803,31 @@ end
 function Physics:RememberEvents(events)
     if self._disposed then return end
     for _, event in ipairs(events) do
+        FrameBudget.Checkpoint()
         self.expansion:Remember(event)
         if event.kind == "remove" then
             self._eventRemoved[event.uid] = true
         end
     end
     for _, event in ipairs(events) do
+        FrameBudget.Checkpoint()
         if event.kind == "merge" and event.a and event.b then
-            local recordA, recordB = self.bodies[event.a], self.bodies[event.b]
-            local rememberedA, rememberedB = self._mergeSpawns[event.a], self._mergeSpawns[event.b]
-            if (recordA or rememberedA) and (recordB or rememberedB) then
-                local poseA = recordA and recordA.node.position2D
-                    or Vector2(rememberedA.x, rememberedA.y)
-                local poseB = recordB and recordB.node.position2D
-                    or Vector2(rememberedB.x, rememberedB.y)
-                self._mergeSpawns[event.uid] = {
-                    x = (poseA.x + poseB.x) * 0.5,
-                    y = (poseA.y + poseB.y) * 0.5,
-                }
+            -- 原生物理可在规则分片期间继续移动，合成应保留触发快照的出生点。
+            if finite(event.x) and finite(event.y) then
+                self._mergeSpawns[event.uid] = {x = event.x, y = event.y}
+            else
+                local recordA, recordB = self.bodies[event.a], self.bodies[event.b]
+                local rememberedA, rememberedB = self._mergeSpawns[event.a], self._mergeSpawns[event.b]
+                if (recordA or rememberedA) and (recordB or rememberedB) then
+                    local poseA = recordA and recordA.node.position2D
+                        or Vector2(rememberedA.x, rememberedA.y)
+                    local poseB = recordB and recordB.node.position2D
+                        or Vector2(rememberedB.x, rememberedB.y)
+                    self._mergeSpawns[event.uid] = {
+                        x = (poseA.x + poseB.x) * 0.5,
+                        y = (poseA.y + poseB.y) * 0.5,
+                    }
+                end
             end
         elseif event.kind == "spawn" then
             if finite(event.x) and finite(event.y) then
@@ -781,6 +894,7 @@ function Physics:Sync(items, reset, seed, options)
         self.ghostPoop = options.ghostPoop == true
     end
     if reset then
+        self.stepContactFacts:Clear()
         self:ResetMotion()
         self.clock = 0
         for uid in pairs(self.bodies) do self:_Retire(uid) end
@@ -798,23 +912,25 @@ function Physics:Sync(items, reset, seed, options)
         self._eventRemoved = {}
         self._respawned = {}
     end
-    ---@type ItemInstance[]
-    local ordered = {}
-    ---@type table<number, boolean>
-    local wanted = {}
+    local scratch = self._syncScratch
+    if not scratch then
+        scratch = {ordered = {}, wanted = {}, definitions = {}, scales = {}, weights = {},
+            variants = {}, rebuilt = {}}
+        self._syncScratch = scratch
+    end
+    for _, values in pairs(scratch) do Clear(values) end
+    local ordered = scratch.ordered --[[@as ItemInstance[] ]]
+    local wanted = scratch.wanted --[[@as table<number,boolean>]]
     for _, item in ipairs(items) do
         if item.location == "bottle" and not wanted[item.uid] then
             wanted[item.uid] = true
             ordered[#ordered + 1] = item
         end
     end
-    table.sort(ordered, function(a, b) return a.uid < b.uid end)
-    ---@type table<number, string>
-    local definitions = {}
-    ---@type table<number, number>
-    local scales, weights = {}, {}
-    ---@type table<number, string>
-    local variants = {}
+    table.sort(ordered, ByUid)
+    local definitions = scratch.definitions --[[@as table<number,string>]]
+    local scales, weights = scratch.scales, scratch.weights
+    local variants = scratch.variants --[[@as table<number,string>]]
     for _, item in ipairs(ordered) do
         definitions[item.uid] = item.id
         local _, shape = dimensions(item.id, item.woolCount)
@@ -822,8 +938,7 @@ function Physics:Sync(items, reset, seed, options)
         scales[item.uid] = PhysicalState.Clamp(item.id, "scale", item.scale)
         weights[item.uid] = PhysicalState.Clamp(item.id, "weight", item.weight)
     end
-    ---@type table<number, BottleRebuiltBody>
-    local rebuilt = {}
+    local rebuilt = scratch.rebuilt --[[@as table<number,BottleRebuiltBody>]]
     for uid, record in pairs(self.bodies) do
         -- 生命周期按uid判断，不按旧kind/sensor判断：尺寸、羊形态、转化、
         -- remove后同uid仍在场都保留自然累计和已施加强制角，但不盲继承行为。
@@ -932,11 +1047,11 @@ function Physics:Sync(items, reset, seed, options)
             created = created + 1
         end
     end
-    self._mergeSpawns = {}
-    self._nearSpawns = {}
-    self._eventRemoved = {}
-    self._respawned = {}
-    self._exactSpawns = {}
+    self._mergeSpawns = Clear(self._mergeSpawns)
+    self._nearSpawns = Clear(self._nearSpawns)
+    self._eventRemoved = Clear(self._eventRemoved)
+    self._respawned = Clear(self._respawned)
+    self._exactSpawns = Clear(self._exactSpawns)
     self.expansion:Flush(self)
     if reset then
         print(string.format("[Bottle.Physics] 重置 %d 个瓶内物体，随机散布，等待 Step 后才运动", #ordered))
@@ -1010,6 +1125,7 @@ function Physics:Contact(eventData, begin)
     if uidA and uidA == uidB then return end -- 软体内部接触不是物品相邻
     local delta = begin and 1 or -1
     if uidA and uidB and uidA ~= uidB then
+        if begin then self.stepContactFacts:Pair(recordA, recordB) end
         local a, b = math.min(uidA, uidB), math.max(uidA, uidB)
         local key = tostring(a) .. ":" .. tostring(b)
         local previous = self._pairs[key]
@@ -1033,6 +1149,7 @@ function Physics:Contact(eventData, begin)
             if node == wallNode then innerWall = true; break end
         end
         if not innerWall then return end
+        if begin then self.stepContactFacts:Wall(uidA and recordA or recordB, wallNode.name) end
         changeContactCount(self._wall, uid, delta)
         if wallNode.name == "floor" then changeContactCount(self._bottom, uid, delta) end
         if wallNode.name == "top" then changeContactCount(self._top, uid, delta) end
@@ -1077,50 +1194,104 @@ function Physics:TakeImpacts()
     return impacts
 end
 
----@return BottlePhysicsContacts
-function Physics:Contacts()
-    ---@type BottlePhysicsContacts
-    local result = { pairs = {}, bottom = {}, top = {}, wall = {}, side = {}, positions = {},
-        angles = {}, rotateOffsets = {}, angularTravel = {}, flightArrived = {}, flightHits = {}, shakeStrength = 0 }
-    for uid, record in pairs(self.bodies) do
-        local position = record.node.position2D
-        if position then result.positions[uid] = { x = position.x, y = position.y } end
-    end
-    for _, pair in pairs(self._pairs) do
-        if pair.count > 0 and self.bodies[pair.a] and self.bodies[pair.b] then
-            result.pairs[#result.pairs + 1] = { pair.a, pair.b }
-        end
-    end
-    table.sort(result.pairs, function(a, b)
-        return a[1] < b[1] or (a[1] == b[1] and a[2] < b[2])
-    end)
-    for uid, count in pairs(self._bottom) do
-        if count > 0 and self.bodies[uid] then result.bottom[uid] = true end
-    end
-    for uid, count in pairs(self._top) do
-        if count > 0 and self.bodies[uid] then result.top[uid] = true end
-    end
-    for uid, count in pairs(self._wall) do
-        if count > 0 and self.bodies[uid] then result.wall[uid] = true end
-    end
-    for uid, count in pairs(self._side) do
-        if count > 0 and self.bodies[uid] then result.side[uid] = true end
-    end
-    self.expansion:Contacts(self, result)
-    return result
+---@param uid number
+---@param target number?
+---@return boolean
+function Physics:HadPair(uid, target)
+    if type(uid) ~= "number" or type(target) ~= "number" then return false end
+    local a, b = math.tointeger(uid), math.tointeger(target)
+    if not a or not b or a < 1 or b < 1 or a > 2147483647 or b > 2147483647 or a == b then return false end
+    local pair = self._pairs[tostring(math.min(a, b)) .. ":" .. tostring(math.max(a, b))]
+    return (pair ~= nil and pair.count > 0 and self.bodies[uid] ~= nil and self.bodies[target] ~= nil)
+        or self.stepContactFacts:HasPair(uid, target, self.bodies)
 end
 
----切换仅改变输入模型，不重建物品、不清接触，也不修改姿态或速度。
----@param mode number
----@return boolean
-function Physics:SetMode(mode)
-    if self._disposed or (mode ~= 1 and mode ~= 2) then return false end
-    if self.mode ~= mode then
-        self.mode = mode
-        self:ResetMotion()
-        print("[Bottle.Physics] 已切换物理" .. (mode == 1 and "一：原版" or "二：摇晃惯性"))
+--- Passing target explicitly lends an exclusive scratch snapshot. The default
+--- keeps independent snapshots for callers that retain previous results.
+---@param target BottlePhysicsContacts?
+---@return BottlePhysicsContacts
+function Physics:Contacts(target)
+    local result = target or {pairs = {}, bottom = {}, top = {}, wall = {}, side = {}, positions = {},
+        angles = {}, rotateOffsets = {}, angularTravel = {}, flightArrived = {}, flightHits = {},
+        poses = {}, members = {}, generations = {}, pathLengths = {}, pathGeneration = {},
+        shakeStrength = 0} --[[@as BottlePhysicsContacts]]
+    local buffer = target and ContactBuffer(result) or nil
+    local copied = 0
+    for uid, record in pairs(self.bodies) do
+        local position = record.node.position2D
+        if position then
+            local index = copied + 1
+            local row = buffer and buffer.positionRows[index] or nil
+            if not row then
+                row = {}
+                if buffer then buffer.positionRows[index] = row end
+            end
+            row.x, row.y = position.x, position.y
+            result.positions[uid] = row
+            ---@type BottlePhysicsPose?
+            local pose = buffer and buffer.poseRows[index] or nil
+            if not pose then
+                pose = {} --[[@as BottlePhysicsPose]]
+                if buffer then buffer.poseRows[index] = pose end
+            end
+            pose.x, pose.y = position.x, position.y
+            pose.angle, pose.radius = record.node.rotation2D * math.pi / 180, record.radius or DEFAULT_RADIUS
+            pose.soft = record.soft and record.soft:GetPose(pose.soft) or nil
+            result.poses[uid] = pose
+        end
+        result.members[uid] = record.kind or ""
+        result.generations[uid] = record.generation or 0
+        result.pathLengths[uid] = record.pathLength or 0
+        result.pathGeneration[uid] = record.pathGeneration or record.generation or 0
+        copied = copied + 1
+        if copied % 32 == 0 then FrameBudget.Checkpoint() end
     end
-    return true
+    copied = 0
+    for _, pair in pairs(self._pairs) do
+        if pair.count > 0 and self.bodies[pair.a] and self.bodies[pair.b] then
+            local index = #result.pairs + 1
+            local row = buffer and buffer.pairRows[index] or nil
+            if not row then
+                row = {}
+                if buffer then buffer.pairRows[index] = row end
+            end
+            row[1], row[2] = pair.a, pair.b
+            result.pairs[index] = row
+        end
+        copied = copied + 1
+        if copied % 128 == 0 then FrameBudget.Checkpoint() end
+    end
+    copied = 0
+    for uid, count in pairs(self._bottom) do
+        if count > 0 and self.bodies[uid] then result.bottom[uid] = true end
+        copied = copied + 1
+        if copied % 32 == 0 then FrameBudget.Checkpoint() end
+    end
+    copied = 0
+    for uid, count in pairs(self._top) do
+        if count > 0 and self.bodies[uid] then result.top[uid] = true end
+        copied = copied + 1
+        if copied % 32 == 0 then FrameBudget.Checkpoint() end
+    end
+    copied = 0
+    for uid, count in pairs(self._wall) do
+        if count > 0 and self.bodies[uid] then result.wall[uid] = true end
+        copied = copied + 1
+        if copied % 32 == 0 then FrameBudget.Checkpoint() end
+    end
+    copied = 0
+    for uid, count in pairs(self._side) do
+        if count > 0 and self.bodies[uid] then result.side[uid] = true end
+        copied = copied + 1
+        if copied % 32 == 0 then FrameBudget.Checkpoint() end
+    end
+    ---@cast buffer {seen:table<string,boolean>,pairRows:number[][]}?
+    self.stepContactFacts:Merge(result, self.bodies, buffer)
+    BudgetSort.Sort(result.pairs, function(a, b)
+        return a[1] < b[1] or (a[1] == b[1] and a[2] < b[2])
+    end)
+    self.expansion:Contacts(self, result)
+    return result
 end
 
 function Physics:ResetMotion()
@@ -1140,35 +1311,21 @@ end
 ---@param ay number
 ---@param dt number
 function Physics:Sensor(ax, ay, dt)
-    if not self._disposed and self.mode == 2 then
-        self.motion:Sensor(ax, ay, dt)
-        if finite(ax) and finite(ay) and finite(dt) and dt > 0 then self.expansion:Input(false,true) end
+    if not self._disposed then
+        local dx, dy = self.motion:Sensor(ax, ay, dt)
+        self:Shake(dx, dy)
     end
 end
 
----物理一原样保留：世界坐标拖动增量，dx 向右、dy 向上；立即同向冲量。
----物理二：记录瓶子的目标位移；在固定 Step 中计算反向惯性，不直接平移物品。
+---记录瓶子的目标位移；在固定 Step 中计算反向惯性，不直接平移物品。
 ---@param dx number
 ---@param dy number
 function Physics:Shake(dx, dy)
     if self._disposed or dx ~= dx or dy ~= dy then return end
-    if self.mode == 2 then
-        if self.motion.holding and (dx ~= 0 or dy ~= 0) then self.expansion:Input(true,false) end
-        self.motion:Move(dx, dy)
-        return
+    if (self.motion.holding or self.motion.sensorHolding) and (dx ~= 0 or dy ~= 0) then
+        self.expansion:Input(true,false)
     end
-    local length = math.sqrt(dx * dx + dy * dy)
-    if length == 0 or length == math.huge then return end
-    local scale = math.min(1, MAX_SHAKE_DELTA / length) * SHAKE_GAIN
-    self.expansion:Input(false,false,dx*scale,dy*scale)
-    for _, record in pairs(self.bodies) do
-        if not self.expansion:Controlled(record) then
-            for _, part in ipairs(record.parts) do
-                local mass = part.body.mass
-                part.body:ApplyLinearImpulseToCenter(Vector2(dx * scale * mass, dy * scale * mass), true)
-            end
-        end
-    end
+    self.motion:Move(dx, dy)
 end
 
 -- 幽灵是穿透 sensor：速度仅由私有确定性流场和瓶轮廓决定，不读解算速度，
@@ -1263,29 +1420,38 @@ local function floatGhost(record, clock, dt, multiplier)
     record.body.awake = true
 end
 
----每次正 dt 仅手动更新一次 scene；主程序固定传 1/60。
----本模块不自动摇晃、不订阅自动更新事件，也没有额外的回合计时器。
----@param dt number
-function Physics:Step(dt)
-    if self._disposed or self._updating or self._flushing or dt ~= dt or math.abs(dt) == math.huge then
-        return
-    end
-    self.expansion:Flush(self)
-    if dt <= 0 then
-        self:_RemovalBarrier()
-        self:_RunDeferred()
-        return
-    end
-    self:_RunDeferred()
+---主瓶开启引擎自动Scene步进；详情预览/同步测试仍使用Step。
+---暂停只需主程序在SceneUpdate关闭world.updateEnabled，保留Scene回调以便恢复。
+---@param enabled boolean
+function Physics:SetAutoUpdate(enabled)
     if self._disposed then return end
-    local dvx, dvy, sensorX, sensorY = 0, 0, 0, 0
-    if self.mode == 2 then
-        dvx, dvy = self.motion:Step(dt)
-        sensorX, sensorY = self.motion:SensorImpulse(dt)
+    assert(not self._updating, "不能在原生物理步中切换自动更新")
+    self.autoUpdate = enabled == true
+    self.scene.updateEnabled = self.autoUpdate
+    self.world.updateEnabled = true
+end
+
+---引擎PhysicsPreStep入口：只准备物理输入/动作/CCD，不积分、不处理规则或事件日志。
+---TimeStep使用真实2D原生步长；引擎自动2D没有暴露固定frequency设置。
+---@param dt number
+---@param sensorInput BottleSensorLabInput?
+---@return boolean started
+function Physics:BeforeStep(dt, sensorInput)
+    if self._disposed or self._updating or self._flushing or dt ~= dt or math.abs(dt) == math.huge then
+        return false
     end
-    self.expansion:SampleShake(dt,dvx,dvy,sensorX,sensorY)
-    dvx,dvy=dvx+sensorX,dvy+sensorY
+    if dt <= 0 then return false end
+    self.expansion:Flush(self)
+    self:_RunDeferred()
+    if self._disposed then return false end
+    local dvx, dvy = 0, 0
+    if sensorInput then dvx, dvy = sensorInput:Advance(dt, self)
+    else dvx, dvy = self.motion:Step(dt) end
+    self.expansion:SampleShake(dt,dvx,dvy,0,0)
     for _, record in pairs(self.bodies) do
+        local position = record.node.position2D
+        record.lastX, record.lastY = record.lastX or position.x, record.lastY or position.y
+        record.pathLength = record.pathLength or 0
         if record.ghostLike then floatGhost(record, self.clock, dt, self.speedMultiplier) end
         if record.soft then record.soft:Step(dt) end
         self.expansion:Before(record, dt, self.bodies, clampSpawn, self.speedMultiplier)
@@ -1307,25 +1473,75 @@ function Physics:Step(dt)
         end
         record.newbornRemaining = math.max(0, record.newbornRemaining - dt)
     end
-    -- 固定dt不变：把基准线速度/重力映射进1.2倍移动坐标，解算后恢复基准速度。
+    -- 把基准线速度/重力映射进1.2倍移动坐标，原生解算后恢复基准速度。
     -- 真实Box2D负责CCD/接触/关节，绝不用事后额外平移绕过薄墙；角速度不加速。
-    local accelerated = self.expansion:BeginSpeed(self)
+    self._stepMultiplier = self.speedMultiplier
+    self._accelerated = self.expansion:BeginSpeed(self)
     self.clock = self.clock + dt
+    self.stepContactFacts:BeginStep(self.bodies)
+    self._activeStepDt = dt
     self._updating = true
-    self.scene:Update(dt)
+    AdaptiveCCD.Update(self, dt)
+    return true
+end
+
+---引擎PhysicsPostStep入口：只收束已开启的同一步；不积分、不能让出协程。
+---@param dt number
+---@return boolean finished
+function Physics:AfterStep(dt)
+    local activeDt = self._activeStepDt
+    if not activeDt then return false end
+    assert(dt == activeDt, "物理前后事件必须属于同一TimeStep")
     self._updating = false
-    self.expansion:EndSpeed(accelerated, self.speedMultiplier)
+    self.stepContactFacts:EndStep()
+    self.expansion:EndSpeed(assert(self._accelerated), assert(self._stepMultiplier))
+    self._accelerated, self._stepMultiplier, self._activeStepDt = nil, nil, nil
+    -- 逐真实积分累计，规则即使跨多帧续作也不会漏掉往返路程。
+    -- Expansion.moveWhole在传送时重设lastX/Y；本代累计不包括传送跳变。
     for _, record in pairs(self.bodies) do
+        local position = record.node.position2D
+        if finite(position.x) and finite(position.y) and finite(record.lastX) and finite(record.lastY) then
+            local dx, dy = position.x - record.lastX, position.y - record.lastY
+            record.pathLength = (record.pathLength or 0) + math.sqrt(dx * dx + dy * dy)
+        end
         if record.sensor then containGhost(record) end
     end
     self.expansion:After(self, dt)
+    -- 几何兜底纠偏不是物理行程；只更新下一真实步的采样基线。
+    for _, record in pairs(self.bodies) do
+        local position = record.node.position2D
+        record.lastX, record.lastY = position.x, position.y
+    end
     self:_DrainRetired()
     self:_RunDeferred()
+    return true
+end
+
+---详情预览/测试的同步入口：恰好一次原生Scene.Update，不与主瓶自动钩子重复执行。
+---@param dt number
+---@param sensorInput BottleSensorLabInput?
+function Physics:Step(dt, sensorInput)
+    if self._disposed or self._updating or self._flushing or dt ~= dt or math.abs(dt) == math.huge then return end
+    if dt <= 0 then
+        self.expansion:Flush(self)
+        self:_RemovalBarrier()
+        self:_RunDeferred()
+        return
+    end
+    self._manualStep = true
+    if not self:BeforeStep(dt, sensorInput) then self._manualStep = false; return end
+    local ok, message = pcall(self.scene.Update, self.scene, dt)
+    self:AfterStep(dt)
+    self._manualStep = false
+    if not ok then error(message, 0) end
 end
 
 function Physics:_ClearBodies()
+    self.stepContactFacts:Clear()
     self:ResetMotion()
     self.clock = 0
+    self.ccdState=nil
+    self.ccdEnabledCount,self.ccdBodyCount=0,0
     for uid in pairs(self.bodies) do self:_Retire(uid) end
     self._pairs = {}
     self._bottom = {}
@@ -1388,10 +1604,11 @@ end
 
 ---柔软段绝对姿态快照；不推进物理、不泄露可写节点引用。普通物品返回 nil。
 ---@param uid number
+---@param target BottleSoftPose[]? Explicit scratch only; omission retains a snapshot.
 ---@return BottleSoftPose[]?
-function Physics:GetSoftPose(uid)
+function Physics:GetSoftPose(uid, target)
     local record = self.bodies[uid]
-    return record and record.soft and record.soft:GetPose() or nil
+    return record and record.soft and record.soft:GetPose(target) or nil
 end
 
 ---软体按实际矩形段拾取；普通物品维持半径粗检，像素透明命中仍由 Art 决定。
@@ -1424,6 +1641,7 @@ function Physics:Dispose()
         node:Dispose()
     end
     self._walls = {}
+    self.ccdWalls = {}
     self.world.updateEnabled = false
     self.scene:RemoveAllComponents()
     self.world:Dispose()

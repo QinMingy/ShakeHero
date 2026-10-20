@@ -1,0 +1,27 @@
+local V=assert(_G.V)
+local context=assert(_G.PoolingNative)
+local config=context.config or require("native-config")
+local Functional=require("native-functional")
+
+V.atFrame(10,function()
+    V.assert(context.started and context.game and context.view and context.physics and context.sim,
+        "actual main, Board and native physics constructors captured")
+    V.assert(require("PublishConfig").PUBLISH_MODE==true,"production permissions retained")
+    V.assert(context.sim.budget.budgetMs==4,"production four-millisecond frame budget retained")
+    V.assert(not context.functionalState or not context.functionalState.error,"finite visual data during early real shaking")
+end)
+
+V.atFrame(config.warmup+config.measured+2,function()
+    context.Finish() -- Fix measured output before any functional-only virtual continuation.
+    V.assert(context.captured==config.measured,"all measured native samples captured before functional checks")
+    V.assert(context.sim.completedSteps>0,"actual fixed-step simulation commits")
+    V.assert(not context.functionalState or not context.functionalState.error,"all measured popup/coin data are finite")
+    local ok,results=Functional.Run(context)
+    print("POOLING_NATIVE_FUNCTIONAL "..cjson.encode(context.functional))
+    V.assert(results.round,"real round lifetimes and credit conservation pass")
+    V.assert(results.score,"explicit score fixture popups/coins credit once and fully expire")
+    V.assert(results.cancel,"suspended actual Stage ages old popups and closes pins on cancellation")
+    V.assert(results.commit,"actual Stage commit preserves popup order and animation age")
+    V.assert(ok,"native functional-only suite passes")
+    V.finish()
+end)

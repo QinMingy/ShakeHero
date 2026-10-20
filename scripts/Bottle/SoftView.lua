@@ -2,6 +2,19 @@
 local Art = require("Bottle.Art")
 ---@class BottleSoftView
 local SoftView = {}
+-- Rendering and hit bounds consume a pose synchronously. Event/residue callers
+-- still use Physics:GetSoftPose without a target and retain isolated snapshots.
+---@type table<table,BottleSoftPose[]>
+local renderPoses = setmetatable({}, {__mode = "k"})
+
+---@param physics BottlePhysics
+---@param uid number
+---@return BottleSoftPose[]?
+local function RenderPose(physics, uid)
+    local target = renderPoses[physics]
+    if not target then target = {}; renderPoses[physics] = target end
+    return physics:GetSoftPose(uid, target)
+end
 
 ---@param vg NVGContextWrapper
 ---@param poses BottleSoftPose[]
@@ -24,7 +37,7 @@ end
 ---@param ppu number
 ---@return {x:number,y:number,w:number,h:number}?
 function SoftView.Bounds(physics, uid, x, y, ppu)
-    local poses = physics:GetSoftPose(uid)
+    local poses = RenderPose(physics, uid)
     if not poses then return nil end
     local minX, minY, maxX, maxY = math.huge, math.huge, -math.huge, -math.huge
     for _, pose in ipairs(poses) do
@@ -46,7 +59,7 @@ end
 ---@param ppu number
 ---@param cooling boolean?
 function SoftView.Item(vg, physics, item, x, y, ppu, cooling)
-    local poses = physics:GetSoftPose(item.uid)
+    local poses = RenderPose(physics, item.uid)
     if poses then SoftView.Draw(vg, poses, x, y, ppu, cooling)
     else
         local px, py, angle, radius = physics:GetPose(item.uid)

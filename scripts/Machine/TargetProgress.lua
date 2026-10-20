@@ -2,6 +2,15 @@
 -- 每次增加在条的前沿迸发受重力的像素粒子，并给机台一个轻微屏幕震动。
 local UI=require("urhox-libs/UI")
 local L=require("Machine.LayeredLayout")
+local RecordPool=require("Bottle.RecordPool")
+local UniformCache=require("Machine.UniformCache")
+local uniforms=UniformCache.New()
+local burstPools=setmetatable({}, {__mode="k"})
+local function burstPool(view)
+    local pool=burstPools[view]
+    if not pool then pool=RecordPool.New(256);burstPools[view]=pool end
+    return pool
+end
 ---@type any
 local Progress={count=21}
 local yellow={244,193,80,255}
@@ -42,15 +51,16 @@ end
 function Progress.Burst(view,x,y,complete,delta)
     local list=view.targetBursts
     if not list then list={};view.targetBursts=list end
+    local pool=burstPool(view)
     local color=complete and green or yellow
     local count=math.min(26,14+math.floor((delta or 1)*.8))
     for _=1,count do
-        list[#list+1]={
-            x=x+(rand()*2-1)*6,y=y+(rand()*2-1)*4,
-            vx=(rand()*2-1)*110,vy=-40-rand()*100,
-            size=2+math.floor(rand()*3),
-            age=0,life=.7+rand()*.5,color=color,
-        }
+        local p=pool:Acquire()
+        p.x,p.y=x+(rand()*2-1)*6,y+(rand()*2-1)*4
+        p.vx,p.vy=(rand()*2-1)*110,-40-rand()*100
+        p.size=2+math.floor(rand()*3)
+        p.age,p.life,p.color=0,.7+rand()*.5,color
+        list[#list+1]=p
     end
 end
 
@@ -59,18 +69,26 @@ end
 function Progress.Update(view,dt)
     local list=view.targetBursts
     if not list then return end
+    local pool=burstPool(view)
     dt=math.max(0,dt)
-    for i=#list,1,-1 do
+    local count,write=#list,1
+    for i=1,count do
         local p=list[i]
         p.age=p.age+dt
         if p.age>=p.life then
-            table.remove(list,i)
+            pool:Release(p)
         else
             p.vy=p.vy+360*dt
             p.x=p.x+p.vx*dt
             p.y=p.y+p.vy*dt
+            list[write]=p;write=write+1
         end
     end
+    for i=write,count do list[i]=nil end
+end
+
+function Progress.GetPoolStats(view)
+    return burstPool(view):GetStats()
 end
 
 ---@param view BottleView
@@ -95,7 +113,8 @@ end
 
 function Progress.Attach(view)
     local m=view.machineSkin
-    view.targetBursts={}
+    if view.targetBursts then burstPool(view):ClearActive(view.targetBursts)
+    else view.targetBursts={} end
     local bar=UI.ProgressBar{id="targetProgress",value=0,max=1,showLabel=false,
         pointerEvents="none",zIndex=2,borderWidth=0,borderRadius=0} --[[@as any]]
     local lastScore=view.board.displayScore or view.game.score
@@ -125,8 +144,8 @@ function Progress.Attach(view)
         scene:Layer(-.08)
         scene:Quad("target-progress",b.x,b.y,b.w,b.h)
         local material=scene.materials["target-progress"]
-        material:SetShaderParameter("progress_value",Variant(value))
-        material:SetShaderParameter("progress_color",Variant(Color(color[1]/255,color[2]/255,color[3]/255,1)))
+        uniforms:Scalar(material,"progress_value",value)
+        uniforms:Vector4(material,"progress_color",color[1]/255,color[2]/255,color[3]/255,1)
     end
     m.targetProgress=bar
     m.placements[#m.placements+1]={widget=bar,rect=L.targetProgress}

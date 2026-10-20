@@ -16,6 +16,7 @@
 -- 价值语义：bonus 临时（回合末清零）；permBonus 永久；mult 临时倍率。
 
 local Items = require("Bottle.Items")
+local FrameBudget = require("Bottle.FrameBudget")
 local Relics = require("Bottle.Relics")
 local Extra = require("Bottle.ExtraEffects")
 local Expansion = require("Bottle.ExpansionEffects")
@@ -37,6 +38,7 @@ local function PlantPool()
     ---@type string[]
     local pool = {}
     for _, def in ipairs(Items.list) do
+        FrameBudget.Checkpoint()
         if def.implemented and not def.id:match("_half$") then
             for _, tag in ipairs(def.tags or {}) do
                 if tag == "植物" then
@@ -54,6 +56,21 @@ local STUDENT_GOOD = { "police", "chef", "teacher", "doctor", "soldier" }
 local STUDENT_BAD = { "thief", "killer", "gambler" }
 -- 警察消灭目标（#15：赌徒、小偷、杀手）。
 local POLICE_TARGETS = { gambler = true, thief = true, killer = true }
+
+--- 只快照事实坐标与图案；转化会清空 lastPositions，必须在改写实例前捕获。
+---@param game BottleGame
+---@param action BottleItemFeedbackKind
+---@param source ItemInstance
+---@param target ItemInstance
+---@param contacts BottleStepContacts?
+---@return GameEvent
+local function ItemFeedback(game, action, source, target, contacts)
+    local from = (contacts and contacts.positions[source.uid]) or game._lastPositions[source.uid]
+    local to = (contacts and contacts.positions[target.uid]) or game._lastPositions[target.uid]
+    return {kind = "itemFeedback", action = action, uid = source.uid, id = source.id,
+        targetUid = target.uid, targetId = target.id,
+        x = from and from.x, y = from and from.y, toX = to and to.x, toY = to and to.y}
+end
 
 -- 接触只决定是否尝试；Apply返回true必须代表本物品实际生效，失败保持就绪。
 -- 护盾/遗物产生的旁支事件不代表主动效果成功，不能用事件数量代替返回契约。
@@ -77,6 +94,7 @@ function Effects.Touches(game, item, contacts)
     if trigger == "top" then return contacts.top[item.uid] == true end
     if trigger == "touch" then
         for _, pair in ipairs(contacts.pairs) do
+            FrameBudget.Checkpoint()
             if pair[1] == item.uid or pair[2] == item.uid then return true end
         end
         return false
@@ -93,6 +111,7 @@ end
 ---@param events GameEvent[]
 function Effects.Merge(game, contacts, events)
     for _, pair in ipairs(contacts.pairs) do
+        FrameBudget.Checkpoint()
         local a = game:Get(pair[1])
         local b = game:Get(pair[2])
         if a and b and a.location == "bottle" and b.location == "bottle" then
@@ -104,7 +123,9 @@ function Effects.Merge(game, contacts, events)
                 resultId = nil
             end
             if resultId then
-                game:_Merge(a, b, resultId, contacts, events)
+                if game:_Merge(a, b, resultId, contacts, events) and coinValue and coinValue >= 64 then
+                    TriggerFeedback.Relic(game, events, "merge_2048")
+                end
             end
         end
     end
@@ -121,20 +142,31 @@ end
 ---@param events GameEvent[]
 ---@param chefBonus boolean
 ---@param extraBonus number?
+---@param cutter ItemInstance
 ---@return boolean
-local function CutFruit(game, fruit, contacts, events, chefBonus, extraBonus)
+local function CutFruit(game, fruit, contacts, events, chefBonus, extraBonus, cutter)
     local halfId = FULL_FRUIT[fruit.id]
     if not halfId then return false end
+    local feedback = ItemFeedback(game, "cut", cutter, fruit, contacts)
+    feedback.producedUids = {}
     local position = contacts.positions[fruit.uid]
     local bonus = (chefBonus and 3 or 0) + (extraBonus or 0)
     game:_Transform(fruit, halfId, events)
     if bonus > 0 then fruit.permBonus = fruit.permBonus + bonus end
     local extra = game:_Spawn(halfId, events, false, position)
     if extra and bonus > 0 then extra.permBonus = extra.permBonus + bonus end
+    if extra and extra.location == "bottle" then
+        feedback.producedUids[#feedback.producedUids + 1] = extra.uid
+    end
     if extra and Relics.Has(game, "knife_skill") and game:_RandomInt(2) == 1 then
         local third = game:_Spawn(halfId, events, false, position)
         if third and bonus > 0 then third.permBonus = third.permBonus + bonus end
+        if third and third.location == "bottle" then
+            feedback.producedUids[#feedback.producedUids + 1] = third.uid
+        end
+        if third then TriggerFeedback.Relic(game, events, "knife_skill") end
     end
+    events[#events + 1] = feedback
     return true
 end
 
@@ -144,7 +176,9 @@ end
 ---@param student ItemInstance
 ---@param events GameEvent[]
 ---@param noNegative boolean
-function Effects.GrowStudent(game, student, events, noNegative)
+---@param contacts BottleStepContacts?
+function Effects.GrowStudent(game, student, events, noNegative, contacts)
+    local feedback = ItemFeedback(game, "grow", student, student, contacts)
     local current = game:_Value(student)
     ---@type string[]
     local pool = STUDENT_GOOD
@@ -157,6 +191,8 @@ function Effects.GrowStudent(game, student, events, noNegative)
     events[#events + 1] = {
         kind = "buff", uid = student.uid, id = student.id, value = current,
     }
+    feedback.targetId = student.id
+    events[#events + 1] = feedback
 end
 
 ------------------------------------------------------------------ 摇晃阶段：TOUCH 效果
@@ -170,6 +206,7 @@ end
 local function TrashCan(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid and (Items.HasTag(other.id, "垃圾") or other.temporary) then
             if game:_Destroy(other.uid, other.temporary, events, item) then
                 item.permBonus = item.permBonus + 1
@@ -191,6 +228,7 @@ local function Glutton(game, item, contacts, events)
     if item.scale >= 2 then return false end
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid and Items.HasTag(other.id, "食物") then
             if game:_Destroy(other.uid, other.temporary, events, item) then
                 item.permBonus = item.permBonus + 1
@@ -213,9 +251,10 @@ end
 local function FruitNinja(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid and FULL_FRUIT[other.id] then
             local value = game:_Value(other)
-            if CutFruit(game, other, contacts, events, false) then
+            if CutFruit(game, other, contacts, events, false, nil, item) then
                 item.permBonus = item.permBonus + value
                 events[#events + 1] = {
                     kind = "buff", uid = item.uid, id = item.id, value = value,
@@ -236,6 +275,7 @@ end
 local function Police(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if POLICE_TARGETS[other.id]
             and not (other.id == "thief" and Relics.Has(game, "wash_hands")) then
             if game:_Eliminate(other, item, 4, contacts, events) then hit = true end
@@ -255,6 +295,7 @@ local function Killer(game, item, contacts, events)
     -- 遗物 teach_all（有教无类）：老师不会被杀手杀害。
     local teacherSafe = Relics.Has(game, "teach_all")
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid and Items.HasTag(other.id, "人类")
             and other.id ~= "police" and other.id ~= "killer"
             and not (teacherSafe and other.id == "teacher") then
@@ -276,9 +317,11 @@ local function Thief(game, item, contacts, events)
     local washHands = Relics.Has(game, "wash_hands")
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         local isCoin = other.id:match("^coin_%d+$") ~= nil
         if other.uid ~= item.uid
             and (Items.HasTag(other.id, "人类") or isCoin or other.id == "credit_card") then
+            local previousValue = game:_Value(other)
             if washHands then
                 other.permBonus = other.permBonus + 1
                 item.permBonus = item.permBonus + 1
@@ -288,6 +331,10 @@ local function Thief(game, item, contacts, events)
                 events[#events + 1] = {
                     kind = "buff", uid = item.uid, id = item.id, value = 1,
                 }
+                local feedback = ItemFeedback(game, "steal", item, other, contacts)
+                feedback.value = game:_Value(other) - previousValue
+                events[#events + 1] = feedback
+                TriggerFeedback.Relic(game, events, "wash_hands")
                 hit = true
             elseif game:_Value(other) > 0 then
                 local delta = Relics.Has(game, "lucky_charm") and 1 or -1
@@ -299,6 +346,10 @@ local function Thief(game, item, contacts, events)
                 events[#events + 1] = {
                     kind = "buff", uid = item.uid, id = item.id, value = 1,
                 }
+                local feedback = ItemFeedback(game, "steal", item, other, contacts)
+                feedback.value = game:_Value(other) - previousValue
+                events[#events + 1] = feedback
+                if delta > 0 then TriggerFeedback.Relic(game, events, "lucky_charm") end
                 hit = true
             end
         end
@@ -317,9 +368,10 @@ local function Teacher(game, item, contacts, events)
     local hit = false
     local convertAll = Relics.Has(game, "teach_all")
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid then
             if other.id == "student" then
-                Effects.GrowStudent(game, other, events, true)
+                Effects.GrowStudent(game, other, events, true, contacts)
                 item.permBonus = item.permBonus + 3
                 events[#events + 1] = {kind="buff", uid=item.uid, id=item.id, value=3}
                 hit = true
@@ -329,6 +381,7 @@ local function Teacher(game, item, contacts, events)
                 game:_Transform(other, "student", events)
                 other.permBonus = other.permBonus + value
                 other.settleCount = 0
+                TriggerFeedback.Relic(game, events, "teach_all")
                 hit = true
             end
         end
@@ -345,8 +398,9 @@ end
 local function Knife(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid and FULL_FRUIT[other.id] then
-            if CutFruit(game, other, contacts, events, false) then hit = true end
+            if CutFruit(game, other, contacts, events, false, nil, item) then hit = true end
         elseif other.id == "sheep" and Expansion.ShedWool(game, other, events) then
             hit = true
         end
@@ -363,6 +417,7 @@ end
 local function FruitFarmer(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid and Items.HasTag(other.id, "水果") then
             game:_Score(events, other, game:_Value(other), contacts.positions[other.uid])
             hit = true
@@ -380,10 +435,11 @@ end
 local function Diner(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid and Items.HasTag(other.id, "食物") then
             local value = game:_Value(other)
             if game:_Destroy(other.uid, other.temporary, events, item) then
-                game:_Score(events, item, value * 2, contacts.positions[item.uid])
+                game:_Score(events, item, value * 2, contacts.positions[item.uid], "consume")
                 item.counter = item.counter + 1
                 hit = true
                 -- 最新备注：最后一次按整批相邻食物处理，可超过五件后再自耗。
@@ -407,6 +463,7 @@ local function Chef(game, item, contacts, events)
     local extra = 0
     if Relics.Has(game, "chef_hat") then
         for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+            FrameBudget.Checkpoint()
             if other.id == "knife" and game:_Destroy(other.uid, false, events, item) then
                 extra = extra + 1
             end
@@ -414,9 +471,11 @@ local function Chef(game, item, contacts, events)
     end
     -- 成功吃刀本身也是效果，即使本次没有可切的水果也应进入冷却。
     local hit = extra > 0
+    if hit then TriggerFeedback.Relic(game, events, "chef_hat") end
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid and FULL_FRUIT[other.id] then
-            if CutFruit(game, other, contacts, events, true, extra) then hit = true end
+            if CutFruit(game, other, contacts, events, true, extra, item) then hit = true end
         end
     end
     return hit
@@ -465,13 +524,16 @@ end
 ---@param game BottleGame
 ---@param item ItemInstance
 ---@param contacts BottleStepContacts
+---@param hasChef boolean
+---@param hasMerchant boolean
 ---@return number
-local function AuraMult(game, item, contacts)
+local function AuraMult(game, item, contacts, hasChef, hasMerchant)
     local mult = 1
-    local isFood = Items.HasTag(item.id, "食物")
-    local isFruit = Items.HasTag(item.id, "水果")
+    local isFood = hasChef and Items.HasTag(item.id, "食物")
+    local isFruit = hasMerchant and Items.HasTag(item.id, "水果")
     if not isFood and not isFruit then return mult end
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.id == "chef" and isFood then
             mult = mult * 2
         elseif other.id == "fruit_merchant" and isFruit then
@@ -487,7 +549,14 @@ end
 ---@param contacts BottleStepContacts
 ---@param events GameEvent[]
 function Effects.Continuous(game, contacts, events)
-    for _, item in ipairs(game:BottleItems()) do
+    local items = game:BottleItems()
+    local hasChef, hasMerchant = false, false
+    for _, item in ipairs(items) do
+        if item.id == "chef" then hasChef = true end
+        if item.id == "fruit_merchant" then hasMerchant = true end
+    end
+    for _, item in ipairs(items) do
+        FrameBudget.Checkpoint()
         if item.id == "orange" or item.id == "orange_half" then
             local touching = contacts.bottom[item.uid] == true
             local wanted = touching and 2 or 0
@@ -499,9 +568,9 @@ function Effects.Continuous(game, contacts, events)
                 -- 贴底是持续状态，接触切换只同步价值，不作为离散收益跳字。
             end
         elseif item.id == "counter" then
-            item.bonus = math.floor(#game:BottleItems() / 3)
+            item.bonus = math.floor(#items / 3)
         end
-        local aura = AuraMult(game, item, contacts) * (item.eventMult or 1)
+        local aura = AuraMult(game, item, contacts, hasChef, hasMerchant) * (item.eventMult or 1)
         if item.mult ~= aura then
             local previous = item.mult
             local previousValue = game:_Value(item)
@@ -525,6 +594,7 @@ end
 ---@param events GameEvent[]
 function Effects.SettleEffects(game, events)
     for _, item in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if item.id == "seed" then
             -- 结算时：50%概率变为任一植物（转化后按新物品价值产金币）。
             if game:_RandomInt(2) == 1 then
@@ -544,6 +614,7 @@ function Effects.SettleEffects(game, events)
         end
     end
     for _, item in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if item.id == "student" then
             item.settleCount = item.settleCount + 1
             if item.settleCount >= 5 then
@@ -555,11 +626,13 @@ function Effects.SettleEffects(game, events)
     -- 若其价值至少为20，再×1.5。桂冠自身也是场上物品，参与评选。
     -- mult 为临时倍率：本轮产金币生效，回合末清零。
     for _, laurel in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if laurel.id == "laurel" then
             ---@type ItemInstance?
             local best = nil
             local bestValue, tie = -math.huge, false
             for _, item in ipairs(game:BottleItems()) do
+                FrameBudget.Checkpoint()
                 local value = game:_Value(item)
                 if value > bestValue then
                     best, bestValue, tie = item, value, false
@@ -596,6 +669,7 @@ function Effects.SettleItem(game, item, events, position, contacts)
         -- 每个真实直接连接的壁虎额外一次；不数培根虚拟相邻或连通分量。
         local seen = {}
         for _, pair in ipairs(contacts.rawPairs or contacts.pairs) do
+            FrameBudget.Checkpoint()
             local uid = pair[1] == item.uid and pair[2] or pair[2] == item.uid and pair[1] or nil
             local other = uid and game:Get(uid)
             if other and other.uid ~= item.uid and other.id == "gecko"
@@ -606,6 +680,7 @@ function Effects.SettleItem(game, item, events, position, contacts)
         end
     end
     for _ = 1, times do
+        FrameBudget.Checkpoint()
         game:_Score(events, item, value, position)
     end
 end
@@ -615,6 +690,7 @@ end
 ---@param events GameEvent[]
 function Effects.PostSettle(game, events)
     for _, item in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if item.id == "credit_card" then
             local delta = Relics.Has(game, "lucky_charm") and 1 or -1
             item.permBonus = item.permBonus + delta

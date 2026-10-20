@@ -1,0 +1,12 @@
+.setup-shell{max-width:620px;margin:0 auto;padding:35px 20px 60px}
+.setup-shell h1{font-size:36px;margin:18px 0;line-height:1.25}
+.setup-intro{font-size:14px;line-height:1.8;color:#a7b4a8}
+.setup-shell .notice{font-size:12px;line-height:1.6;padding:14px;margin:22px 0}
+.setup-step{padding:24px;margin-bottom:18px}
+.setup-step h2{font-size:20px;margin:9px 0 14px}
+.setup-step p{font-size:14px;line-height:1.8;color:#a7b4a8;margin:12px 0}
+.setup-step strong{color:#d5e6c4}
+.setup-fingerprint{display:block;overflow-wrap:anywhere;white-space:normal;font-size:12px;line-height:1.7;padding:15px;background:#101714;margin:15px 0;color:#c4f179}
+.setup-step .button{margin-top:18px;min-height:48px;font-size:14px}
+.setup-step [aria-disabled=true]{opacity:.4;pointer-events:none}
+.setup-shell>.microcopy{font-size:12px;line-height:1.8}

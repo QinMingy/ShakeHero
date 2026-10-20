@@ -71,7 +71,7 @@ function StartScreen.New(view)
     self:InitFalling()
     self:Layout()
     self:MaskGameUi()
-    print("[开始页] 实习造物主 · 金色像素标题从上方降下，白色过渡至金色")
+    print("[开始页] 摇摇上帝 · 金色像素标题从上方降下，白色过渡至金色")
     return self
 end
 

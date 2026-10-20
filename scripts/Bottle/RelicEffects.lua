@@ -2,6 +2,7 @@
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
 local Money = require("Bottle.Money")
+local TriggerFeedback = require("Bottle.TriggerFeedback")
 
 ---@class RelicEffects
 local RelicEffects = {}
@@ -119,6 +120,7 @@ function RelicEffects.CheckGamblingToken(game, item, events)
         kind = "buff", uid = item.uid, id = item.id, value = value,
     }
     game.revision = game.revision + 1
+    TriggerFeedback.Relic(game, events, "gambling_token")
     return true
 end
 
@@ -173,6 +175,7 @@ function RelicEffects.OnEliminate(game, target, by, targetUid, events)
     by.permMult = (by.permMult or 1) * 1.5
     events[#events + 1] = { kind = "buff", uid = by.uid, id = by.id, value = by.permMult }
     game.revision = game.revision + 1
+    TriggerFeedback.Relic(game, events, "jungle_hunt")
 end
 
 ---@param game BottleGame

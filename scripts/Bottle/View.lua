@@ -32,6 +32,13 @@ local function Busy(game)
     return game.phase == "running" or game.phase == "settle" or game.phase == "reveal"
 end
 
+---@param game BottleGame
+---@return string
+local function DayText(game)
+    -- Paying rent advances the target stage before the next day begins.
+    return "天数 " .. game.round .. "/" .. (game.stage * 5)
+end
+
 local NO_REMOVALS_MESSAGE = "当前无移除机会0"
 
 -- 品质铭牌文字色，与三选一候选、详情共用同一组。
@@ -90,9 +97,10 @@ local function ItemStats(gold, tags)
     local goldLabel = UI.Label {id = "goldValue", text = Money.Format(gold),
         textMotionDisabled = true, fontSize = 11.25, fontFamily = "mono", fontColor = C.warning}
     local tagText = tags or ""
+    -- 显式整行宽度：multiline 标签在横向容器内没有宽度来源，auto 宽度会收成 0 被 Render 裁掉。
     local tagLabel = UI.Label {id = "itemTag", text = tagText, visible = tagText ~= "",
-        fontSize = 11.25, fontColor = C.textSecondary, marginLeft = 8,
-        whiteSpace = "normal", flexShrink = 1}
+        fontSize = 11.25, fontColor = C.textSecondary,
+        whiteSpace = "normal", width = "100%", flexShrink = 1}
     local row = UI.Panel {id = "itemStats", width = "100%", flexDirection = "row",
         flexWrap = "wrap", alignItems = "center", gap = 12, pointerEvents = "none", children = {
             UI.Panel {flexDirection = "row", alignItems = "center", gap = 4, minHeight = 24, children = {
@@ -154,6 +162,13 @@ local function Button(text, callback, primary)
     }
 end
 
+---@class BottleSensorLabState
+---@field enabled boolean
+---@field configured boolean
+---@field available boolean
+---@field error string?
+---@field status "disabled"|"missing"|"waiting"|"online"|"stale"
+
 ---@class BottleView
 ---@field game BottleGame
 ---@field physics BottlePhysics
@@ -184,8 +199,6 @@ end
 ---@field detailRevision number
 ---@field physicsButton Button
 ---@field physicsMenu Panel
----@field physicsOne Button
----@field physicsTwo Button
 ---@field scoreLabel Label
 ---@field roundLabel Label
 ---@field goalLabel Label
@@ -216,6 +229,8 @@ end
 ---@field lastRevision number
 ---@field lastDisplayedScore number
 ---@field lastRound number
+---@field sensorLabState BottleSensorLabState
+---@field RefreshSensorGm fun()?
 
 ---@param game BottleGame
 ---@param physics BottlePhysics
@@ -261,7 +276,7 @@ function View:Init(game, physics, actions)
     self.definitionEffect, self.definitionScroll = popup.effect, popup.scroll
     self.scoreLabel = Label("0", 27, C.warning)
     self.scoreLabel:SetStyle({fontFamily = "mono"})
-    self.roundLabel = Label("天数 1/5", 12, C.textSecondary)
+    self.roundLabel = Label(DayText(game), 12, C.textSecondary)
     self.goalLabel = Label("40", 27, C.warning)
     self.badgeLabel = Label("考核阶段 1", 10, C.textSecondary)
     -- 统计区整体固定，不让回合／分数的文字基线随装饰时钟漂移。
@@ -274,7 +289,7 @@ function View:Init(game, physics, actions)
     self.board = Board {game = game, physics = physics, shake = actions.shake,
         inspect = function(uid) self:InspectItem(uid) end,
         width = "100%", flexGrow = 1, flexBasis = 0, minHeight = 120, pointerEvents = "auto"}
-    self.physicsButton = Button("切换物理 · 二", function()
+    self.physicsButton = Button("体感设置", function()
         if not DeveloperOverlay.IsAllowed(self) then return end
         self.board:ResetShake()
         self.physicsMenu:SetVisible(not self.physicsMenu:IsVisible())
@@ -282,17 +297,8 @@ function View:Init(game, physics, actions)
     self.physicsButton:SetStyle({position = "absolute", left = 8, top = 8,
         width = 144, height = 40, fontSize = 11.25, zIndex = 5})
     self.physicsButton:SetWidth(144)
-    self.physicsOne = Button("物理一 · 原版", function()
-        if DeveloperOverlay.IsAllowed(self) then self.actions.physics(1) end
-    end)
-    self.physicsTwo = Button("物理二 · 摇晃", function()
-        if DeveloperOverlay.IsAllowed(self) then self.actions.physics(2) end
-    end, true)
-    self.physicsOne:SetWidth(162)
-    self.physicsTwo:SetWidth(162)
-    self.physicsOne:SetStyle({fontSize = 11.25})
-    self.physicsTwo:SetStyle({fontSize = 11.25})
     self.sensorStatus = "off"
+    self.sensorLabState = {enabled = false, configured = false, available = false, status = "disabled"}
     self.sensorLabel = UI.Label {id = "sensorStatus", text = "体感：未启用", fontSize = 10,
         whiteSpace = "normal", width = "100%", fontColor = C.textSecondary}
     self.sensorButton = Button("启用／校准体感", function()
@@ -305,7 +311,7 @@ function View:Init(game, physics, actions)
     self.physicsMenu = UI.Panel {position = "absolute", left = 8, top = 54,
         width = 178, padding = 8, gap = 8, backgroundColor = C.surface,
         visible = false, zIndex = 6, pointerEvents = "auto",
-        children = {self.physicsOne, self.physicsTwo, self.sensorLabel, self.sensorButton}}
+        children = {self.sensorLabel, self.sensorButton}}
     self.board.physicsButton, self.board.physicsMenu = self.physicsButton, self.physicsMenu
     self.board:AddChild(self.physicsButton)
     self.board:AddChild(self.physicsMenu)
@@ -324,7 +330,7 @@ function View:Init(game, physics, actions)
     local gm = Button("GM", function() self:OpenGm() end)
     gm:SetStyle({textMotionDisabled = true})
     gm:SetStyle({height = 40, fontSize = 11.25, width = 52})
-    local title = Label("实习造物主", 22.5, C.primary)
+    local title = Label("摇摇上帝", 22.5, C.primary)
     title:SetStyle({textShadow = {offsetX = 2, offsetY = 2, blur = 0, color = C.secondary}})
     self.container = UI.Panel {width = "100%", maxWidth = 560, height = "100%",
         alignSelf = "center", paddingHorizontal = 20, paddingTop = 16, gap = 10,
@@ -353,18 +359,22 @@ function View:Init(game, physics, actions)
         children = {UI.SafeAreaView {width = "100%", height = "100%", nativeMenuInset = true,
             children = {self.container}}}}
     MachineSkin.Apply(self,title,help,gm)
+    -- 候选页会隐藏Board；仅刷新获得浮字在同一机台坐标系的Widget上补绘。
+    local refreshOverlay = UI.Widget {id = "refreshGainOverlay", position = "absolute",
+        left = 0, top = 0, width = "100%", height = "100%", zIndex = 21, pointerEvents = "none"}
+    local view = self
+    function refreshOverlay:Render(vg)
+        if view.board:IsVisible() or view.inventoryOpen then return end
+        local l = self:GetAbsoluteLayout()
+        local rect = require("Machine.LayeredLayout").board
+        local scale = view.machineSkin.scale
+        view.board:RenderPopups(vg, {x = l.x + rect[1] * scale, y = l.y + rect[2] * scale,
+            w = rect[3] * scale, h = rect[4] * scale}, true)
+    end
+    self.container:AddChild(refreshOverlay)
     self.removalConfirm = RemovalConfirm.New(self)
     UI.SetRoot(self.root)
-    self:UpdatePhysicsMode()
     self:Update(true)
-end
-
-function View:UpdatePhysicsMode()
-    local original = self.physics.mode == 1
-    self.physicsButton:SetText("切换物理 · " .. (original and "一" or "二"))
-    self.physicsOne:SetText(original and "物理一 [当前]" or "物理一 · 原版")
-    self.physicsTwo:SetText(original and "物理二 · 摇晃" or "物理二 [当前]")
-    self.physicsMenu:Hide()
 end
 
 function View:SetSensorStatus(status)
@@ -375,11 +385,26 @@ function View:SetSensorStatus(status)
         available = "体感：已接通",
         unavailable = "体感：暂无数据",
         unsupported = "体感：当前端不支持",
+        lab_waiting = "体感：等待 Wi-Fi 手机",
+        lab_available = "体感：Wi-Fi 手机已接通",
+        lab_unavailable = "体感：Wi-Fi 数据已中断",
     }
     self.sensorLabel:SetText(labels[status] or "体感：未启用")
-    self.sensorButton:SetText(status == "available" and "重新校准体感"
+    self.sensorButton:SetText((status == "available" or status == "lab_available") and "重新校准体感"
         or status == "unsupported" and "查看体感说明" or "启用／校准体感")
     if Busy(self.game) then self:BuildFooter() end
+end
+
+---@param info BottleSensorLabState
+function View:SetSensorLabState(info)
+    local previous = self.sensorLabState
+    if previous and previous.enabled == info.enabled and previous.configured == info.configured
+        and previous.available == info.available and previous.error == info.error and previous.status == info.status then return end
+    self.sensorLabState = {
+        enabled = info.enabled == true, configured = info.configured == true,
+        available = info.available == true, error = info.error, status = info.status,
+    }
+    if self.RefreshSensorGm then self.RefreshSensorGm() end
 end
 
 function View:CloseItemDetail()
@@ -513,11 +538,14 @@ function View:Rebind(game)
         self.machineSkin.pageMotion:Reset()
         self.machineSkin.draftMotionKey=nil
         self.machineSkin.deductionNote:Reset()
+        if self.machineSkin.litScene and self.machineSkin.litScene.screenFlow then
+            self.machineSkin.litScene.screenFlow:Reset()
+        end
     end
     self:CloseDefinition()
     self:CloseItemDetail()
     self.board:ResetShake()
-    self:UpdatePhysicsMode()
+    self.physicsMenu:Hide()
     self.game = game
     self.board.game = game
     self.board:ResetEffects()
@@ -545,6 +573,7 @@ end
 
 ---@param force? boolean
 function View:Update(force)
+    -- Simulation在挂起帧绑定已提交展示副本；HUD可继续刷新，写操作仍由actions守卫。
     MachineSkin.Update(self)
     if self.removalConfirm then self.removalConfirm:Update() end
     local game = self.game
@@ -571,15 +600,16 @@ function View:Update(force)
         self.lastDisplayedTarget = game.target
         self.progress:SetValue(math.min(1, game.score / game.target))
     end
-    self.roundLabel:SetText("天数 " .. (((game.round - 1) % 5) + 1) .. "/5")
+    self.roundLabel:SetText(DayText(game))
     self.goalLabel:SetText(Money.Format(MachineSkin.TargetValue(self)))
     MachineSkin.FitNumbers(self)
     self.badgeLabel:SetText("考核阶段 " .. game.stage)
-    if game.phase == "running" then
-        self.timer:SetValue(math.max(0, 1 - game.elapsed / 10))
-    elseif game.phase == "settle" then
+    local clock = self.simulationClock or game
+    if clock.phase == "running" then
+        self.timer:SetValue(math.max(0, 1 - clock.elapsed / (clock.duration or game:Duration())))
+    elseif clock.phase == "settle" then
         -- 结算下落2秒复用进度条：显示剩余缓冲时间。
-        self.timer:SetValue(math.max(0, 1 - game.settleElapsed / 2))
+        self.timer:SetValue(math.max(0, 1 - clock.settleElapsed / 2))
     else
         self.timer:SetValue(1)
     end
@@ -631,7 +661,7 @@ function View:BuildFooter()
     local game = self.game
     if game.phase == "prepare" then
         self.statusLabel:SetText(game.lastResult ~= "" and game.lastResult
-            or (self.physics.mode == 2 and "点击物品查看效果 · 开始后短距离来回摇" or "点击物品查看效果 · 开始后拖动瓶子"))
+            or "点击物品查看效果 · 开始后短距离来回摇")
         local reroll = Button(RefreshUI.ButtonText(game, "重抽"), function() self.actions.reroll() end)
         reroll.id = "prepareReroll"
         reroll:SetDisabled(RefreshUI.Count(game) <= 0)
@@ -645,9 +675,9 @@ function View:BuildFooter()
         hint:SetStyle({width = "100%", textAlign = "center", textMotionDisabled = true})
         self.footer:AddChild(hint)
     elseif game.phase == "running" then
-        self.statusLabel:SetText(self.sensorStatus == "available" and "摇动手机或按住瓶子来回摇，带动物品碰撞"
-            or self.physics.mode == 2 and "按住来回摇，换向时物品惯性翻滚"
-            or "按住瓶子来回拖动，碰撞会改变组合")
+        self.statusLabel:SetText((self.sensorStatus == "available" or self.sensorStatus == "lab_available")
+            and "摇动手机或按住瓶子来回摇，带动物品碰撞"
+            or "按住来回摇，换向时物品惯性翻滚")
         local label = Label("正在摇晃", 15, C.primary)
         label:SetStyle({height = 52, textAlign = "center", verticalAlign = "middle"})
         self.footer:AddChild(label)
@@ -1031,6 +1061,7 @@ function View:OpenGm()
     if not DeveloperOverlay.IsAllowed(self) then return end
     local panel = self:Modal("GM 面板")
     panel:SetStyle({textMotionDisabled = true})
+    require("Bottle.SensorGm").Add(panel, self)
     panel:AddChild(UI.Label {text = "功能一 · 添加物品：输入数字编号 1–98 或字符串 id，全部98件可添加，加入牌库供后续抽取",
         fontSize = 11.25, fontColor = C.textSecondary, whiteSpace = "normal", width = "100%"})
     local message = UI.Label {text = "输入数字或字符串 id；也可点击下方列表“添加”快捷加入",

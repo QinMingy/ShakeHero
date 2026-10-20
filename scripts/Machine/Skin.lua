@@ -136,8 +136,7 @@ function Skin.Footer(view)
     local faces=view.machineSkin.cabinet.keyFaces
     local lettering=view.machineSkin.cabinet.labels
     local phase=view.game.phase
-    lettering:SetHint(phase=="prepare" and (view.physics.mode==2
-        and "来回摇手机或拖动 · 菜单校准体感" or "拖动瓶身 · 物理菜单切换模式")
+    lettering:SetHint(phase=="prepare" and "来回摇手机或拖动 · 菜单校准体感"
         or phase=="running" and "摇晃中 · 碰撞计分" or "")
     local footerTop,footerHeight=phase=="over" and 718 or 752,phase=="over" and 92 or 68
     Place(view.footer,38,footerTop,344,footerHeight,{gap=0,padding=0})

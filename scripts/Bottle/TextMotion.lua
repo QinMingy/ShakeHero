@@ -3,6 +3,7 @@
 local UI = require("urhox-libs/UI")
 ---@type any
 local Motion = {time = 0, period = 2.7, phaseStep = .48, revealStep = .012, settleTime = .14}
+local EMPTY, DEFAULT_INK = {}, {224,215,181,255}
 
 ---@param index number
 ---@param fontSize number Actual NanoVG size in UI base pixels, before DPR scaling.
@@ -49,6 +50,7 @@ end
 ---@param widget Widget
 ---@return boolean
 function Motion.IsDisplayed(widget)
+    ---@type Widget?
     local current = widget
     while current do
         if not current:IsVisible() then return false end
@@ -61,60 +63,73 @@ end
 -- Only their synchronous text draw calls are adapted. The engine globals are
 -- restored even if Render fails; no replacement survives this Render scope.
 ---@param widget any
----@param vg NVGContextWrapper
 ---@param render function
-local function RenderText(widget, vg, render)
-    if widget.textMotionDisabled then return render(widget, vg) end
+local function CreateRender(widget, render)
+    ---@type any
+    local vg = nil
     local text, box, align, size = nvgText, nvgTextBox, nvgTextAlign, nvgFontSize
     local alignment, fontSize = NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE, 16
     local cache = widget.textMotionCache or {}
     widget.textMotionCache = cache
-    nvgTextAlign = function(ctx, value)
+    cache.glyphs, cache.numberRanges = cache.glyphs or {}, cache.numberRanges or {}
+    -- 每个widget只构造这一组包装器；Render只改当前上下文和原函数引用。
+    local alignWrapper = function(ctx, value)
         if ctx == vg then alignment = value end
         return align(ctx, value)
     end
-    nvgFontSize = function(ctx, value)
+    local sizeWrapper = function(ctx, value)
         if ctx == vg then fontSize = value end
         return size(ctx, value)
     end
-    nvgText = function(ctx, x, y, value, finish, autoFit)
+    local textWrapper = function(ctx, x, y, value, finish, autoFit)
         if ctx ~= vg or type(value) ~= "string" or value == "" then
             return text(ctx, x, y, value, finish, autoFit)
         end
         -- The bundled local Runtime may ship the pre-GetProps UI library.
-        local props = widget.GetProps and widget:GetProps() or widget.props or {}
-        local key = table.concat({value, fontSize, props.fontFamily or "sans", props.fontWeight or "normal",
-            props.letterSpacing or 0, UI.GetFontVersion(), UI.GetScale()}, "|")
-        if cache.key ~= key then
-            cache.key, cache.glyphs = key, {}
+        local props = widget.GetProps and widget:GetProps() or widget.props or EMPTY
+        local family, weight, spacing = props.fontFamily or "sans", props.fontWeight or "normal", props.letterSpacing or 0
+        local version, scale = UI.GetFontVersion(), UI.GetScale()
+        if cache.value ~= value or cache.fontSize ~= fontSize or cache.family ~= family or cache.weight ~= weight
+            or cache.spacing ~= spacing or cache.version ~= version or cache.scale ~= scale then
+            cache.value, cache.fontSize, cache.family, cache.weight = value, fontSize, family, weight
+            cache.spacing, cache.version, cache.scale = spacing, version, scale
             nvgSave(ctx)
-            align(ctx, NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE)
+            align(ctx, NVG_ALIGN_LEFT | NVG_ALIGN_MIDDLE)
             local width, bounds = nvgTextBounds(ctx, 0, 0, value, nil, nil, false)
             width = width or 0
             cache.width, cache.visualCenter = width, bounds and (bounds[1] + bounds[3]) / 2 or width / 2
             local prefix = ""
             -- 按钮次数、标题中的编号等与文案混排时，只固定完整数值片段。
             -- 描述正文由 Bottle.Description 绘制，仍作为文案整体保留浮动。
-            local numberRanges = {}
+            local numberRanges, rangeCount = cache.numberRanges, 0
             local cursor = 1
             while cursor <= #value do
                 local first, last = value:find("[%d%+%-%.%%/eE]+", cursor)
                 if not first then break end
                 if value:sub(first, last):find("%d") then
-                    numberRanges[#numberRanges + 1] = {first = first, last = last}
+                    rangeCount = rangeCount + 1
+                    local range = numberRanges[rangeCount] or {}
+                    range.first, range.last = first, last
+                    numberRanges[rangeCount] = range
                 end
                 cursor = last + 1
             end
+            local glyphCount = 0
             for position, code in utf8.codes(value) do
                 local glyph = utf8.char(code)
                 local advance = prefix == "" and 0 or nvgTextBounds(ctx, 0, 0, prefix, nil, nil, false)
                 local fixed = false
-                for _, range in ipairs(numberRanges) do
+                for index = 1, rangeCount do
+                    local range = numberRanges[index]
                     if position >= range.first and position <= range.last then fixed = true; break end
                 end
-                cache.glyphs[#cache.glyphs + 1] = {text = glyph, x = advance, fixed = fixed}
+                glyphCount = glyphCount + 1
+                local info = cache.glyphs[glyphCount] or {}
+                info.text, info.x, info.fixed = glyph, advance, fixed
+                cache.glyphs[glyphCount] = info
                 prefix = prefix .. glyph
             end
+            cache.glyphCount = glyphCount
             nvgRestore(ctx)
         end
         local left = x
@@ -123,7 +138,8 @@ local function RenderText(widget, vg, render)
         elseif alignment & NVG_ALIGN_RIGHT ~= 0 then left = x - cache.width end
         nvgSave(ctx)
         align(ctx, (alignment & (NVG_ALIGN_TOP | NVG_ALIGN_MIDDLE | NVG_ALIGN_BOTTOM | NVG_ALIGN_BASELINE)) | NVG_ALIGN_LEFT)
-        for index, glyph in ipairs(cache.glyphs) do
+        for index = 1, cache.glyphCount do
+            local glyph = cache.glyphs[index]
             local alpha, rise, age = 1, 0, 1
             if props.textReveal then
                 alpha, rise, age = Motion.Appearance(Motion.time - (widget.textMotionStarted or Motion.time), index)
@@ -132,7 +148,7 @@ local function RenderText(widget, vg, render)
                 nvgSave(ctx)
                 if props.textReveal then
                     nvgGlobalAlpha(ctx, alpha)
-                    local r, g, b = Motion.Ink(props.fontColor or {224,215,181,255}, age, "text")
+                    local r, g, b = Motion.Ink(props.fontColor or DEFAULT_INK, age, "text")
                     nvgFillColor(ctx, nvgRGBA(r, g, b, 255))
                 end
                 local motion = glyph.fixed and 0 or Motion.Offset(index, fontSize) + rise * fontSize * .08
@@ -145,17 +161,25 @@ local function RenderText(widget, vg, render)
     end
     -- The engine retains ownership of multiline word wrapping and line metrics.
     -- Each wrapped block floats without changing its measured height.
-    nvgTextBox = function(ctx, x, y, width, value, finish, autoFit)
-        local props = widget.GetProps and widget:GetProps() or widget.props or {}
+    local boxWrapper = function(ctx, x, y, width, value, finish, autoFit)
+        local props = widget.GetProps and widget:GetProps() or widget.props or EMPTY
         local fixed = type(value) == "string" and value:find("%d") ~= nil
         if ctx == vg and props.textReveal and type(value) == "string" then
-            local advance = nvgTextBounds(ctx, 0, 0, value, nil, nil, false) or 0
+            local family, weight, spacing = props.fontFamily or "sans", props.fontWeight or "normal", props.letterSpacing or 0
+            local version, scale = UI.GetFontVersion(), UI.GetScale()
+            if cache.boxValue ~= value or cache.boxSize ~= fontSize or cache.boxFamily ~= family
+                or cache.boxWeight ~= weight or cache.boxSpacing ~= spacing or cache.boxVersion ~= version or cache.boxScale ~= scale then
+                cache.boxAdvance = nvgTextBounds(ctx, 0, 0, value, nil, nil, false) or 0
+                cache.boxValue, cache.boxSize, cache.boxFamily = value, fontSize, family
+                cache.boxWeight, cache.boxSpacing, cache.boxVersion, cache.boxScale = weight, spacing, version, scale
+            end
+            local advance = cache.boxAdvance
             if advance <= width then
                 -- Names use whiteSpace=normal even when they fit on one line.
                 local anchor = x
                 if alignment & NVG_ALIGN_CENTER ~= 0 then anchor = x + width / 2
                 elseif alignment & NVG_ALIGN_RIGHT ~= 0 then anchor = x + width end
-                return nvgText(ctx, anchor, y, value, finish, false)
+                return textWrapper(ctx, anchor, y, value, finish, false)
             end
             -- Keep the engine's full-text layout; only the drawn prefix changes.
             local elapsed = Motion.time - (widget.textMotionStarted or Motion.time)
@@ -167,9 +191,16 @@ local function RenderText(widget, vg, render)
         local motion = ctx == vg and not fixed and Motion.Offset(1, fontSize) or 0
         return box(ctx, x, y + motion, width, value, finish, autoFit)
     end
-    local ok, err = pcall(render, widget, vg)
-    nvgText, nvgTextBox, nvgTextAlign, nvgFontSize = text, box, align, size
-    if not ok then error(err, 0) end
+    return function(w, context)
+        if w.textMotionDisabled then return render(w, context) end
+        vg = context
+        text, box, align, size = nvgText, nvgTextBox, nvgTextAlign, nvgFontSize
+        alignment, fontSize = NVG_ALIGN_LEFT + NVG_ALIGN_MIDDLE, 16
+        nvgText, nvgTextBox, nvgTextAlign, nvgFontSize = textWrapper, boxWrapper, alignWrapper, sizeWrapper
+        local ok, err = pcall(render, w, context)
+        nvgText, nvgTextBox, nvgTextAlign, nvgFontSize = text, box, align, size
+        if not ok then error(err, 0) end
+    end
 end
 
 -- 输入值是数据，保持光标、选区和文字的基线一致，不参与装饰浮动。
@@ -190,7 +221,7 @@ function Motion.AttachTree(widget, disabled)
     end
     if classes[widget._className] and not widget.textMotionAttached then
         local render = widget.Render
-        widget.Render = function(w, vg) return RenderText(w, vg, render) end
+        widget.Render = CreateRender(widget, render)
         widget.textMotionAttached = true
     end
     for _, child in ipairs(widget:GetChildren()) do Motion.AttachTree(child, skip) end

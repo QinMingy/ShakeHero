@@ -1,6 +1,7 @@
 -- 全局非空间音频独立于反复重建的页面；固定声源池，不占用玩法随机序列。
 local UI = require("urhox-libs/UI")
 local TextMotion = require("Bottle.TextMotion")
+local ItemSounds = require("Bottle.ItemSounds")
 ---@type any
 local Music = {current = "", tracks = {}, clicks = {}, pops = {}, impacts = {}, nextClick = 1,
     nextPop = 1, nextImpact = 1, clickCount = 0, popCount = 0, popPitchStep = 0,
@@ -30,10 +31,17 @@ local deductionSound = nil
 local deductionSource = nil
 ---@type SoundSource?
 local coinBurstSource = nil
+---@type Sound?
+local relicTriggerSound = nil
+---@type SoundSource?
+local relicTriggerSource = nil
+local relicTriggerTime, lastRelicTriggerTime = 0, -1
 local lastCalfTime = -1
 local calfTime = 0
 local FADE_SECONDS = 1.2
-local MUSIC_GAIN = .36
+-- 摇晃时提高约2.85dB，让音乐在碰撞和收益音效中保持与三选一相近的存在感。
+---@type table<string,number>
+local MUSIC_GAINS = {running = .50, calm = .36}
 local CLICK_GAIN = .55
 -- 三选一阶段的按键在原混音上衰减3dB；这是局部平衡，不是整游戏LUFS校准。
 local DRAFT_CLICK_GAIN = CLICK_GAIN * 10 ^ (-3 / 20)
@@ -51,6 +59,9 @@ local REEL_START_GAIN = .7
 local REEL_STOP_GAIN = .75
 local DEDUCTION_GAIN = 1.0
 local COIN_BURST_GAIN = .7
+-- 遗物成功触发的短提示独占一个声源；同批与短窗连批不叠音、不补播。
+local RELIC_TRIGGER_GAIN = .35
+local RELIC_TRIGGER_GAP = .09
 -- 出现音调阶梯（用户要求：音调从低到高，超出上限后从最低开始）：
 -- 每批出现都从低于原调3个半音起，每次升高1.5个半音，共8档
 -- （约0.84 → 1.55倍速），用完回到本批最低档；批次开始时由调用方重置。
@@ -87,6 +98,8 @@ local IMPACT_FILE = "sfx/balatro_coin.wav"
 local CALF_FILE = "sfx/calf_moo.wav"
 -- 用户指定的超市柜员机提示音；保留原始 MP3，运行使用同源 OGG。
 local DEDUCTION_FILE = "sfx/cash_register_deduction.ogg"
+-- 复用已有奖励倍率短音，与物品出现筹码音及碰撞金币音区分。
+local RELIC_TRIGGER_FILE = "sfx/balatro_mult.wav"
 
 local function Load(path, looped)
     local sound = cache:GetResource("Sound", path) --[[@as Sound?]]
@@ -177,6 +190,10 @@ function Music.Init()
     deductionSound = Load(AUDIO_DIR .. DEDUCTION_FILE, false)
     deductionSource = audioScene:CreateChild("MoneyDeduction"):CreateComponent("SoundSource")
     deductionSource:SetSoundType(SOUND_EFFECT)
+    relicTriggerSound = Load(AUDIO_DIR .. RELIC_TRIGGER_FILE, false)
+    relicTriggerSource = audioScene:CreateChild("RelicTrigger"):CreateComponent("SoundSource")
+    relicTriggerSource:SetSoundType(SOUND_EFFECT)
+    ItemSounds.Init(audioScene)
     print("[音频] 双状态BGM与机械按钮音已启用")
 end
 
@@ -189,7 +206,7 @@ function Music.SetPhase(phase)
     Music.current = wanted
     for key, track in pairs(Music.tracks) do
         track.from, track.elapsed = track.gain, 0
-        track.target = key == wanted and MUSIC_GAIN or 0
+        track.target = key == wanted and MUSIC_GAINS[key] or 0
         if key == wanted and not track.source:IsPlaying() then
             -- 0 指素材原采样率，不是变调倍数；复用声源时每次明确恢复原速。
             track.source:Play(track.sound, 0, track.gain)
@@ -201,7 +218,9 @@ end
 function Music.Update(dt)
     if not audioScene then return end
     calfTime = calfTime + math.max(0, dt)
+    relicTriggerTime = relicTriggerTime + math.max(0, dt)
     FlushImpacts()
+    ItemSounds.Update(dt)
     for _, track in pairs(Music.tracks) do
         track.elapsed = math.min(FADE_SECONDS, track.elapsed + math.max(0, dt))
         local progress = track.elapsed / FADE_SECONDS
@@ -211,6 +230,12 @@ function Music.Update(dt)
         track.source:SetGain(track.gain)
         if progress == 1 and track.target == 0 and track.source:IsPlaying() then track.source:Stop() end
     end
+end
+
+-- Board 每批规则事件提交；Update 在本帧末合并多个物理步后播放，不排队补播。
+---@param events GameEvent[]
+function Music.ItemEvents(events)
+    ItemSounds.Events(events)
 end
 
 -- 同批多次消费只播一声；与物品出现、按钮及碰撞声源互不抢占。
@@ -230,6 +255,19 @@ end
 function Music.CoinBurst()
     if not audioScene or not coinBurstSource or not impactSound then return end
     coinBurstSource:Play(impactSound, 0, COIN_BURST_GAIN)
+end
+
+-- 仅在完整规则批次发布后调用；多件遗物同批成功仍只播一声。
+---@param count number? 本批成功触发的遗物数，省略视为1；零或非法数量不播放
+---@return boolean played
+function Music.RelicTrigger(count)
+    if count == nil then count = 1 end
+    if type(count) ~= "number" or count ~= count or count <= 0 or count == math.huge then return false end
+    if not audioScene or not relicTriggerSource or not relicTriggerSound
+        or relicTriggerTime - lastRelicTriggerTime < RELIC_TRIGGER_GAP then return false end
+    relicTriggerSource:Play(relicTriggerSound, 0, RELIC_TRIGGER_GAIN)
+    lastRelicTriggerTime = relicTriggerTime
+    return true
 end
 
 function Music.Click()
@@ -336,6 +374,7 @@ function Music.Button(props)
 end
 
 function Music.Shutdown()
+    ItemSounds.Shutdown()
     clickGain = CLICK_GAIN
     -- Lua仍持有组件时，仅Dispose父Scene不会立即注销声源；逐个显式释放。
     for _, track in pairs(Music.tracks) do track.source:Stop(); track.source:Dispose() end
@@ -348,6 +387,8 @@ function Music.Shutdown()
     if calfSource then calfSource:Stop(); calfSource:Dispose(); calfSource = nil end
     if deductionSource then deductionSource:Stop(); deductionSource:Dispose(); deductionSource = nil end
     if coinBurstSource then coinBurstSource:Stop(); coinBurstSource:Dispose(); coinBurstSource = nil end
+    if relicTriggerSource then relicTriggerSource:Stop(); relicTriggerSource:Dispose(); relicTriggerSource = nil end
+    relicTriggerSound, relicTriggerTime, lastRelicTriggerTime = nil, 0, -1
     deductionSound = nil
     calfSound, lastCalfTime, calfTime = nil, -1, 0
     if audioScene then audioScene:Dispose(); audioScene = nil end

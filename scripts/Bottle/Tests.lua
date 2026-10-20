@@ -4,7 +4,7 @@
 -- 覆盖：98件数据表完整性、新主流程（抽20/摇10/结算2秒/考核/三选一概率表）、
 -- 初始4物品、价值临时性、冷却回合重置、香蕉生命周期、橘子贴底、小球碰壁、
 -- V0.4 效果（合成/切割/消灭/偷取/催熟/消耗/结算/重生）、遗物三选一与遗物效果、
--- 快照回滚与存档校验、ShakeMotion 物理二、Physics 接触计数（无引擎 mock）。
+-- 快照回滚与存档校验、ShakeMotion 摇晃惯性、Physics 接触计数（无引擎 mock）。
 
 local Items = require("Bottle.Items")
 local Relics = require("Bottle.Relics")
@@ -716,6 +716,7 @@ Test("物理fixture导出全部内壁/底/顶且引用计数独立", function()
         world = world, bodies = {[1] = {uid=1,node = itemA}, [2] = {uid=2,node = itemB}},
         _walls = walls, _pairs = {}, _bottom = {}, _top = {}, _wall = {}, _side = {},
         expansion = require("Bottle.ExpansionPhysics").New(), _disposed = false,
+        stepContactFacts = require("Bottle.StepContactFacts").New(),
         _impactContacts = {}, _impacts = {}, clock = 0,
     }, Physics) --[[@as any]]
     local function contact(a, b, begin, eventWorld)
@@ -764,7 +765,7 @@ Test("物理fixture导出全部内壁/底/顶且引用计数独立", function()
     assert(physics:Contacts().top[1])
 end)
 
-Test("物理二启动反向惯性/保持静止/换向/松手回中", function()
+Test("摇晃惯性启动反向惯性/保持静止/换向/松手回中", function()
     local motion = ShakeMotion.New()
     motion:Move(.3, .2)
     Close(motion.targetX, 0) -- 未抓住瓶子时不会响应。
@@ -799,7 +800,7 @@ Test("物理二启动反向惯性/保持静止/换向/松手回中", function()
     Close(iy, 0)
 end)
 
-Test("物理二输入合并/固定步一致和位移边界", function()
+Test("摇晃惯性输入合并/固定步一致和位移边界", function()
     local single, multiple = ShakeMotion.New(), ShakeMotion.New()
     single:Begin(); multiple:Begin()
     for i = 1, 180 do
@@ -827,7 +828,7 @@ Test("物理二输入合并/固定步一致和位移边界", function()
     Close(single.x, .22); Close(single.y, -.26)
 end)
 
-Test("物理二非有限输入不改变手势/步进/体感状态", function()
+Test("摇晃惯性非有限输入不改变手势/步进/体感状态", function()
     local motion = ShakeMotion.New()
     motion:Begin()
     motion:Move(.2, -.1)
@@ -838,7 +839,7 @@ Test("物理二非有限输入不改变手势/步进/体感状态", function()
         -- 用字符串快照，避免运行时错误的 NaN 比较让断言假通过。
         local values = {}
         for _, key in ipairs({ "targetX", "targetY", "x", "y", "vx", "vy",
-            "sensorBaseX", "sensorBaseY", "sensorX", "sensorY", "holding", "sensorReady" }) do
+            "sensorBaseX", "sensorBaseY", "sensorX", "sensorY", "holding", "sensorReady", "sensorHolding" }) do
             values[#values + 1] = tostring(motion[key])
         end
         return table.concat(values, ",")
@@ -859,19 +860,46 @@ Test("物理二非有限输入不改变手势/步进/体感状态", function()
     end
 end)
 
-Test("物理二体感滤除静态倾斜/摇晃有惯性/重置无残留", function()
+Test("体感系数线性放大虚拟拖动，重置和换回合保留倍率", function()
+    local one, four = ShakeMotion.New(), ShakeMotion.New()
+    assert(one:SetSensorGain(1) and four:SetSensorGain(4))
+    one:Sensor(0, 0, 1 / 60); four:Sensor(0, 0, 1 / 60)
+    local ax, ay = one:Sensor(.2, .1, 1 / 60)
+    local bx, by = four:Sensor(.2, .1, 1 / 60)
+    Close(bx, ax * 4); Close(by, ay * 4)
+    one:Move(ax, ay); four:Move(bx, by)
+    local ix, iy = one:Step(1 / 60)
+    local jx, jy = four:Step(1 / 60)
+    Close(jx, ix * 4); Close(jy, iy * 4)
+    four:Reset(); Close(four.sensorGain, 4)
+    four:Begin(); four:Move(.1, .1)
+    one:Reset(); one:Begin(); one:Move(.1, .1)
+    ix, iy = one:Step(1 / 60); jx, jy = four:Step(1 / 60)
+    Close(ix, jx); Close(iy, jy) -- 倍率只放大体感，手指拖动不变。
+    assert(four:SetSensorGain(100)); Close(four.sensorGain, 20)
+    assert(four:SetSensorGain(-1)); Close(four.sensorGain, .25)
+    assert(not four:SetSensorGain(0 / 0) and not four:SetSensorGain(math.huge))
+    Close(four.sensorGain, .25)
+end)
+
+Test("摇晃惯性体感滤除静态倾斜/摇晃有惯性/重置无残留", function()
     local motion = ShakeMotion.New()
-    for _ = 1, 120 do motion:Sensor(.2, -.4, 1 / 60) end
-    local x, y = motion:SensorImpulse(1 / 60)
+    local function sample(ax, ay)
+        local dx, dy = motion:Sensor(ax, ay, 1 / 60)
+        motion:Move(dx, dy)
+        return motion:Step(1 / 60)
+    end
+    for _ = 1, 120 do sample(.2, -.4) end
+    local x, y = motion:Step(1 / 60)
     Close(x, 0); Close(y, 0)
-    motion:Sensor(.8, -.4, 1 / 60)
-    x, y = motion:SensorImpulse(1 / 60)
-    assert(x < 0 and y == 0)
-    for _ = 1, 300 do motion:Sensor(.8, -.4, 1 / 60) end
-    x, y = motion:SensorImpulse(1 / 60)
+    x, y = sample(.8, -.4)
+    assert(x < 0 and y == 0 and motion.x > 0, "体感右移瓶身，复用拖动的反向惯性")
+    for _ = 1, 300 do sample(.8, -.4) end
+    x, y = motion:Step(1 / 60)
     Close(x, 0); Close(y, 0)
+    Close(motion.x, 0); Close(motion.y, 0)
     motion:Reset()
-    x, y = motion:SensorImpulse(1 / 60)
+    x, y = motion:Step(1 / 60)
     Close(x, 0); Close(y, 0)
 end)
 
@@ -880,21 +908,65 @@ Test("体感断开/校准只清传感器，不打断手势", function()
     motion:Begin()
     motion:Move(.3, -.2)
     motion:Step(1 / 60)
-    motion:Sensor(0, 0, 1 / 60)
-    motion:Sensor(.8, .2, 1 / 60)
-    local ix, iy = motion:SensorImpulse(1 / 60)
-    assert(ix ~= 0 and iy ~= 0)
+    local ix, iy = motion:Sensor(.8, .2, 1 / 60)
+    Close(ix, 0); Close(iy, 0) -- 手指输入优先，不叠加体感。
     local x, y, vx, vy = motion.x, motion.y, motion.vx, motion.vy
     motion:ResetSensor()
-    ix, iy = motion:SensorImpulse(1 / 60)
-    Close(ix, 0); Close(iy, 0)
     assert(not motion.sensorReady and motion.holding)
     Close(motion.targetX, .3); Close(motion.targetY, -.2)
     Close(motion.x, x); Close(motion.y, y)
     Close(motion.vx, vx); Close(motion.vy, vy)
-    motion:Sensor(-.4, .3, 1 / 60)
-    ix, iy = motion:SensorImpulse(1 / 60)
+    motion:End()
+    ix, iy = motion:Sensor(-.4, .3, 1 / 60)
     Close(ix, 0); Close(iy, 0) -- 重新接通首样本只建立新基线。
+end)
+
+Test("体感位移经过Physics.Shake，与等量手势的每步惯性完全一致", function()
+    local sensor, drag = ShakeMotion.New(), ShakeMotion.New()
+    local sim = setmetatable({motion = sensor,
+        expansion = {Input = function() end}}, {__index = Physics}) --[[@as any]]
+    drag:Begin()
+    for i = 1, 360 do
+        Physics.Sensor(sim, .2 + .7 * math.sin(i / 8), -.4 + .5 * math.sin(i / 11), 1 / 60)
+        drag:Move(sensor.targetX - drag.targetX, sensor.targetY - drag.targetY)
+        local ax, ay = sensor:Step(1 / 60)
+        local bx, by = drag:Step(1 / 60)
+        Close(ax, bx); Close(ay, by)
+        Close(sensor.x, drag.x); Close(sensor.y, drag.y)
+        assert(math.abs(sensor.targetX) <= .52 and math.abs(sensor.targetY) <= .36)
+    end
+    sensor:ResetSensor(); drag:End()
+    for _ = 1, 120 do
+        local ax, ay = sensor:Step(1 / 60)
+        local bx, by = drag:Step(1 / 60)
+        Close(ax, bx); Close(ay, by)
+    end
+    Close(sensor.x, 0); Close(sensor.y, 0)
+end)
+
+Test("体感抖动死区/超大输入限幅/暂停重连/触摸接管", function()
+    local m = ShakeMotion.New()
+    m:Sensor(.2, -.4, 1 / 60)
+    for i = 1, 120 do
+        local dx, dy = m:Sensor(.2 + .01 * math.sin(i), -.4, 1 / 60)
+        m:Move(dx, dy); m:Step(1 / 60)
+    end
+    Close(m.x, 0); Close(m.y, 0)
+    local dx, dy = m:Sensor(1e6, -1e6, 1 / 60)
+    m:Move(dx, dy); m:Step(1 / 60)
+    Close(m.targetX, .52); Close(m.targetY, -.36)
+    local x, y = m.x, m.y
+    m:Begin()
+    Close(m.targetX, x); Close(m.targetY, y)
+    m:Move(.1, .1)
+    local tx, ty = m.targetX, m.targetY
+    dx, dy = m:Sensor(-1, 1, 1 / 60)
+    m:Move(dx, dy)
+    Close(m.targetX, tx); Close(m.targetY, ty)
+    m:End()
+    dx, dy = m:Sensor(-.7, .9, 1)
+    Close(dx, 0); Close(dy, 0)
+    Close(m.targetX, 0); Close(m.targetY, 0)
 end)
 
 ---@class BottleTestJsonCodec
@@ -1363,6 +1435,111 @@ Test("旧考核失败文案迁移不把39.2未达40改成40未达40", function()
     assert(Equal(saved,Game.Restore(saved):Snapshot()), "已迁移考核文案与账本再次恢复幂等")
 end)
 
+-- 存档接口测试只使用内存文件；无引擎环境也可覆盖双槽读写及旧设置迁移。
+---@param run fun(storage:BottleStorage,files:table<string,string>,json:any)
+local function WithStorage(run)
+    local json = rawget(_G, "cjson")
+    if not json then return end
+    local storage = require("Bottle.Storage")
+    local original, globals, files = {}, {}, {}
+    for key, value in pairs(storage) do original[key] = value end
+    for _, name in ipairs({"File", "fileSystem", "FILE_READ", "FILE_WRITE"}) do globals[name] = rawget(_G,name) end
+    _G.FILE_READ, _G.FILE_WRITE = 1, 2
+    _G.fileSystem = {FileExists=function(_,name) return files[name] ~= nil end}
+    _G.File = function(name, mode)
+        local buffer = files[name] or ""
+        return {
+            IsOpen=function() return mode == 2 or files[name] ~= nil end,
+            ReadString=function() return buffer end,
+            WriteString=function(_,text) buffer=text; return true end,
+            Flush=function() if mode == 2 then files[name]=buffer end end,
+            Dispose=function() end,
+        }
+    end
+    local ok, err = pcall(run, storage, files, json)
+    for key in pairs(storage) do if original[key] == nil then storage[key] = nil end end
+    for key, value in pairs(original) do storage[key] = value end
+    for _, name in ipairs({"File", "fileSystem", "FILE_READ", "FILE_WRITE"}) do _G[name] = globals[name] end
+    assert(ok, err)
+end
+
+Test("旧物理模式存档码可导入且灯光处于第三返回值", function()
+    WithStorage(function(storage, _, json)
+        local game = Fixture({"apple","banana","ball"},nil,3456)
+        game.relics.small_savings = true
+        local expected = game:Snapshot()
+        assert(storage.SetAtmosphere("ember"))
+        for _, mode in ipairs({1,2,"obsolete"}) do
+            local code = json.encode({format="bottle-lab-v1", game=expected,
+                settings={physicsMode=mode, atmosphereMode="slate"}})
+            local result = table.pack(storage.Import(code))
+            assert(result.n == 3 and result[1] and result[2] == nil and result[3] == "slate")
+            assert(Equal(Game.Restore(result[1]):Snapshot(), expected), "旧设置不影响游戏数据和RNG")
+            assert(storage.atmosphereMode == "ember", "导入仅返回待提交设置，不抢先覆盖本地设置")
+        end
+        assert(rawget(storage,"physicsMode") == nil and rawget(storage,"SetPhysicsMode") == nil)
+    end)
+end)
+
+Test("导出与本地保存移除旧物理字段并保留其他存档数据", function()
+    WithStorage(function(storage, files, json)
+        local game = Fixture({"apple","banana"},nil,1234)
+        assert(storage.SetAtmosphere("slate") and storage.SetSensorGain(8))
+        storage.runStarted, storage.sequence = true, 20
+        storage.tutorial = require("Bottle.TutorialState").New(true)
+        local exported = json.decode(storage.Export(game))
+        assert(exported.settings.physicsMode == nil and exported.settings.atmosphereMode == "slate")
+        assert(Equal(exported.game,game:Snapshot()))
+        assert(storage.Save(game))
+        local saved = json.decode(assert(files["bottle-save-2.json"]))
+        assert(saved.sequence == 21 and saved.settings.physicsMode == nil)
+        assert(saved.settings.atmosphereMode == "slate" and saved.settings.sensorGain == 8)
+        assert(saved.settings.sensorGainRevision == require("Bottle.SensorTuning").SAVE_REVISION)
+        assert(saved.runStarted == true and saved.tutorial.status == "legacy")
+        assert(Equal(saved.game,game:Snapshot()))
+    end)
+end)
+
+Test("旧物理模式本地双槽仍保留灯光体感引导及有效对局", function()
+    WithStorage(function(storage, files, json)
+        local snapshot = Fixture({"student","ball"},nil,5678):Snapshot()
+        for _, mode in ipairs({1,2}) do
+            files["bottle-save-1.json"] = json.encode({format="bottle-lab-v1",sequence=8,game=snapshot,
+                settings={physicsMode=mode,atmosphereMode="ember",sensorGain=7,
+                    sensorGainRevision=require("Bottle.SensorTuning").SAVE_REVISION},
+                tutorial=require("Bottle.TutorialState").New(true),runStarted=false})
+            files["bottle-save-2.json"] = json.encode({format="bottle-lab-v1",sequence=9,game={},
+                settings={physicsMode=1,atmosphereMode="slate"}})
+            local loaded = storage.Load()
+            assert(loaded and Equal(Game.Restore(loaded):Snapshot(),snapshot))
+            assert(storage.sequence == 8 and storage.atmosphereMode == "ember" and storage.sensorGain == 7)
+            assert(storage.tutorial.status == "legacy" and storage.runStarted == false)
+            assert(rawget(storage,"physicsMode") == nil, "旧设置不重新引入已删除的物理模式")
+        end
+    end)
+end)
+
+Test("失败导入不改变本地设置，缺失或未知灯光回退auto", function()
+    WithStorage(function(storage, _, json)
+        storage.sequence, storage.runStarted = 91, true
+        assert(storage.SetAtmosphere("ember") and storage.SetSensorGain(8))
+        local tutorial = storage.GetTutorial()
+        for _, code in ipairs({"not-json", "{}", json.encode({format="bottle-lab-v1",game=false}),
+            string.rep("x",2000001)}) do
+            local result = table.pack(storage.Import(code))
+            assert(result.n == 3 and result[1] == nil and type(result[2]) == "string" and result[3] == nil)
+            assert(storage.atmosphereMode == "ember" and storage.sensorGain == 8 and storage.sequence == 91)
+            assert(storage.runStarted == true and Equal(tutorial,storage.GetTutorial()))
+        end
+        local game = Fixture({"apple"}):Snapshot()
+        for _, settings in ipairs({{}, {physicsMode=1}, {physicsMode=2,atmosphereMode="invalid"}}) do
+            local snapshot, err, atmosphere = storage.Import(json.encode({format="bottle-lab-v1",game=game,settings=settings}))
+            assert(snapshot and err == nil and atmosphere == "auto")
+            assert(storage.atmosphereMode == "ember")
+        end
+    end)
+end)
+
 Test("可选cjson往返保持prepare/rollback/draft和RNG", function()
     ---@type BottleTestJsonCodec?
     local json = rawget(_G, "cjson")
@@ -1409,6 +1586,10 @@ function Tests.Run()
         + require("Bottle.ExpansionTests").Run() + require("Bottle.NewRelicTests").Run()
         + require("Bottle.TriggerFeedbackTests").Run()
         + require("Bottle.ConsumeFlashTests").Run()
+        + require("Bottle.ConsumeFeedbackTests").Run()
+        + require("Bottle.ItemFeedbackEventTests").Run()
+        + require("Bottle.ItemFeedbackTests").Run()
+        + require("Bottle.ItemSoundTests").Run()
         + require("Bottle.RotationTests").Run() + require("Bottle.RotationRelicTests").Run()
         + require("Bottle.CooldownTests").Run()
         + require("Bottle.DistanceTests").Run()

@@ -43,17 +43,22 @@ function Dust:Random()
 end
 function Dust:Spawn(i,age)
     local stationary=i%4==0
-    local p={x=(self:Random()-.5)*20,y=(self:Random()-.5)*20,
-        z=-.6-self:Random()*1.5,age=age,speed=.05+self:Random()*.45,
-        seed=self:Random()*200,color=colors[1+math.floor(self:Random()*#colors)],
-        stationary=stationary,lifetime=10,size=.035}
+    -- Each fixed slot owns its record and draw colour throughout the scene.
+    -- Keep the random calls in their original order when a particle is reborn.
+    local p=self.particles[i]
+    if not p then p={drawColor=Color()};self.particles[i]=p end
+    p.x,p.y=(self:Random()-.5)*20,(self:Random()-.5)*20
+    p.z,p.age,p.speed=-.6-self:Random()*1.5,age,.05+self:Random()*.45
+    p.seed,p.color=self:Random()*200,colors[1+math.floor(self:Random()*#colors)]
+    p.stationary,p.lifetime,p.size=stationary,10,.035
     if stationary then
         -- 四分之一为原地显隐的微尘；不新增粒子、材质或玩法随机数。
         p.x=(self:Random()-.5)*4.4;p.y=(self:Random()-.5)*9
         p.lifetime=6+self:Random()*3;p.age=age%p.lifetime
         p.size=.025+self:Random()*.015
     end
-    self.particles[i]=p
+    local color=p.drawColor
+    color.r,color.g,color.b,color.a=p.color[1],p.color[2],p.color[3],0
 end
 function Dust:Tick(dt,cookieTime)
     self.time=self.time+dt
@@ -76,7 +81,8 @@ function Dust:Tick(dt,cookieTime)
             alpha=envelope*envelope*(3-2*envelope)*.65
         end
         if math.abs(p.x)<2.3 and math.abs(p.y)<4.7 then
-            local color=Color(p.color[1],p.color[2],p.color[3],math.max(0,alpha))
+            local color=p.drawColor
+            color.a=math.max(0,alpha)
             for j,uv in ipairs(self.uvs) do
                 local vertex=self.quad[j]
                 vertex.x,vertex.y,vertex.z=p.x+(uv.x-.5)*p.size,p.y+(uv.y-.5)*p.size,p.z

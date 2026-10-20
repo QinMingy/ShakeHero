@@ -6,6 +6,7 @@ local SoftBacon = require("Bottle.SoftBacon")
 local PixelCache = require("Bottle.PixelCache")
 local GainIcon = require("Bottle.GainIcon")
 local CoinIcon = require("Bottle.CoinIcon")
+local GlassBottle = require("Bottle.GlassBottle")
 local Shapes = require("Bottle.Shapes")
 -- Native NanoVG RTT has no usable compound-path stencil. Draw the identical
 -- cached sprite rectangles separately only in registered offscreen contexts.
@@ -20,6 +21,7 @@ function Art.ReleaseContext(vg)
     PixelCache.Release(vg)
     GainIcon.Release(vg)
     CoinIcon.Release(vg)
+    GlassBottle.Release(vg)
     offscreenContexts[vg]=nil
 end
 local INK = { 10, 10, 26, 255 }
@@ -582,101 +584,16 @@ function Art.ItemColors(id)
     return colors
 end
 
--- 外轮廓完全保留原物理尺寸，肩部保留原直线而非向外扩张的阶梯。
--- 单位为米：左右壁 ±2.4，底部 0，肩高 5.5 到 6.05，颈宽 2.3，顶高 6.4。
-local BOTTLE_OUTER = { -2.4, 0, -2.4, -5.5, -1.15, -6.05, -1.15, -6.4,
-    1.15, -6.4, 1.15, -6.05, 2.4, -5.5, 2.4, 0 }
-local BOTTLE_INNER = { -2.31, -.09, -2.31, -5.44, -1.06, -5.99, -1.06, -6.31,
-    1.06, -6.31, 1.06, -5.99, 2.31, -5.44, 2.31, -.09 }
-local GLASS_EDGE = { 102, 126, 67, 255 }
-local GLASS_DARK = { 16, 39, 21, 255 }
-local GLASS_SHADE = { 22, 48, 27, 255 }
-local GLASS_LIGHT = { 181, 190, 112, 255 }
-local GLASS_DIM = { 62, 83, 43, 255 }
-local ACTIVE = { 255, 217, 61, 255 }
-
----@param vg NVGContextWrapper
----@param points number[]
----@param color number[]
-local function Polygon(vg, points, color, step)
-    if offscreenContexts[vg] then
-        -- RTT has no compound stencil. Rasterize the same polygon into narrow
-        -- horizontal strips, retaining the original bottle silhouette.
-        local ymin,ymax=math.huge,-math.huge
-        for i=2,#points,2 do ymin=math.min(ymin,points[i]);ymax=math.max(ymax,points[i]) end
-        local dy=step or .018
-        local y=ymin
-        while y<ymax do
-            local height=math.min(dy,ymax-y)
-            local mid=y+height*.5
-            local crossings={}
-            for i=1,#points,2 do
-                local j=i+2;if j>#points then j=1 end
-                local ax,ay,bx,by=points[i],points[i+1],points[j],points[j+1]
-                if (ay<=mid and by>mid) or (by<=mid and ay>mid) then
-                    crossings[#crossings+1]=ax+(mid-ay)*(bx-ax)/(by-ay)
-                end
-            end
-            table.sort(crossings)
-            for i=1,#crossings-1,2 do Rect(vg,crossings[i],y,crossings[i+1]-crossings[i],height,color) end
-            y=y+height
-        end
-        return
-    end
-    nvgBeginPath(vg)
-    nvgMoveTo(vg, points[1], points[2])
-    for i = 3, #points, 2 do nvgLineTo(vg, points[i], points[i + 1]) end
-    nvgClosePath(vg)
-    Fill(vg, color)
-end
-
 ---@param vg NVGContextWrapper
 ---@param x number
 ---@param floorY number
 ---@param ppu number
----@param active boolean
-function Art.Bottle(vg, x, floorY, ppu, active)
-    nvgSave(vg)
-    nvgShapeAntiAlias(vg, 0)
-    nvgTranslate(vg, x, floorY)
-    nvgScale(vg, ppu, ppu)
-    -- 双层实色多边形形成内描边，不用居中描线，避免改变外轮廓尺寸。
-    Polygon(vg, BOTTLE_OUTER, GLASS_EDGE,1/ppu)
-    Polygon(vg, BOTTLE_INNER, GLASS_DARK,1/ppu)
-    Rect(vg, -2.31, -1.1, 4.62, 1.01, GLASS_SHADE)
-    Rect(vg, 1.85, -5.1, .22, 4.78, GLASS_SHADE)
-
-    -- 瓶口硬边与分段肩部高光全部位于轮廓内部，不再额外抬高瓶口。
-    Rect(vg, -1.15, -6.4, 2.3, .14, GLASS_EDGE)
-    Rect(vg, -.98, -6.36, 1.96, .04, GLASS_LIGHT)
-    Rect(vg, -1.87, -5.7, .28, .09, GLASS_LIGHT)
-    Rect(vg, -1.44, -5.91, .22, .08, GLASS_LIGHT)
-    Rect(vg, 1.28, -5.87, .16, .08, GLASS_DIM)
-
-    -- 硬高光以分开的像素条表达，不使用透明柔光或渐变。
-    Rect(vg, -2.17, -5.16, .12, 1.28, GLASS_LIGHT)
-    Rect(vg, -2.17, -3.66, .12, 1.72, GLASS_EDGE)
-    Rect(vg, -2.17, -1.7, .12, .98, GLASS_LIGHT)
-    Rect(vg, -1.96, -4.96, .06, .36, GLASS_DIM)
-    Rect(vg, 2.13, -4.85, .07, 1.24, GLASS_DIM)
-    Rect(vg, 2.13, -3.3, .07, 1.12, GLASS_DIM)
-    Rect(vg, 2.13, -1.88, .07, .94, GLASS_DIM)
-
-    -- 八组分段刻度，无数字；长短条和孤立方点便于识别深色瓶内高度。
-    for i = 1, 8 do
-        local tickY = -.65 * i
-        local tickWidth = i % 2 == 0 and .28 or .16
-        Rect(vg, 2.01 - tickWidth, tickY, tickWidth, .055, GLASS_EDGE)
-        Rect(vg, 2.07, tickY, .055, .055, GLASS_DIM)
-    end
-    local floorColor = active and ACTIVE or GLASS_EDGE
-    Rect(vg, -2.31, -.09, 4.62, .09, floorColor)
-    for i = 1, 7 do
-        Rect(vg, -2.18 + (i - 1) * .65, -.2, .14, .07, floorColor)
-    end
-    nvgRestore(vg)
+---@param _active boolean
+function Art.Bottle(vg, x, floorY, ppu, _active)
+    GlassBottle.Draw(vg, x, floorY, ppu)
 end
 
+local GLASS_EDGE = { 102, 126, 67, 255 }
 local EYE = Sprite({
     "......oooo......",
     "....oohhhhoo....",

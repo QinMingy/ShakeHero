@@ -43,6 +43,8 @@
 ---@field idleHold boolean
 
 local Shapes = require("Bottle.Shapes")
+local FrameBudget = require("Bottle.FrameBudget")
+local AdaptiveCCD = require("Bottle.AdaptiveCCD")
 
 ---@class BottleExpansionPhysics
 ---@field states table<number, BottleExpansionMotion>
@@ -55,6 +57,7 @@ local Shapes = require("Bottle.Shapes")
 ---@field shakeStrength number
 ---@field shakeStrong boolean
 local Expansion = {}
+local CONTACT_FIELDS = {"angles", "rotateOffsets", "angularTravel", "flightArrived", "flightHits"}
 Expansion.__index = Expansion
 local PI, RAD = math.pi, math.pi / 180
 local DISC_SPEED = 3.0
@@ -276,6 +279,8 @@ function Expansion:Apply(sim, event)
         -- 一条rotate只作用于目标uid；全场遍历由规则层产生整批事件，绝不在此二次遍历。
         local record = sim.bodies[event.uid]
         if not record then return end
+        if sim._InvalidateSamples then sim:_InvalidateSamples(record.uid) end
+        AdaptiveCCD.Guard(record)
         local delta = finite(event.delta) and event.delta or -PI * .5
         local state = self:SampleAngle(record)
         if record.ghostLike then
@@ -303,6 +308,7 @@ function Expansion:Apply(sim, event)
     if not record then return end
     local state = self:State(record)
     if event.kind == "anchor" then
+        if sim._InvalidateSamples then sim:_InvalidateSamples(record.uid) end
         if finite(event.x) and finite(event.y) then moveWhole(record, event.x, event.y) end
         state.anchored, state.dashRemaining, state.flight = true, 0, nil
         for _, part in ipairs(record.parts) do
@@ -312,12 +318,14 @@ function Expansion:Apply(sim, event)
         end
     elseif event.kind == "teleport" then
         if not finite(event.x) or not finite(event.y) then return end
+        AdaptiveCCD.Guard(record)
         -- 明确的闪现使用精确坐标；不走瓶顶/近源净空搜索，不将跳变计入位移。
         moveWhole(record, event.x, event.y)
         state.flight, state.arrived, state.hit, state.idleHold = nil, false, nil, true
         sim:_ForgetContacts(record.uid)
     elseif event.kind == "impulse" then
         if self:Controlled(record) then return end
+        AdaptiveCCD.Guard(record)
         local dx, dy = direction(record, event, sim.bodies)
         local strength = finite(event.strength) and event.strength or 3
         for _, part in ipairs(record.parts) do
@@ -327,6 +335,8 @@ function Expansion:Apply(sim, event)
             part.body:ApplyLinearImpulseToCenter(Vector2(ix, iy), true)
         end
     elseif event.kind == "flight" and record.kind == "discus" then
+        if sim._InvalidateSamples then sim:_InvalidateSamples(record.uid) end
+        AdaptiveCCD.Guard(record)
         local position = record.node.position2D
         local fromX = finite(event.fromX) and event.fromX or (finite(event.x) and event.x or position.x)
         local fromY = finite(event.fromY) and event.fromY or (finite(event.y) and event.y or position.y)
@@ -344,6 +354,7 @@ function Expansion:Apply(sim, event)
             arc = math.min(.85, math.max(.18, distance * .22)),
             targetUid = event.targetUid, endpointWait = false}
     elseif event.kind == "dash" and not self:Controlled(record) then
+        AdaptiveCCD.Guard(record)
         state.dashX, state.dashY = direction(record, event, sim.bodies)
         state.dashRemaining = finite(event.duration) and math.max(0, math.min(.75, event.duration)) or .35
     end
@@ -353,6 +364,7 @@ end
 function Expansion:Flush(sim)
     if sim._updating or sim._flushing then return end
     local pending = self.pending
+    if #pending == 0 then return end
     self.pending = {}
     for _, event in ipairs(pending) do self:Apply(sim, event) end
 end
@@ -366,10 +378,12 @@ function Expansion:Before(record, dt, bodies, clampPoint, multiplier)
     local speed = multiplier or 1
     local state = self:SampleAngle(record)
     if record.ghostLike then
-        state.rotations = {} -- 直立豁免期间不积攒待补转任务。
+        for index = #state.rotations, 1, -1 do state.rotations[index] = nil end
     else
-        local delta, remaining = 0, {}
-        for _, rotation in ipairs(state.rotations) do
+        local delta, remaining, count = 0, state.rotations, 0
+        local length = #remaining
+        for index = 1, length do
+            local rotation = remaining[index]
             local elapsed = math.min(rotation.duration, rotation.elapsed + dt)
             if rotation.duration - elapsed <= 1e-9 * math.max(1, rotation.duration) then
                 elapsed = rotation.duration
@@ -378,10 +392,14 @@ function Expansion:Before(record, dt, bodies, clampPoint, multiplier)
             local applied = rotation.delta * (elapsed / rotation.duration)
             delta = delta + applied - rotation.applied
             rotation.elapsed, rotation.applied = elapsed, applied
-            if elapsed < rotation.duration then remaining[#remaining + 1] = rotation end
+            if elapsed < rotation.duration then
+                count = count + 1
+                remaining[count] = rotation
+            end
         end
-        state.rotations = remaining
+        for index = length, count + 1, -1 do remaining[index] = nil end
         if delta ~= 0 then
+            AdaptiveCCD.Guard(record)
             rotateWhole(record, delta)
             state.rotateOffset = state.rotateOffset + delta
             state.angle = record.node.rotation2D * RAD
@@ -589,11 +607,8 @@ function Expansion:After(sim, dt)
         local state = self:SampleAngle(record)
         local flight = state.flight
         if flight then
-            -- 遍历真实接触计数，绝不用到终点的几何距离冒充Box2D触碰。
-            for _, pair in pairs(sim._pairs) do
-                if pair.count > 0 and ((pair.a == uid and pair.b == flight.targetUid)
-                    or (pair.b == uid and pair.a == flight.targetUid)) then state.hit = flight.targetUid end
-            end
+            -- 同宏微步Begin后End也是真实命中；绝不用几何终点距离冒充触碰。
+            if sim:HadPair(uid, flight.targetUid) then state.hit = flight.targetUid end
             if state.hit or (flight.endpointWait and flight.endpointAge >= dt * .5) then
                 state.arrived, state.flight = true, nil
                 record.body.linearVelocity = Vector2(0, 0)
@@ -650,8 +665,12 @@ end
 ---@param result BottlePhysicsContacts
 function Expansion:Contacts(sim, result)
     result.shakeStrength = self.shakeStrength
-    result.angles, result.rotateOffsets, result.angularTravel = {}, {}, {}
-    result.flightArrived, result.flightHits = {}, {}
+    for _, field in ipairs(CONTACT_FIELDS) do
+        local values = result[field] or {}
+        for key in pairs(values) do values[key] = nil end
+        result[field] = values
+    end
+    local copied = 0
     for uid, record in pairs(sim.bodies) do
         local state = self:State(record)
         result.angles[uid] = record.node.rotation2D * RAD
@@ -659,6 +678,8 @@ function Expansion:Contacts(sim, result)
         result.angularTravel[uid] = state.angularTravel
         if state.arrived then result.flightArrived[uid] = true end
         if state.hit then result.flightHits[uid] = state.hit end
+        copied = copied + 1
+        if copied % 32 == 0 then FrameBudget.Checkpoint() end
     end
 end
 

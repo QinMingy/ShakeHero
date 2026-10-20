@@ -170,16 +170,23 @@ function SoftBacon:Step(dt)
     end
 end
 
+--- Default is a retained snapshot; only explicit caller-owned scratch is reused.
+---@param target BottleSoftPose[]?
 ---@return BottleSoftPose[]
-function SoftBacon:GetPose()
-    ---@type BottleSoftPose[]
-    local result = {}
-    for _, segment in ipairs(self.segments) do
+function SoftBacon:GetPose(target)
+    local result = target or {}
+    for index = #result, #self.segments + 1, -1 do result[index] = nil end
+    for index, segment in ipairs(self.segments) do
         local position = segment.node.position2D
-        result[#result + 1] = { x = position.x, y = position.y,
-            angle = segment.node.rotation2D * math.pi / 180,
-            halfLength = segment.halfLength, halfWidth = segment.halfWidth,
-            u0 = segment.u0, u1 = segment.u1 }
+        local pose = result[index]
+        if not pose then
+            pose = {} --[[@as BottleSoftPose]]
+            result[index] = pose
+        end
+        pose.x, pose.y = position.x, position.y
+        pose.angle = segment.node.rotation2D * math.pi / 180
+        pose.halfLength, pose.halfWidth = segment.halfLength, segment.halfWidth
+        pose.u0, pose.u1 = segment.u0, segment.u1
     end
     return result
 end

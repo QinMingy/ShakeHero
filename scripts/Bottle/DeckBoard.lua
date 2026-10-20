@@ -8,7 +8,7 @@ local Art = require("Bottle.Art")
 local SoftBacon = require("Bottle.SoftBacon")
 local SoftView = require("Bottle.SoftView")
 local PhysicalState = require("Bottle.PhysicalState")
-local ConsumeFlash = require("Bottle.ConsumeFlash")
+local ConsumeFlash = require("Bottle.ConsumeFeedback")
 -- 碰撞设计（米）：培根 [1]-o-[2]-o-[3]-o-[4]-o-[5]，与瓶中同一5段4关节。
 -- 任意段均可撞墙/物品；弯曲后逐段拾取，所有段仍只返回一个实例 uid。
 -- 缩窄面板时整条等量平移，不只移动中心破坏关节；释放先关节后所有段。
@@ -374,10 +374,11 @@ function Sim:Step(dt)
 end
 
 ---@param uid number
+---@param target BottleSoftPose[]?
 ---@return BottleSoftPose[]?
-function Sim:GetSoftPose(uid)
+function Sim:GetSoftPose(uid, target)
     local record = self.records[uid]
-    return not self.disposed and record and record.soft and record.soft:GetPose() or nil
+    return not self.disposed and record and record.soft and record.soft:GetPose(target) or nil
 end
 
 ---@param uid number
@@ -474,7 +475,7 @@ function Board:RemoveItem(uid)
     local record = self.sim.records[uid]
     if self.sim.disposed or not record or record.isRelic then return false end
     local x, y, angle = self.sim:GetPose(uid)
-    self.consumeFlash:CapturePose({kind = "consume", uid = uid, id = record.id,
+    self.consumeFlash:CapturePose({kind = "consume", uid = uid, id = record.id, reason = "remove",
         scale = record.scale, rollValue = record.rollValue, woolCount = record.woolCount},
         x, y, angle, self.sim:GetSoftPose(uid))
     local removed = self.sim:Remove(uid)

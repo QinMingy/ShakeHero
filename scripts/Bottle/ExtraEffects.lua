@@ -15,6 +15,7 @@
 -- 位移（健身教练/兔子）、计数器持续加成、水果商人光环由 Game/Effects 维护。
 
 local Items = require("Bottle.Items")
+local FrameBudget = require("Bottle.FrameBudget")
 local TriggerFeedback = require("Bottle.TriggerFeedback")
 local Relics = require("Bottle.Relics")
 local RelicEffects = require("Bottle.RelicEffects")
@@ -67,6 +68,26 @@ local function Permanent(game, item, events, value)
     Buff(game, item, events, value)
 end
 
+--- 排队生成仍沿用原规则的成功返回；表现只报告当批真正进入瓶中的产物。
+---@param produced integer[]
+---@param item ItemInstance?
+local function RecordProduct(produced, item)
+    if item and item.location == "bottle" then produced[#produced + 1] = item.uid end
+end
+
+---@param game BottleGame
+---@param item ItemInstance
+---@param contacts BottleStepContacts
+---@param events GameEvent[]
+---@param produced integer[]
+local function ProduceFeedback(game, item, contacts, events, produced)
+    if #produced == 0 then return end
+    local position = contacts.positions[item.uid] or game._lastPositions[item.uid]
+    events[#events + 1] = {kind = "itemFeedback", action = "produce", uid = item.uid, id = item.id,
+        x = position and position.x, y = position and position.y,
+        count = #produced, producedUids = produced}
+end
+
 --- 合法接触仅代表可尝试；是否仍有额度或确实改变状态由Apply的boolean返回。
 ---@param sourceId string
 ---@param other ItemInstance
@@ -103,6 +124,7 @@ function Extra.Touches(game, item, contacts)
             or contacts.top[item.uid] == true
     end
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.uid ~= item.uid and LegalTarget(item.id, other) then return true end
     end
     return false
@@ -123,6 +145,7 @@ local function Roll(game, die, contacts, events)
     RelicExpansion.OnRoll(game, die, point, events)
     Buff(game, die, events, point)
     game:_Score(events, die, game:_Value(die), contacts and contacts.positions[die.uid] or nil)
+    if minimum == 2 then TriggerFeedback.Relic(game, events, "cheat_dice") end
     return point
 end
 
@@ -149,9 +172,11 @@ local function Gambler(game, item, contacts, events)
     item.rerolled = counts
     local hit = false
     for _, die in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if LegalTarget(item.id, die) then
             local limit = item.id == "gambler" and Relics.Has(game, "one_more_round") and 2 or 1
             while die.location == "bottle" and (counts[die.uid] or 0) < limit do
+                FrameBudget.Checkpoint()
                 -- 先记次数，再掷/结算；后续效果不得让同一次投掷再次进入处理。
                 counts[die.uid] = (counts[die.uid] or 0) + 1
                 local point = Roll(game, die, contacts, events)
@@ -164,6 +189,9 @@ local function Gambler(game, item, contacts, events)
                     game:_Score(events, item, game:_Value(item), contacts.positions[item.uid])
                 end
                 hit = true
+                if limit == 2 and counts[die.uid] == 2 then
+                    TriggerFeedback.Relic(game, events, "one_more_round")
+                end
                 -- 本次加值/特殊点数结算/投1归零全部完成后才检查令牌。
                 -- 转化后结束原赌徒批次，不能立即按赌神规则继续处理。
                 if RelicEffects.CheckGamblingToken(game, item, events) then return true end
@@ -179,6 +207,7 @@ local function PlantPool()
     ---@type string[]
     local pool = {}
     for _, def in ipairs(Items.list) do
+        FrameBudget.Checkpoint()
         if def.implemented and not def.id:match("_half$") and Items.HasTag(def.id, "植物") then
             pool[#pool + 1] = def.id
         end
@@ -210,19 +239,26 @@ function Extra.Crop(game, item, contacts, events)
     local blessed = item.treeBlessed == true
     item.treeBlessed = false -- 下一次判定即消费，不叠加，也不会因瓶满保留。
     local applied = false
+    local produced = {}
     if blessed then
         -- 先保证基础一件，再独立50%额外一件，每件独立抽完整水果种类。
-        applied = game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
-            contacts.positions[item.uid]) ~= nil
+        local first = game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
+            contacts.positions[item.uid])
+        applied = first ~= nil
+        RecordProduct(produced, first)
         if game:_RandomInt(2) == 1 then
             local extra = game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
                 contacts.positions[item.uid])
             applied = extra ~= nil or applied
+            RecordProduct(produced, extra)
         end
     elseif game:_RandomInt(2) == 1 then
-        applied = game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
-            contacts.positions[item.uid]) ~= nil
+        local first = game:_Spawn(assert(FULL_FRUIT[game:_RandomInt(#FULL_FRUIT)]), events, false,
+            contacts.positions[item.uid])
+        applied = first ~= nil
+        RecordProduct(produced, first)
     end
+    ProduceFeedback(game, item, contacts, events, produced)
     game.revision = game.revision + 1
     return true, applied
 end
@@ -235,6 +271,7 @@ end
 local function Farmer(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.id == "fruit_tree" and other.location == "bottle" then
             if not other.treeBlessed then
                 other.treeBlessed = true
@@ -256,12 +293,14 @@ local function Droplet(game, item, contacts, events)
     -- Crop返回“已执行农作物判定”而非“概率成功”；水珠明确判定后自耗，
     -- 因而概率失败但自耗成功仍是水珠本身的实际效果，不改果树周期。
     for _, crop in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if crop.location == "bottle" and Items.HasTag(crop.id, "农作物") then
             local checked, changed = Extra.Crop(game, crop, contacts, events)
             attempted, applied = checked or attempted, changed or applied
         end
     end
     if attempted then
+        ---@type boolean
         local consumed = game:_Destroy(item.uid, false, events)
         return consumed or applied -- 自耗被拦截但确实触发了农作物，也属于实际生效。
     end
@@ -276,9 +315,10 @@ end
 local function Monkey(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.id == "banana" and game:_Destroy(other.uid, false, events, item) then
             -- 固定7金币/香蕉，与香蕉当前价值、猴子当前价值及倍率无关。
-            game:_Score(events, item, 7, contacts.positions[item.uid])
+            game:_Score(events, item, 7, contacts.positions[item.uid], "consume")
             hit = true
         end
     end
@@ -314,6 +354,7 @@ local function SoulJar(game, item, events)
     if not game:_Destroy(item.uid, false, events) then return false end
     local count = game:_RandomInt(3)
     for _ = 1, count do
+        FrameBudget.Checkpoint()
         game:_Spawn("ghost", events, false, RandomBottlePosition(game))
     end
     return true
@@ -327,9 +368,10 @@ end
 local function SoulStone(game, item, contacts, events)
     local hit = false
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if other.id == "ghost" and game:_Destroy(other.uid, false, events, item) then
             -- 幽灵自身的被消耗结算由 Game:_Destroy 完成，这里只结算灵魂石。
-            game:_Score(events, item, game:_Value(item), contacts.positions[item.uid])
+            game:_Score(events, item, game:_Value(item), contacts.positions[item.uid], "consume")
             hit = true
         end
     end
@@ -344,15 +386,24 @@ end
 local function CoinMachine(game, item, contacts, events)
     local count = 0
     for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+        FrameBudget.Checkpoint()
         if Items.HasTag(other.id, "人类") then count = count + 1 end
     end
     local pool = Relics.Has(game, "upgrade_coin_machine") and UPGRADED_COINS or COINS
     local hit = false
+    local produced = {}
     for _ = 1, count do
+        FrameBudget.Checkpoint()
         -- 两种/三种硬币均匀抽签；总生成数是相邻人类数，不是每种各生成该数。
         local id = assert(pool[game:_RandomInt(#pool)])
-        if game:_SpawnTop(id, events, false) then hit = true end
+        local coin = game:_SpawnTop(id, events, false)
+        if coin then
+            hit = true
+            if id == "coin_4" then TriggerFeedback.Relic(game, events, "upgrade_coin_machine") end
+        end
+        RecordProduct(produced, coin)
     end
+    ProduceFeedback(game, item, contacts, events, produced)
     return hit
 end
 
@@ -361,6 +412,7 @@ end
 ---@param events GameEvent[]
 function Extra.Start(game, events)
     for _, item in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if DIE_SIDES[item.id] then Roll(game, item, nil, events) end
     end
 end
@@ -385,13 +437,21 @@ function Extra.Apply(game, item, contacts, events)
         return Droplet(game, item, contacts, events)
     elseif id == "cloud" then
         local spawnId = Relics.Has(game, "coin_rain") and "coin_1" or "droplet"
-        local spawned = game:_Spawn(spawnId, events, false, contacts.positions[item.uid]) ~= nil
+        local first = game:_Spawn(spawnId, events, false, contacts.positions[item.uid])
+        local spawned = first ~= nil
+        local produced = {}
+        RecordProduct(produced, first)
         -- 每周期保底永久一件，独立20%瓶顶追加六件临时；硬币雨只换类型。
         if game:_RandomInt(5) == 1 then
             for _ = 1, 6 do
-                if game:_SpawnTop(spawnId, events, true) then spawned = true end
+                FrameBudget.Checkpoint()
+                local extra = game:_SpawnTop(spawnId, events, true)
+                if extra then spawned = true end
+                RecordProduct(produced, extra)
             end
         end
+        if spawned and spawnId == "coin_1" then TriggerFeedback.Relic(game, events, "coin_rain") end
+        ProduceFeedback(game, item, contacts, events, produced)
         return spawned
     elseif id == "monkey" then
         return Monkey(game, item, contacts, events)
@@ -426,9 +486,11 @@ end
 ---@param events GameEvent[]
 function Extra.BeforeSettle(game, contacts, events)
     for _, item in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if item.id == "bacon" then
             local count = 0
             for _, other in ipairs(game:_Adjacents(item.uid, contacts)) do
+                FrameBudget.Checkpoint()
                 if other.uid ~= item.uid and Items.HasTag(other.id, "食物") then
                     count = count + 1
                 end
@@ -447,10 +509,12 @@ end
 ---@param events GameEvent[]
 function Extra.AfterSettle(game, events)
     for _, caster in ipairs(game:BottleItems()) do
+        FrameBudget.Checkpoint()
         if caster.id == "necromancer" then
             ---@type ItemInstance[]
             local candidates = {}
             for _, other in ipairs(game.discard) do
+                FrameBudget.Checkpoint()
                 if other.location == "discard" then candidates[#candidates + 1] = other end
             end
             table.sort(candidates, ByUid)
@@ -474,10 +538,12 @@ function Extra.TrackDistance(game, item, events)
         local threshold = 50
         local coaches = 0
         for _, other in ipairs(game:BottleItems()) do
+            FrameBudget.Checkpoint()
             if other.id == "fitness_coach" then coaches = coaches + 1 end
         end
         local shrink = 0.1 * (2 ^ coaches)
         while item.distance >= threshold and item.scale > 1 do
+            FrameBudget.Checkpoint()
             item.distance = item.distance - threshold
             local previousScale = item.scale
             item.scale = math.max(1, previousScale - shrink)
@@ -489,13 +555,16 @@ function Extra.TrackDistance(game, item, events)
     elseif item.id == "rabbit" then
         local threshold = 100
         while item.distance >= threshold do
+            FrameBudget.Checkpoint()
             item.distance = item.distance - threshold
             if Relics.Has(game, "in_groups") then
                 for _, other in ipairs(game:BottleItems()) do
+                    FrameBudget.Checkpoint()
                     if other.id == "rabbit" then
                         Permanent(game, other, events, 1)
                         TriggerFeedback.Reward(events, other, 1, "permanent", "move",
                             game._lastPositions[other.uid])
+                        if other.uid ~= item.uid then TriggerFeedback.Relic(game, events, "in_groups") end
                     end
                 end
             else

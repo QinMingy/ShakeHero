@@ -63,6 +63,27 @@ local cases = {}
 local function case(name, run) cases[#cases+1]={name=name,run=run} end
 
 -- 夹具示意：独立凸片/真圆在中央自由下落；凹口只由分片表示，不交给Box2D凹多边形。
+-- 原生单位实测：RigidBody2D.angularVelocity为rad/s，node.rotation2D为degree。
+-- 低角速、无阻尼/重力/接触，避开Box2D最大角位移钳制，验证真实body和node差值。
+case("原生2D角速度1弧度每秒与节点角度转换", function(check)
+    local sim=make({"ball"})
+    place(sim,1,0,3)
+    local record=sim.bodies[1]
+    record.body.gravityScale=0
+    record.body.linearDamping=0
+    record.body.angularDamping=0
+    record.body.linearVelocity=Vector2(0,0)
+    record.body.angularVelocity=1
+    local before=record.node.rotation2D
+    sim:Step(1/60)
+    local delta=record.node.rotation2D-before
+    local expected=(1/60)*180/math.pi
+    print("[ExpansionPhysics] angularUnit "..cjson.encode({radiansPerSecond=record.body.angularVelocity,
+        macroDt=1/60,deltaDegrees=delta,expectedDegrees=expected}))
+    check(math.abs(delta-expected)<1e-4,"真实1rad/s在1/60宏步推进约0.95493度")
+    check(math.abs(record.body.angularVelocity-1)<1e-7,"无接触无阻尼真实角速度保持1rad/s")
+end)
+
 case("新增图案与全部凸片及真圆轮廓合法", function(check)
     local sim = make(IDS)
     local fingerprints = {}
@@ -123,6 +144,8 @@ case("飞盘动态sensor穿透且路径真实弧线和路程", function(check)
     local sim,items=make({"discus","apple"})
     place(sim,1,-1.2,3);place(sim,2,0,3.45)
     sim.bodies[2].body.gravityScale=0
+    -- 固定接触靶，真实手势只考察飞盘受控轨迹免疫，避免苹果先被惯性带离路径。
+    sim.bodies[2].body.bodyType=BT_KINEMATIC
     local disc=sim.bodies[1]
     check(disc.body.bodyType==BT_DYNAMIC and disc.body.gravityScale==0,"飞盘动态零重力")
     local sensors=true
@@ -132,6 +155,7 @@ case("飞盘动态sensor穿透且路径真实弧线和路程", function(check)
     sim:Sync(items)
     local x,y=sim:GetPose(1)
     local distance,maxY,hit,ended=0,y,false,false
+    sim:BeginShake()
     for _=1,75 do
         sim:Shake(.08,.08);sim:Step(1/60)
         local xx,yy=sim:GetPose(1)
@@ -140,6 +164,7 @@ case("飞盘动态sensor穿透且路径真实弧线和路程", function(check)
         hit=hit or pair(sim,1,2)
         ended=ended or sim:Contacts().flightArrived[1]==true
     end
+    sim:EndShake()
     local ax,ay=sim:GetPose(2)
     -- 苹果不受摇晃测试单独隔离，受控飞盘路径则应不受输入改变。
     check(maxY>3.25 and distance>2.4,"弧线高于直线且累计真实路程大于弦长")
@@ -194,7 +219,9 @@ case("side准确分类与壁虎anchor稳定固定及重入解除", function(chec
     local x,y=sim:GetPose(1)
     sim:RememberEvents({{kind="anchor",uid=1,x=x,y=y}});sim:Sync(items)
     check(sim.bodies[1].body.bodyType==BT_KINEMATIC,"anchor改为kinematic")
+    sim:BeginShake()
     for _=1,90 do sim:Shake(.4,.4);sim:Step(1/60) end
+    sim:EndShake()
     local xx,yy=sim:GetPose(1)
     check(math.abs(xx-x)<1e-6 and math.abs(yy-y)<1e-6,"重力和摇瓶不改变锚定位置")
     sim:Sync(items,true,19)
@@ -276,16 +303,28 @@ case("冲量弹开与小牛短冲刺遵循实体CCD", function(check)
     check(sim.expansion.states[3].dashRemaining<1e-7,"冲刺到期停止主动速度覆盖")
     sim:RememberEvents({{kind="dash",uid=3,dx=1,dy=0,duration=.35}})
     local wall,bounded=false,true
+    local activeDashSteps,activeDashProtected,wallDuringProtectedDash=0,true,false
     for _=1,90 do
         sim:Step(1/60)
         local xx,yy=sim:GetPose(3)
-        wall=wall or sim:Contacts().side[3]==true
+        local touching=sim:Contacts().side[3]==true
+        local active=sim.expansion.states[3].dashRemaining>1e-7
+        if active then
+            activeDashSteps=activeDashSteps+1
+            activeDashProtected=activeDashProtected and sim.bodies[3].body.bullet
+            wallDuringProtectedDash=wallDuringProtectedDash or (touching and sim.bodies[3].body.bullet)
+        end
+        wall=wall or touching
         bounded=bounded and math.abs(xx)<2.4 and yy>0 and yy<6.4
     end
     check(select(1,sim:GetPose(3))<2.4,"实体短冲刺不会穿出瓶壁")
-    check(wall and bounded and sim.world.continuousPhysics and sim.bodies[3].body.bullet
-        and not sim.bodies[3].sensor and not assert(sim.bodies[3].shapes[1]).trigger,
-        "6米每秒冲刺实际撞侧壁并由实体CCD阻挡，全程不穿瓶")
+    print("[ExpansionPhysics] dashProtection "..cjson.encode({activeSteps=activeDashSteps,
+        activeProtected=activeDashProtected,wallDuringProtectedDash=wallDuringProtectedDash,
+        wall=wall,bounded=bounded,finalBullet=sim.bodies[3].body.bullet}))
+    check(wall and bounded and activeDashSteps>0 and activeDashProtected and wallDuringProtectedDash
+        and sim.world.continuousPhysics and not sim.bodies[3].sensor
+        and not assert(sim.bodies[3].shapes[1]).trigger,
+        "6米每秒冲刺在实际危险步受CCD保护并真实撞壁，全程不穿瓶")
 end)
 
 -- 果冻夹具（米，+Y向上）：轻苹果(-.4,2.8) <- 果冻(0,3) -> 重苹果(.4,3.2)。
@@ -354,22 +393,31 @@ case("果冻生产弹开豁免幽灵飞盘及四幽灵便便", function(check)
         check(pair(sim,1,2) and pair(sim,1,3),id.."与实体邻居同时真实接触果冻")
         local sensor=sim.bodies[3]
         local velocity,mass=sensor.body.linearVelocity,sensor.body.mass
-        local events=game:Step(0,sim:Contacts())
-        local count,exempt,isolated=0,true,true
+        local contacts=sim:Contacts()
+        local events=game:Step(0,contacts)
+        local count,feedbackCount,exempt,isolated=0,0,true,true
         local eventKinds={}
+        local function near(a,b) return type(a)=="number" and math.abs(a-b)<1e-7 end
         for _,event in ipairs(events) do
             eventKinds[#eventKinds+1]=event.kind..":"..tostring(event.uid)
             if event.kind=="impulse" then
                 count=count+1
-                exempt=exempt and event.uid==2 and event.strength==6
+                exempt=exempt and event.uid==2 and event.sourceUid==1 and event.strength==6
+            elseif event.kind=="itemFeedback" then
+                feedbackCount=feedbackCount+1
+                isolated=isolated and event.uid==1 and event.id=="jelly" and event.action=="jelly"
+                    and event.targetUid==2 and event.targetId=="removal_coin"
+                    and near(event.x,contacts.positions[1].x) and near(event.y,contacts.positions[1].y)
+                    and near(event.toX,contacts.positions[2].x) and near(event.toY,contacts.positions[2].y)
             else isolated=false end
         end
         if not isolated then
             print("[ExpansionPhysics] jellyExempt 非果冻事件 id="..id.." events="..table.concat(eventKinds,","))
         end
         check(count==1 and exempt,id.."不在生产impulse目标内，实体仍正常弹开")
-        check(isolated and #game:BottleItems()==3 and game:Get(3).location=="bottle",
-            id.."夹具只产生果冻事件且不消费/投掷穿透物")
+        check(isolated and feedbackCount==1 and #events==2
+            and #game:BottleItems()==3 and game:Get(3).location=="bottle",
+            id.."夹具仅有唯一实体impulse及果冻本人对应反馈，不消费/投掷穿透物")
         sim:RememberEvents(events);sim:Sync(game:BottleItems())
         local after=sensor.body.linearVelocity
         check(sensor.sensor and assert(sensor.shapes[1]).trigger and math.abs(after.x-velocity.x)<1e-7
@@ -498,15 +546,16 @@ case("小羊零一五档真实轮廓和强摇脉冲", function(check)
     check(fat.shape=="sheep_5" and fat.body.mass>middleMass,"五份胖档碰撞覆盖更宽")
     items[2].woolExtraEntry=true;sim:Sync(items,true,123)
     check(select(2,sim:GetPose(2))>5.8,"额外羊毛准备入瓶从瓶顶布置")
-    sim:SetMode(1);sim:Shake(.4,0);sim:Step(1/60)
+    sim:BeginShake();sim:Shake(.4,0);sim:Step(1/60)
     check(sim:Contacts().shakeStrength>=4,"真实强摇输入dv提供强摇信号")
     for _=1,5 do sim:Step(1/60) end
     check(sim:Contacts().shakeStrength==0,"无输入不重复强摇，碰撞不伪造信号")
-    sim:Shake(.4,0);sim:Step(1/60)
+    sim:Shake(-.8,0);sim:Step(1/60)
     check(sim:Contacts().shakeStrength==0,"0.35秒防抖不重复脱毛")
     for _=1,25 do sim:Step(1/60) end
-    sim:Shake(.4,0);sim:Step(1/60)
+    sim:Shake(.8,0);sim:Step(1/60)
     check(sim:Contacts().shakeStrength>=4,"防抖结束后新强摇可再次触发")
+    sim:EndShake()
 end)
 
 -- 压力夹具：100件包含每种新轮廓/幽灵/培根，持续10秒输入；逐段检测有限与瓶内。
@@ -518,6 +567,7 @@ case("100物品600步不穿瓶且原生对象安全释放", function(check)
     local sim=make(ids)
     local safe=true
     local maxY,minY,maxX=-math.huge,math.huge,0
+    sim:BeginShake()
     for step=1,600 do
         if step%20==0 then sim:Shake(step%40==0 and .12 or -.12,.08) end
         sim:Step(1/60)
@@ -535,6 +585,7 @@ case("100物品600步不穿瓶且原生对象安全释放", function(check)
             end
         end
     end
+    sim:EndShake()
     print(string.format("[ExpansionPhysics] stress minY=%.6f maxY=%.6f maxX=%.6f",minY,maxY,maxX))
     check(safe,"100件全真实刚体/软体段600步均有限不穿瓶")
     sim:Clear()
@@ -566,7 +617,7 @@ case("真实Game和Box2D完整生态固定步长至reveal", function(check)
     place(sim,8,0,4.2);place(sim,9,-.5,4.4)
     sim.bodies[9].body.angularDamping=0
     sim.bodies[9].body.angularVelocity=7
-    sim:SetMode(1)
+    sim:BeginShake()
     local counts={}
     local maxCount,finiteAll,hasDiscus=0,true,false
     local function consume(events)
@@ -579,16 +630,60 @@ case("真实Game和Box2D完整生态固定步长至reveal", function(check)
             finiteAll=finiteAll and p.x==p.x and p.y==p.y and math.abs(p.x)<3 and p.y>-.1 and p.y<6.5
         end
     end
+    local shedTraces={}
+    local sawVerifiedShed,allShedsVerified=false,true
     for step=1,600 do
-        if step==12 or step==240 then sim:Shake(.4,.05) end
+        if step==12 then sim:Shake(.4,.05)
+        elseif step==240 then sim:Shake(-.8,-.1) end
         sim:Step(1/60)
-        consume(game:Step(1/60,sim:Contacts()))
+        local contacts=sim:Contacts()
+        local woolBefore=game:Get(1).woolCount or 0
+        local firstNewUid=game._nextUid
+        local events=game:Step(1/60,contacts)
+        local knifeTouch=false
+        for _,contact in ipairs(contacts.pairs) do
+            if contact[1]==1 and contact[2]==3 then knifeTouch=true end
+        end
+        local inventory=woolBefore
+        for index,event in ipairs(events) do
+            if event.kind=="buff" and event.uid==1 and event.id=="sheep" then
+                if event.value==0 and inventory>0 then
+                    local products,seen={},{}
+                    local valid=true
+                    local cursor=index+1
+                    while events[cursor] and events[cursor].kind=="spawn" and events[cursor].id=="wool" do
+                        local born=events[cursor]
+                        local item=game:Get(born.uid)
+                        valid=valid and born.uid>=firstNewUid and not seen[born.uid]
+                            and item~=nil and item.id=="wool"
+                        seen[born.uid]=true;products[#products+1]=born.uid
+                        cursor=cursor+1
+                    end
+                    local sourceVerified=(contacts.shakeStrength or 0)>=4 or knifeTouch
+                    local complete=valid and #products==inventory and sourceVerified
+                    local trace={step=step,inventoryBeforeZero=inventory,stepWoolBefore=woolBefore,
+                        buffValue=event.value,spawnCount=#products,spawnUids=products,
+                        afterWool=game:Get(1).woolCount or 0,shakeStrength=contacts.shakeStrength or 0,
+                        knifeTouch=knifeTouch,verified=complete}
+                    shedTraces[#shedTraces+1]=trace
+                    print("[ExpansionPhysics] sheepShedTrace "..cjson.encode(trace))
+                    sawVerifiedShed=sawVerifiedShed or complete
+                    allShedsVerified=allShedsVerified and complete
+                end
+                inventory=event.value
+            end
+        end
+        consume(events)
     end
+    sim:EndShake()
     check(game.phase=="settle" and math.abs(game.elapsed-10)<1e-6,"真实600步恰好进入settle")
     check(hasDiscus and (counts.flight or 0)>0,"生态规则真实创建并抛出临时飞盘")
     check((counts.rotate or 0)>0,"生态真实旋转累计触发指南针事件")
     check((counts.dash or 0)>0 and (counts.remove or 0)>0,"真实消费接触触发小牛冲刺与移除")
-    check((game:Get(1).woolCount or 0)==0,"真实输入或刀接触触发整批脱毛")
+    check(sawVerifiedShed and allShedsVerified and #shedTraces>0,
+        "真实输入或刀接触使正库存归零并逐份生成对应羊毛，允许后续吃草重新积毛")
+    print("[ExpansionPhysics] sheepShedFinal "..cjson.encode({traceCount=#shedTraces,
+        allVerified=allShedsVerified,finalWool=game:Get(1).woolCount or 0}))
     for _=1,120 do
         sim:Step(1/60)
         consume(game:SettleStep(1/60,sim:Contacts()))
@@ -626,11 +721,13 @@ case("幽灵便便获取即时重建及真实穿透接触", function(check)
         place(sim,1,0,3);place(sim,2,0,3)
         local seen,ended=false,false
         local ax,ay=sim:GetPose(2)
+        sim:BeginShake()
         for _=1,180 do
             sim:Shake(.4,.4);sim:Step(1/60)
             local touching=pair(sim,1,2)
             seen=seen or touching;ended=ended or (seen and not touching)
         end
+        sim:EndShake()
         local px,py=sim:GetPose(2)
         check(seen and ended,id.."穿透仍产生真实Begin与End")
         -- 隔离实体摇晃：上一段仅验证sensor事实，静止苹果另开无输入世界。
@@ -649,8 +746,12 @@ case("幽灵便便获取即时重建及真实穿透接触", function(check)
     local a,items=make({"poop"})
     local b,bItems=make({"poop"})
     a:Sync(items,false,nil,{ghostPoop=true});b:Sync(bItems,false,nil,{ghostPoop=true})
-    place(a,1,0,3);place(b,1,0,3);a:SetMode(1);b:SetMode(1)
-    for _=1,60 do a:Shake(.4,.4);a:Step(1/60);b:Step(1/60) end
+    place(a,1,0,3);place(b,1,0,3);a:BeginShake()
+    for step=1,60 do
+        local direction=step%24<12 and 1 or -1
+        a:Shake(.1*direction,.1*direction);a:Step(1/60);b:Step(1/60)
+    end
+    a:EndShake()
     local ax,ay=a:GetPose(1);local bx,by=b:GetPose(1)
     check(math.abs(ax-bx)<1e-6 and math.abs(ay-by)<1e-6,"幽灵便便自主流场完全免摇晃")
     a:RememberEvents({{kind="rotate",uid=1,delta=-math.pi/2}});a:Sync(items)
@@ -811,7 +912,7 @@ case("加速器幽灵便便真实Game生态不偷跑计时", function(check)
     place(sim,6,1.4,3);place(sim,7,1.4,3)
     place(sim,8,0,4.2);place(sim,9,-.5,4.4)
     sim.bodies[9].body.angularDamping=0;sim.bodies[9].body.angularVelocity=7
-    sim:SetMode(1)
+    sim:BeginShake()
     local maxCount,safe,sensors=0,true,true
     local function consume(events,step,stage)
         sim:RememberEvents(events);sim:Sync(game:BottleItems(),false,nil,options)
@@ -841,9 +942,11 @@ case("加速器幽灵便便真实Game生态不偷跑计时", function(check)
         end
     end
     for step=1,600 do
-        if step==12 or step==240 then sim:Shake(.4,.05) end
+        if step==12 then sim:Shake(.4,.05)
+        elseif step==240 then sim:Shake(-.8,-.1) end
         sim:Step(1/60);consume(game:Step(1/60,sim:Contacts()),step,"running")
     end
+    sim:EndShake()
     check(game.phase=="settle" and math.abs(game.elapsed-10)<1e-6
         and math.abs(sim.clock-10)<1e-6,"遗物生态600步仍仅10秒且恰到settle")
     for step=1,120 do

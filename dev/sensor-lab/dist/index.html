@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101714">
+  <title>ShakeHero · 体感实验台</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="masthead">
+      <a class="brand" href="./" aria-label="体感实验台首页"><span class="brand-mark" aria-hidden="true">S<span>H</span></span><span>SHAKEHERO<span class="brand-sub">DEVELOPMENT TOOLS</span></span></a>
+      <span class="local-label"><span class="dot"></span> LOCAL LAB <span class="version">/ 01</span></span>
+    </header>
+
+    <section class="intro">
+      <div><p class="eyebrow">MOTION INPUT / 体感调试</p><h1>让每一次摇动，<br class="mobile-break">都有迹可循<span>。</span></h1><p class="intro-copy">看原始信号，调输入系数，找到适合手机的手感。</p></div>
+      <div class="context-note"><span class="context-line"></span><span>物理二输入模型<br><strong>加速度 → 虚拟拖动 → 瓶身响应</strong></span></div>
+    </section>
+
+    <nav class="mode-tabs" aria-label="选择测试模式">
+      <button class="mode-tab active" data-mode="simulation" aria-pressed="true"><span class="mode-num">01</span><span>PC 模拟<span class="mode-description">生成测试信号</span></span><span class="tab-indicator"></span></button>
+      <button class="mode-tab" data-mode="device" aria-pressed="false"><span class="mode-num">02</span><span>本机传感器<span class="mode-description">手机直接测试</span></span><span class="tab-indicator"></span></button>
+      <button class="mode-tab" data-mode="receiver" aria-pressed="false"><span class="mode-num">03</span><span>电脑接收手机<span class="mode-description">大屏查看实时数据</span></span><span class="tab-indicator"></span></button>
+    </nav>
+
+    <div id="notice" class="notice" role="status"><span class="notice-symbol" aria-hidden="true">i</span><span id="noticeText">当前是模拟信号，不是物理传感器。可切换到本机传感器，在手机上授权采样。</span></div>
+
+    <main>
+      <section class="panel wifi-card" id="wifiCard" aria-labelledby="wifiTitle" hidden>
+        <div class="wifi-heading"><div><p class="eyebrow">ANDROID / SAME WI-FI</p><h2 id="wifiTitle">手机扫码，电脑看曲线</h2></div><span class="small-tag" id="wifiState">连接信息载入中</span></div>
+        <div id="wifiDisabled" class="wifi-disabled" hidden><span class="wifi-disabled-icon" aria-hidden="true">↗</span><div><strong>先开启同 Wi-Fi 测试服务</strong><p>在电脑双击 <code>dev\sensor-lab\start-wifi.cmd</code>，再打开启动后显示的电脑接收页。USB 连接仍可使用页面下方的方法。</p></div></div>
+        <div id="wifiEnabled" hidden>
+          <div class="wifi-content">
+            <div class="wifi-qr-column"><div class="wifi-qr-frame"><img id="wifiQr" width="184" height="184" alt="手机连接二维码"><span id="wifiQrError" hidden>二维码暂不可用<br>请复制右侧链接到手机</span></div><strong id="wifiQrTitle">Chrome 扫码开始测试</strong><span id="wifiQrCaption">已信任证书的手机可直接打开</span></div>
+            <div class="wifi-connect-column"><div class="wifi-step-tabs" role="group" aria-label="选择手机连接步骤"><button id="wifiPhoneStep" class="selected" aria-pressed="true">开始测试 <span>HTTPS</span></button><button id="wifiSetupStep" aria-pressed="false">首次连接 / 装证书</button></div><p class="wifi-first-note" id="wifiFirstNote">首次使用这台电脑的证书？先选“首次连接 / 装证书”，完成信任后再开始测试。</p><label class="wifi-address-label" for="wifiAddress">电脑连接手机 Wi-Fi 的网卡</label><select id="wifiAddress" aria-label="选择与手机同一 Wi-Fi 的电脑网卡"></select><div class="wifi-url-row"><label class="sr-only" for="wifiUrl">手机打开的连接地址</label><input id="wifiUrl" type="text" readonly spellcheck="false" autocomplete="off"><button id="wifiCopy" class="button secondary">复制链接</button></div><p id="wifiCopyStatus" class="wifi-copy-status" role="status">电脑与手机连接同一 Wi-Fi；手机使用 Chrome 打开。</p><div class="wifi-howto" id="wifiPhoneInstructions"><span><b>1</b> 手机扫码，使用 Chrome 打开</span><span><b>2</b> 点击“启用手机传感器”并允许权限</span><span><b>3</b> 保持手机页在前台，电脑等待有效样本</span></div><div class="wifi-howto" id="wifiSetupInstructions" hidden><span><b>1</b> 扫码进入首装引导页，下载公开 CA 证书</span><span><b>2</b> 安装前核对下方 SHA-256 指纹，并在 Android 设置中安装为 CA 证书</span><span><b>3</b> 信任完成后，切回“开始测试”扫描 HTTPS 二维码</span></div></div>
+          </div>
+          <aside class="wifi-game" aria-labelledby="wifiGameTitle"><div class="wifi-game-heading"><h3 id="wifiGameTitle">接入本地 ShakeHero</h3><span id="wifiGameState" class="small-tag" role="status">输入桥未开启</span></div><p id="wifiGameInstructions">使用 start-wifi.cmd 启动实验台，即可开启游戏输入。</p><p id="wifiGameError" class="wifi-game-error" hidden>游戏输入暂不可用，请重启实验台后重试。</p></aside>
+          <details class="wifi-certificate" id="wifiCertificate"><summary><span>首次连接：证书信任与指纹核对</span><span aria-hidden="true">+</span></summary><div class="wifi-certificate-body"><div><p>局域网传感器采样使用 HTTPS。首次连接时，手机只需下载并安装此实验台的<strong>公开 CA 证书</strong>；安装前请将手机显示的 SHA-256 指纹与这里逐项核对。二维码进入的 HTTP 首装引导页不采集传感器。</p><p>Android 在系统设置中搜索“安装证书”，选择 CA 证书并按提示安装。安装后使用 Chrome 打开“开始测试”的 HTTPS 地址；如果仍显示证书错误，请检查证书信任与网卡地址。</p><p class="wifi-cert-name" id="wifiCertificateName"></p><a id="wifiCertificateDownload" class="wifi-cert-download" download>下载公开 CA 证书 <span aria-hidden="true">↓</span></a></div><div class="wifi-fingerprint"><span>公开 CA / SHA-256 指纹</span><code id="wifiFingerprint">读取中…</code><p id="wifiCertificateExpiry"></p></div></div></details>
+        </div>
+      </section>
+      <section class="workbench">
+        <article class="panel response-panel">
+          <div class="panel-heading"><div><p class="eyebrow">RESPONSE VIEW</p><h2>瓶身响应</h2></div><span class="source-badge" id="sourceBadge">模拟 · 正弦波</span></div>
+          <div class="bottle-stage"><canvas id="bottleCanvas" aria-label="瓶身响应可视化，可用鼠标或手指拖动"></canvas><div class="stage-coordinate top-left">Y ↑ <span>屏幕坐标</span></div><div class="stage-coordinate bottom-right">X →</div><div class="stage-hint" id="stageHint">按住瓶子区域可测试手指拖动</div></div>
+          <div class="response-values"><div><span>瓶身位置 X / Y</span><strong id="positionValue">0.000 / 0.000 <small>m</small></strong></div><div><span>拖动目标 X / Y</span><strong id="targetValue">0.000 / 0.000 <small>m</small></strong></div><div><span>死区状态</span><strong id="deadzoneValue" class="muted-value">等待输入</strong></div></div>
+          <div class="signal-diagnostics"><span>过滤后强度 <strong id="filteredMagnitude">0.0000 g</strong></span><span>目标限幅 <strong id="saturationValue">未限幅</strong></span><span>基线 X / Y <strong id="baselineValue">0.000 / 0.000 g</strong></span></div>
+          <p class="panel-footnote">复用游戏的体感、虚拟拖动与瓶身跟随逻辑。此视图不包含完整游戏碰撞。</p>
+        </article>
+
+        <aside class="controls-column">
+          <section class="panel gain-panel">
+            <div class="panel-heading"><div><p class="eyebrow">SENSITIVITY</p><h2>陀螺仪系数</h2></div><span class="small-tag">实时生效</span></div>
+            <div class="gain-readout"><output id="gainValue" for="gainRange">6.00<span>×</span></output><span>与游戏 GM 相同<br><strong>1× = 1.2 米 / g</strong></span></div>
+            <label class="sr-only" for="gainRange">陀螺仪系数</label><input id="gainRange" type="range" min="0.25" max="20" step="0.25" value="6">
+            <div class="range-ends"><span>0.25×</span><span>20×</span></div>
+            <div class="gain-presets" aria-label="系数快捷设置"><button data-gain="1">1×</button><button data-gain="6" class="selected">6×</button><button data-gain="8">8×</button><button data-gain="12">12×</button><button data-gain="20">20×</button></div>
+            <div class="gain-fine"><button id="gainMinus" aria-label="系数减少 0.25">−</button><label for="gainNumber">精确系数</label><input id="gainNumber" type="number" min="0.25" max="20" step="0.25" value="6"><button id="gainPlus" aria-label="系数增加 0.25">+</button></div>
+            <div class="control-divider"></div><div class="axis-options"><label><input id="invertX" type="checkbox" checked><span>反转 X 轴</span></label><label><input id="invertY" type="checkbox" checked><span>反转 Y 轴</span></label></div>
+            <button id="calibrateButton" class="button secondary full-width"><span aria-hidden="true">⊕</span> 重新校准 / 回中</button><p class="microcopy">校准后首个样本建立基线。手机保持不动片刻，再开始摇动。</p>
+          </section>
+
+          <section class="panel input-panel" id="simulationPanel"><div class="panel-heading compact"><h2>模拟输入</h2><span class="small-tag">合成信号</span></div><div class="segmented"><button id="sineButton" class="selected" aria-pressed="true">正弦波</button><button id="manualButton" aria-pressed="false">手动滑条</button></div><div id="sineControls"><label class="slider-label" for="amplitudeRange">振幅 <output id="amplitudeValue">0.25 g</output></label><input id="amplitudeRange" type="range" min="0" max="2" step="0.01" value="0.25"><label class="slider-label" for="frequencyRange">频率 <output id="frequencyValue">1.20 Hz</output></label><input id="frequencyRange" type="range" min="0.1" max="5" step="0.05" value="1.2"></div><div id="manualControls" hidden><label class="slider-label" for="manualX">X 轴 <output id="manualXValue">0.00 g</output></label><input id="manualX" type="range" min="-2" max="2" step="0.01" value="0"><label class="slider-label" for="manualY">Y 轴 <output id="manualYValue">0.00 g</output></label><input id="manualY" type="range" min="-2" max="2" step="0.01" value="0"></div><button id="pauseSimulation" class="text-button">暂停模拟</button></section>
+
+          <section class="panel input-panel" id="devicePanel" hidden><div class="panel-heading compact"><h2>本机采样</h2><span class="small-tag" id="permissionLabel">未请求权限</span></div><p class="microcopy device-copy">在手机浏览器点击启用，并允许“运动与方向”权限。收到有效样本后才会显示在线。</p><button id="enableSensor" class="button primary full-width">启用手机传感器</button><button id="stopSensor" class="text-button full-width" disabled>停止采样</button><label class="relay-option"><input id="relayPhone" type="checkbox"><span>同步数据到电脑接收端</span></label><p class="microcopy" id="relayStatus">仅在本机页面查看。</p></section>
+
+          <section class="panel input-panel" id="receiverPanel" hidden><div class="panel-heading compact"><h2>手机连接</h2><span class="small-tag" id="receiverStatus">等待手机</span></div><p class="microcopy device-copy">在手机打开同一个实验台，选择“本机传感器”，勾选同步并启用。电脑会在这里接收。</p><a id="receiverGuideLink" class="button primary full-width" href="#connectionGuide">查看连接方法 <span aria-hidden="true">↗</span></a><p class="microcopy" id="receiverDevice">尚未接收手机样本</p></section>
+        </aside>
+      </section>
+
+      <section class="telemetry-strip" aria-label="采样诊断"><div class="telemetry-item"><span>输入状态</span><strong id="inputStatus"><i class="status-dot"></i>模拟信号</strong></div><div class="telemetry-item"><span>有效样本</span><strong id="sampleCount">0 <small>次</small></strong></div><div class="telemetry-item"><span>输入频率</span><strong id="sampleRate">— <small>Hz</small></strong></div><div class="telemetry-item"><span>最近样本</span><strong id="sampleAge">尚无样本</strong></div><div class="telemetry-item"><span>安全上下文</span><strong id="secureValue">—</strong></div></section>
+
+      <section class="analysis-grid">
+        <article class="panel graph-panel"><div class="panel-heading"><div><p class="eyebrow">SIGNAL TRACE / 最近 8 秒</p><h2>从输入到虚拟拖动</h2></div><div class="graph-axis segmented" aria-label="曲线轴选择"><button class="selected" data-axis="x" aria-pressed="true">X</button><button data-axis="y" aria-pressed="false">Y</button></div></div><div class="graph-legend"><span><i class="legend-raw"></i>输入 g</span><span><i class="legend-filter"></i>滤波 g</span><span><i class="legend-target"></i>拖动目标 m</span></div><div class="graph-container"><canvas id="signalCanvas" aria-label="输入、滤波与拖动目标的实时曲线"></canvas><div class="graph-empty" id="graphEmpty">等待有效输入样本</div></div><div class="graph-footer"><span id="graphScale">左轴 ±1.00 g · 右轴 ±0.60 m</span><span>0.035 g 连续死区</span></div></article>
+        <article class="panel raw-panel"><div class="panel-heading"><div><p class="eyebrow">SENSOR TELEMETRY</p><h2>原始传感器</h2></div><span class="small-tag" id="rawSource">模拟</span></div><p class="raw-section-title">加速度（包含重力）<span>g</span></p><dl class="raw-values"><div><dt>X</dt><dd id="rawX">—</dd></div><div><dt>Y</dt><dd id="rawY">—</dd></div><div><dt>Z</dt><dd id="rawZ">—</dd></div></dl><p class="raw-section-title">真实角速度 · rotationRate<span>°/s</span></p><dl class="raw-values gyro-values"><div><dt>α</dt><dd id="gyroAlpha">null</dd></div><div><dt>β</dt><dd id="gyroBeta">null</dd></div><div><dt>γ</dt><dd id="gyroGamma">null</dd></div></dl><p id="sensorExplanation" class="microcopy">模拟输入不产生真实陀螺仪读数。游戏当前以加速度计驱动体感。</p><div class="raw-detail"><span>转换后 X / Y（g）</span><strong id="screenValue">— / —</strong></div><div class="raw-detail"><span>屏幕旋转</span><strong id="screenAngle">0°</strong></div></article>
+      </section>
+
+      <section class="panel capture-panel"><div><p class="eyebrow">CAPTURE A TEST</p><h2>把这次手感留下来</h2><p>记录输入、系数、滤波结果和瓶身响应，导出本地 JSON 便于对照。</p></div><div class="capture-actions"><span id="recordingStatus">尚未录制</span><button id="recordButton" class="button secondary"><span class="record-dot"></span>开始录制</button><button id="exportButton" class="button primary" disabled>导出 JSON <span aria-hidden="true">↓</span></button></div></section>
+
+      <details class="panel connection-guide" id="connectionGuide"><summary><span><span class="guide-icon" aria-hidden="true">↗</span>手机怎么连接到本地实验台？</span><span class="summary-action">连接指南 <span aria-hidden="true">+</span></span></summary><div class="guide-content"><div><span class="guide-step">01 / PC</span><h3>先确认工具在运行</h3><p>电脑接收地址：</p><a id="receiverLink" class="local-link" href="?mode=receiver">http://localhost:8787/?mode=receiver</a><p id="serverConnection">正在读取本地服务信息…</p></div><div><span class="guide-step">02 / ANDROID</span><h3>USB 连接最直接</h3><p>手机打开开发者选项与 USB 调试；电脑安装 ADB 并授权后执行：</p><code id="adbCommand">adb reverse tcp:8787 tcp:8787</code><p>手机 Chrome 打开：</p><code id="phoneLocalUrl">http://localhost:8787/?mode=phone</code><p>点击“启用手机传感器”，允许权限，并勾选同步到电脑。</p><p>没有 ADB：电脑 Chrome 打开 <code>chrome://inspect/#devices</code>，勾选 Discover USB devices，在 Port forwarding 中填写 <code id="chromeForward">8787 → localhost:8787</code> 并启用转发。手机仍访问上面的 localhost 地址。</p></div><div><span class="guide-step">03 / iPHONE & WI-FI</span><h3>使用受信任的 HTTPS</h3><p>iPhone 或无线连接需要手机信任的 HTTPS 证书，并在手机端允许“运动与方向”权限。局域网的普通 HTTP 地址可检查连通性，但不能可靠采集传感器。</p><p>本工具只在本地处理数据，不上传到 Maker。浏览器测试验证输入链路；原生游戏仍需手机实测。</p><p id="lanAddresses" class="lan-addresses"></p></div></div></details>
+    </main>
+    <footer><span>SHAKEHERO / SENSOR LAB</span><span>本地调试工具 · 物理一保持原样</span><span id="connectionStatus">本地服务连接中</span></footer>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

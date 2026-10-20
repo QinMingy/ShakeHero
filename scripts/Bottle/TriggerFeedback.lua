@@ -1,6 +1,32 @@
 -- 触发收益的表现事件；不计分、不改实例，也不把 buff 的总量/计数当作增量。
 local Money = require("Bottle.Money")
+local Relics = require("Bottle.Relics")
 local Feedback = {}
+
+-- 仅由已成功的离散效果调用；随原事件批次发布，不改规则或额外抽随机数。
+---@param game BottleGame
+---@param events GameEvent[]?
+---@param id string
+---@return boolean added
+function Feedback.Relic(game, events, id)
+    if not events or game.phase ~= "running" or not Relics.byId[id]
+        or not Relics.Has(game, id) then return false end
+    for _, event in ipairs(events) do
+        if event.kind == "relicTrigger" and event.id == id then return false end
+    end
+    events[#events + 1] = {kind = "relicTrigger", uid = 0, id = id}
+    return true
+end
+
+-- 刷新次数的获得独立于金币与价值，不进入结算队列、不占用玩法随机数。
+---@param events GameEvent[]
+---@param item ItemInstance?
+---@param position {x:number,y:number}?
+function Feedback.Refresh(events, item, position)
+    events[#events + 1] = {kind = "refreshGain", uid = item and item.uid or 0,
+        id = item and item.id, value = 1,
+        x = position and position.x, y = position and position.y}
+end
 
 ---@param events GameEvent[]
 ---@param item ItemInstance
@@ -8,13 +34,15 @@ local Feedback = {}
 ---@param rewardKind 'value'|'permanent'|'size'
 ---@param trigger 'move'|'rotate'|'distance'|'collision'
 ---@param position {x:number,y:number}?
-function Feedback.Reward(events, item, amount, rewardKind, trigger, position)
+---@param cause GameEvent?
+function Feedback.Reward(events, item, amount, rewardKind, trigger, position, cause)
     if rewardKind ~= "size" then amount = Money.Round(amount) end
     if math.abs(amount) < 1e-9 then return end
     events[#events + 1] = {
         kind = "triggerReward", uid = item.uid, id = item.id, value = amount,
         rewardKind = rewardKind, trigger = trigger,
         x = position and position.x, y = position and position.y,
+        reason = cause and cause.reason, consumerId = cause and cause.consumerId,
     }
 end
 
@@ -69,6 +97,16 @@ end
 ---@param contacts BottleStepContacts
 function Feedback.Finish(game, before, events, first, trigger, contacts)
     Feedback.TagScores(events, first, trigger)
+    -- 只取本次效果处理范围内、成功消耗的明确消费者；不从碰撞或附近物品猜来源。
+    ---@type table<number,GameEvent>
+    local causes = {}
+    for index = first, #events do
+        local event = events[index]
+        if event.kind == "consume" and event.consumerUid
+            and (event.reason == "consume" or event.reason == "eliminate") then
+            causes[event.consumerUid] = event
+        end
+    end
     local items = game:BottleItems()
     local included = {}
     for _, item in ipairs(items) do included[item.uid] = true end
@@ -91,6 +129,7 @@ function Feedback.Finish(game, before, events, first, trigger, contacts)
         local normalized = same and old.valueBase ~= item.valueBase
         if not normalized then
             local position = contacts.positions[item.uid]
+            local cause = causes[item.uid]
             if not position then
                 for index = first, #events do
                     local event = events[index]
@@ -101,20 +140,20 @@ function Feedback.Finish(game, before, events, first, trigger, contacts)
                 end
             end
             Feedback.Reward(events, item, item.permBonus - (same and old.permBonus or 0),
-                "permanent", trigger, position)
+                "permanent", trigger, position, cause)
             Feedback.Reward(events, item, item.bonus - (same and old.bonus or 0),
-                "value", trigger, position)
+                "value", trigger, position, cause)
             local permanent = item.permMult or 1
             local oldPermanent = same and old.permMult or 1
             local oldMult = same and old.mult or 1
             if permanent ~= oldPermanent and permanent > 0 then
                 Feedback.Reward(events, item, ValueAt(game, item, permanent, oldMult)
                     - ValueAt(game, item, oldPermanent, oldMult),
-                    "permanent", trigger, position)
+                    "permanent", trigger, position, cause)
             end
             if item.mult ~= oldMult and item.mult > 0 then
                 Feedback.Reward(events, item, game:_Value(item) - ValueAt(game, item, permanent, oldMult),
-                    "value", trigger, position)
+                    "value", trigger, position, cause)
             end
         end
     end
@@ -126,11 +165,12 @@ local LABELS = {move = "移动：", rotate = "旋转：", distance = "位移", c
 ---@param value number
 ---@param trigger string?
 ---@param rewardKind string?
+---@param label string? 来源明确时覆盖通用触发文案
 ---@return string prefix
 ---@return string amount
 ---@return boolean valueIcon
-function Feedback.Content(value, trigger, rewardKind)
-    local prefix = LABELS[trigger] or ""
+function Feedback.Content(value, trigger, rewardKind, label)
+    local prefix = label or LABELS[trigger] or ""
     if rewardKind == "size" then prefix = prefix .. "体积" end
     -- 金币与价值使用同一整数规则；体积百分比继续保留实际精度。
     if rewardKind ~= "size" then value = Money.Round(value) end

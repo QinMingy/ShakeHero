@@ -9,6 +9,28 @@ local Post=require("Machine.CinematicPost")
 local Motion=require("Machine.AmbientMotion")
 local Orientation=require("Machine.SpriteOrientation")
 local SceneLayers=require("Machine.SceneLayers")
+local ScreenFlow=require("Machine.ScreenFlow")
+local UniformCache=require("Machine.UniformCache")
+local STIR_NAMES={"stir_1","stir_2","stir_3","stir_4","stir_5","stir_6"}
+---@param uniforms MachineUniformCache
+---@param material Material
+---@param flow MachineScreenFlow
+local function setScreenFlow(uniforms,material,flow)
+    uniforms:Scalar(material,"flow_time",flow.time)
+    uniforms:Scalar(material,"vortex_strength",flow.vortex)
+    uniforms:Scalar(material,"flow_rotation",flow.rotation)
+    uniforms:Scalar(material,"gesture_spin",flow.spin)
+    uniforms:Vector4(material,"gesture_motion",flow.directionX,flow.directionY,flow.accelX,flow.accelY)
+    -- Clear every slot as well as filling it: expiry/reset cannot leave old GPU points.
+    for index=1,6 do
+        local point=flow.trails[index]
+        if point then
+            uniforms:Vector4(material,STIR_NAMES[index],point.x,point.y,point.dx*point.weight,point.dy*point.weight)
+        else
+            uniforms:Vector4(material,STIR_NAMES[index],.5,.5,0,0)
+        end
+    end
+end
 ---@type any
 local SceneSkin={}
 SceneSkin.__index=SceneSkin
@@ -17,6 +39,8 @@ function SceneSkin.New()
         cameraMotionEnabled=true,dustEnabled=true,motionX=0,motionY=0,
         shakeX=0,shakeY=0,shakeVX=0,shakeVY=0,
         presentX=0,presentY=0,frameStats={count=0,elapsed=0,maxDt=0,slow=0}},SceneSkin)
+    self.screenFlow=ScreenFlow.New()
+    self.uniforms=UniformCache.New()
     self.scene=Scene();self.scene:CreateComponent("Octree")
     local zone=self.scene:CreateChild("SpriteAmbient"):CreateComponent("Zone")
     zone.boundingBox=BoundingBox(Vector3(-20,-20,-20),Vector3(20,20,20))
@@ -137,11 +161,14 @@ function SceneSkin:Tick(dt)
         if dt>1/30 then stats.slow=stats.slow+1 end
     end
     for name,material in pairs(self.materials) do
+        if name=="screen-5" then
+            setScreenFlow(self.uniforms,material,self.screenFlow)
+        end
         if name:find("foliage",1,true) then
-            material:SetShaderParameter("wind_time",Variant(self.time))
+            self.uniforms:Scalar(material,"wind_time",self.time)
         end
         if name~="structure-noise" then
-            material:SetShaderParameter("cookie_time",Variant(self.time))
+            self.uniforms:Scalar(material,"cookie_time",self.time)
         end
     end
     if self.dustEnabled then self.dust:Tick(dt,self.time) end
@@ -288,16 +315,21 @@ function SceneSkin:Quad(name,x,y,w,h,tileW,tileH,transform)
         material=Material:new()
         local bulb=name=="crt-bulb-a" or name=="crt-bulb-b"
         assert(material:SetSurfaceShader(foliage and "Shaders/BLGL/LayeredFoliage.shader"
-            or bulb and "Shaders/BLGL/LayeredBulbLit.shader" or "Shaders/BLGL/LayeredSpriteLit.shader"))
+            or bulb and "Shaders/BLGL/LayeredBulbLit.shader"
+            or name=="screen-5" and "Shaders/BLGL/ScreenFlow.shader" or "Shaders/BLGL/LayeredSpriteLit.shader"))
         assert(material:SetSurfaceTexture("sprite_map",texture))
+        if name=="screen-5" then
+            self.uniforms:Vector2(material,"panel_pixels",L.board[3],L.board[4])
+            setScreenFlow(self.uniforms,material,self.screenFlow)
+        end
         if foliage then
             material.renderOrder=225
-            material:SetShaderParameter("wind_time",Variant(self.time))
+            self.uniforms:Scalar(material,"wind_time",self.time)
         end
         end
         if name~="structure-noise" then
             assert(material:SetSurfaceTexture("cookie_map",self.cookieTexture))
-            material:SetShaderParameter("cookie_time",Variant(self.time))
+            self.uniforms:Scalar(material,"cookie_time",self.time)
         end
         self.materials[name]=material
     end
@@ -318,6 +350,12 @@ function SceneSkin:Quad(name,x,y,w,h,tileW,tileH,transform)
         local pos=Vector3((dx+uv[1]*dw-L.width/2)/100*perspective,
             (L.height/2-dy-uv[2]*dh)/100*perspective,depth)
         local u,v=uv[1]*dw/tw,uv[2]*dh/th
+        if name=="screen-5" then
+            -- The frame centre and board backing share one continuous display field.
+            -- Tile UVs would repeat the vortex and create a seam between these planes.
+            u=(dx+uv[1]*dw-L.board[1])/L.board[3]
+            v=(dy+uv[2]*dh-L.board[2])/L.board[4]
+        end
         if name=="foliage-2" or name=="foliage-4" then u=1-u end
         if name=="foliage-1" or name=="foliage-2" then v=1-v end
         geometry:DefineVertex(pos);geometry:DefineNormal(Vector3(0,0,-1));geometry:DefineTexCoord(Vector2(u,v))
@@ -345,8 +383,8 @@ function SceneSkin:Finish(vg)
     if self.dustEnabled then
         self.fxSurface:QueueUpdate()
     end
-    self.post.material:SetShaderParameter("cookie_time",Variant(self.time))
-    self.post.material:SetShaderParameter("ui_camera_offset",Variant(Vector2(-self.motionX/100,self.motionY/100)))
+    self.uniforms:Scalar(self.post.material,"cookie_time",self.time)
+    self.uniforms:Vector2(self.post.material,"ui_camera_offset",-self.motionX/100,self.motionY/100)
     self.post:Present(b)
 end
 function SceneSkin:Dispose()

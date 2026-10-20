@@ -5,7 +5,13 @@
 -- 随机外观用私有 Park-Miller（种子由 uid 与 game.revision 派生），不调用 math.random、
 -- 不消耗玩法随机序列。
 local Art = require("Bottle.Art")
+local Pool = require("Bottle.RecordPool")
+---@class BottlePopIn
 local PopIn = {}
+local posePool, particlePool = Pool.New(160), Pool.New(768)
+local inflationPool, batchPool = Pool.New(96), Pool.New(32)
+---@type table<string,number[][]>
+local palettes = {}
 
 local STAGGER = .09       -- 同批物品错峰间隔（秒），形成“突突突”的连续节奏
 -- 每件物品按序号独立错峰，不设延迟上限：截断会让超出上限的物品同时出现
@@ -35,9 +41,13 @@ PopIn.INFLATION_DURATION, PopIn.EXPLOSION_LIFETIME = .55, .65
 ---@param targetRadius number
 ---@return BottleInflation
 function PopIn.NewInflation(fromRadius, targetRadius)
-    return {fromRadius = fromRadius, targetRadius = targetRadius, radius = fromRadius,
-        age = 0, duration = PopIn.INFLATION_DURATION}
+    local pose = inflationPool:Acquire() --[[@as BottleInflation]]
+    pose.fromRadius, pose.targetRadius, pose.radius = fromRadius, targetRadius, fromRadius
+    pose.age, pose.duration = 0, PopIn.INFLATION_DURATION
+    return pose
 end
+
+function PopIn.ReleaseInflation(pose) return inflationPool:Release(pose) end
 
 ---@param pose BottleInflation
 ---@param dt number
@@ -95,13 +105,15 @@ end
 ---@param delay number?
 ---@return BottlePopPose
 function PopIn.NewPose(uid, id, delay)
-    return {
-        uid = uid, id = id, delay = delay or 0, age = 0, started = false,
-        scale = 0, scaleVelocity = 0,
-        -- 幽灵只缩放弹出、始终直立；其他物品按 uid 奇偶交错角回摆。
-        angle = 0, angleVelocity = id == "ghost" and 0 or (uid % 2 == 0 and 1 or -1) * .9,
-    }
+    local pose = posePool:Acquire() --[[@as BottlePopPose]]
+    pose.uid, pose.id, pose.delay, pose.age, pose.started = uid, id, delay or 0, 0, false
+    pose.scale, pose.scaleVelocity, pose.angle = 0, 0, 0
+    -- 幽灵只缩放弹出、始终直立；其他物品按 uid 奇偶交错角回摆。
+    pose.angleVelocity = id == "ghost" and 0 or (uid % 2 == 0 and 1 or -1) * .9
+    return pose
 end
+
+function PopIn.ReleasePose(pose) return posePool:Release(pose) end
 
 -- 推进弹跳动效；返回 true 仅一次（弹跳开始的那帧），调用方此时迸发粒子并播放音效。
 ---@param pose BottlePopPose
@@ -150,25 +162,32 @@ end
 ---@param explosionRadius number? 仅气球爆炸使用；nil 保持原出现粒子参数
 ---@return BottlePopParticle[]
 function PopIn.Burst(x, y, id, seed, explosionRadius)
-    local colors = Art.ItemColors(id)
-    local particles = {}
+    local colors = palettes[id]
+    if not colors then colors = Art.ItemColors(id);palettes[id] = colors end
+    local particles = batchPool:Acquire() --[[@as BottlePopParticle[] ]]
     local count = explosionRadius and 32 or BURST_COUNT
     local minSpeed, maxSpeed = explosionRadius and 2.6 or MIN_SPEED, explosionRadius and 5.5 or MAX_SPEED
     for index = 1, count do
         local angle = seededRandom(seed, index) * math.pi * 2
         local speed = minSpeed + (maxSpeed - minSpeed) * seededRandom(seed, index + 101)
         local offset = (explosionRadius or 0) * (.35 + .5 * seededRandom(seed, index + 401))
-        particles[#particles + 1] = {
-            x = x + math.cos(angle) * offset, y = y + math.sin(angle) * offset,
-            vx = math.cos(angle) * speed,
-            vy = math.sin(angle) * speed + UP_BIAS,
-            age = 0,
-            life = (explosionRadius and .65 or .5) + .35 * seededRandom(seed, index + 211),
-            size = (explosionRadius and 3 or 2) + math.floor(seededRandom(seed, index + 311) * 3),
-            color = colors[1 + index % #colors],
-        }
+        local particle = particlePool:Acquire() --[[@as BottlePopParticle]]
+        particle.x, particle.y = x + math.cos(angle) * offset, y + math.sin(angle) * offset
+        particle.vx, particle.vy = math.cos(angle) * speed, math.sin(angle) * speed + UP_BIAS
+        particle.age = 0
+        particle.life = (explosionRadius and .65 or .5) + .35 * seededRandom(seed, index + 211)
+        particle.size = (explosionRadius and 3 or 2) + math.floor(seededRandom(seed, index + 311) * 3)
+        particle.color = colors[1 + index % #colors]
+        particles[#particles + 1] = particle
     end
     return particles
+end
+
+-- Board转交粒子到bursts后只归还批容器；粒子仍归活动列表所有。
+function PopIn.ReleaseBatch(particles) return batchPool:Release(particles) end
+function PopIn.ClearParticles(particles) particlePool:ClearActive(particles) end
+function PopIn.PoolStats()
+    return posePool:GetStats(), particlePool:GetStats(), inflationPool:GetStats(), batchPool:GetStats()
 end
 
 -- 独立于入场粒子的气球碎片：同种子可重现，绝不调用玩法随机或施加物理冲量。
@@ -187,11 +206,12 @@ end
 ---@param dt number
 function PopIn.StepParticles(particles, dt)
     dt = math.max(0, dt)
-    for i = #particles, 1, -1 do
+    local count, kept = #particles, 0
+    for i = 1, count do
         local p = particles[i]
         p.age = p.age + dt
         if p.age >= p.life then
-            table.remove(particles, i)
+            particlePool:Release(p)
         else
             p.vy = p.vy - GRAVITY * dt
             p.x = p.x + p.vx * dt
@@ -203,8 +223,10 @@ function PopIn.StepParticles(particles, dt)
                 p.x = p.x < 0 and -WALL or WALL
                 p.vx = -p.vx * RESTITUTION
             end
+            kept = kept + 1;particles[kept] = p
         end
     end
+    for index = count, kept + 1, -1 do particles[index] = nil end
 end
 
 return PopIn

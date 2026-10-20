@@ -1,6 +1,8 @@
 -- 纯表现：先重力散落，再沿曲线吸向回合金币。每枚携带一份收益，不按金币数创建对象。
 local UI = require("urhox-libs/UI")
 local Coin = require("Bottle.CoinIcon")
+local Pool = require("Bottle.RecordPool")
+local coinPool, batchPool = Pool.New(256), Pool.New(128)
 
 ---@class BottlePickupCoin
 ---@field age number
@@ -55,7 +57,9 @@ function Pickup:Init(props)
 end
 
 function Pickup:Reset()
-    self.coins, self.waiting, self.serial = {}, {}, 0
+    coinPool:ClearActive(self.coins)
+    batchPool:ClearActive(self.waiting)
+    self.serial = 0
 end
 
 function Pickup:Busy()
@@ -69,7 +73,9 @@ end
 ---@param height number
 function Pickup:Burst(amount, x, y, source, height)
     if amount <= 0 then return end
-    self.waiting[#self.waiting + 1] = {amount = amount, x = x, y = y, source = source, height = height}
+    local batch = batchPool:Acquire() --[[@as BottlePickupBatch]]
+    batch.amount, batch.x, batch.y, batch.source, batch.height = amount, x, y, source, height
+    self.waiting[#self.waiting + 1] = batch
     self:LaunchWaiting()
 end
 
@@ -88,18 +94,17 @@ function Pickup:LaunchWaiting()
             local nextCredit = i == count and batch.amount
                 or (reels and math.min(batch.amount, math.ceil(batch.amount * (i / count)))
                     or math.floor(batch.amount * (i / count)))
-            self.coins[#self.coins + 1] = {
-                age = 0, delay = (i - 1) * (reels and .022 or .026),
-                drop = .25 + (i % 3) * .018,
-                flight = reels and .72 or .37 + (i % 4) * .022,
-                x = math.max(12, math.min(358, batch.x)),
-                y = math.max(12, math.min(batch.height - 18, batch.y)),
-                vx = (((i * 37 + self.serial * 19) % 101) - 50) * 1.3,
-                floor = batch.height - 12, credit = nextCredit - credited,
-                source = batch.source, index = i, departed = false,
-            }
+            local coin = coinPool:Acquire() --[[@as BottlePickupCoin]]
+            coin.age, coin.delay = 0, (i - 1) * (reels and .022 or .026)
+            coin.drop, coin.flight = .25 + (i % 3) * .018, reels and .72 or .37 + (i % 4) * .022
+            coin.x, coin.y = math.max(12, math.min(358, batch.x)), math.max(12, math.min(batch.height - 18, batch.y))
+            coin.vx = (((i * 37 + self.serial * 19) % 101) - 50) * 1.3
+            coin.floor, coin.credit = batch.height - 12, nextCredit - credited
+            coin.source, coin.index, coin.departed = batch.source, i, false
+            self.coins[#self.coins + 1] = coin
             credited = nextCredit
         end
+        batchPool:Release(batch)
     end
 end
 
@@ -135,8 +140,9 @@ end
 function Pickup:Step(dt, depart, arrive)
     self:LaunchWaiting()
     -- 按出生顺序触发回调，低帧率一次跨过落地与抵达也只入账一次。
-    local keep = {}
-    for _, coin in ipairs(self.coins) do
+    local count, kept = #self.coins, 0
+    for index = 1, count do
+        local coin = self.coins[index]
         coin.age = coin.age + math.max(0, dt)
         if not coin.departed and coin.age >= coin.delay + coin.drop then
             coin.departed = true
@@ -144,12 +150,18 @@ function Pickup:Step(dt, depart, arrive)
         end
         if coin.age >= coin.delay + coin.drop + coin.flight then
             arrive(coin.credit, coin.source)
+            coinPool:Release(coin)
         else
-            keep[#keep + 1] = coin
+            kept = kept + 1
+            self.coins[kept] = coin
         end
     end
-    self.coins = keep
+    for index = count, kept + 1, -1 do self.coins[index] = nil end
     self:LaunchWaiting()
+end
+
+function Pickup.PoolStats()
+    return coinPool:GetStats(), batchPool:GetStats()
 end
 
 function Pickup:Render(vg)

@@ -199,8 +199,6 @@ V.atFrame(130, function()
     view:Update(true)
     V.assert(not view.detail:IsVisible() and board.selectedUid == 0, "重抽或状态修订关闭旧选中")
     Click(x, clickY)
-    physics:SetMode(1)
-    view:UpdatePhysicsMode()
     local startButton
     for _, row in ipairs(view.footer:GetChildren()) do
         for _, child in ipairs(row:GetChildren()) do
@@ -239,24 +237,40 @@ V.atFrame(230, function()
     local _, y = physics:GetPose(uid)
     V.assert(y < startY - .05, "物品在真实重力下下落")
     V.assert(game.elapsed > 0, "固定步长计时推进")
-    local body = physics.bodies[uid].body
-    local previous = body.linearVelocity.y
-    physics:Shake(0, .3)
-    V.assert(body.linearVelocity.y > previous + 1, "拖动摇晃施加真实向上冲量")
+    -- 单物体隔离碰撞，验证输入只改目标，固定步才产生反向惯性。
+    local probe = require("Bottle.Physics").New()
+    local probeGame = require("Bottle.RepairTests").Fixture({"apple"})
+    probe:Sync(probeGame:BottleItems(),true,337)
+    local record = probe.bodies[1]
+    record.node:SetPosition2D(0,3)
+    record.body.linearVelocity, record.body.gravityScale = Vector2(0,0), 0
+    record.newbornRemaining = 0
+    probe:BeginShake();probe:Shake(0,-.3)
+    V.assert(record.body.linearVelocity.y == 0, "手势输入不直接修改瓶内物品速度")
+    probe:Step(1/60)
+    V.assert(probe.motion.vy < 0 and record.body.linearVelocity.y > 1,
+        "固定步瓶子向下加速，物品获得真实向上惯性")
+    probe:EndShake();probe:Dispose()
     local GestureEvent = require("urhox-libs.UI.Core.GestureEvent")
     local board = api.GetView().board
     local l = board:GetAbsoluteLayout()
     local px, py = (l.x + l.w / 2) * UI.GetScale(), (l.y + l.h / 2) * UI.GetScale()
+    local body = physics.bodies[uid].body
     local beforeDrag = body.linearVelocity.x
     CoreUI.HandlePointerDown(PointerEvent.new("PointerDown", {x = px, y = py, button = MOUSEB_LEFT}))
     CoreUI.HandleGestureEvent(GestureEvent.new(GestureEvent.Types.PanStart,
         {x = px, y = py, target = board}))
     CoreUI.HandleGestureEvent(GestureEvent.new(GestureEvent.Types.PanMove,
-        {x = px + 20, y = py, target = board, deltaX = 20, deltaY = 0}))
-    V.assert(body.linearVelocity.x > beforeDrag + .5, "UI拖动事件真实传递到物理冲量")
+        {x = px + 20, y = py, target = board, deltaX = 20, deltaY = 0,
+            totalDeltaX = 20, totalDeltaY = 0}))
+    V.assert(physics.motion.holding and physics.motion.targetX > 0
+        and body.linearVelocity.x == beforeDrag,"UI累计拖动只更新有界目标，不立即给物品加力")
+    physics:Step(1/60)
+    V.assert(physics.motion.x > 0 and physics.motion.vx > 0,"UI手势在固定物理步驱动瓶子运动")
     CoreUI.HandleGestureEvent(GestureEvent.new(GestureEvent.Types.PanEnd,
         {x = px + 20, y = py, target = board}))
-    V.assert(board.state.dragging == false, "拖动结束清除手势状态")
+    V.assert(board.state.dragging == false and not physics.motion.holding
+        and physics.motion.targetX == 0,"拖动结束清除手势并由现有惯性回中")
     local saved = game:Snapshot()
     V.assert(saved.phase == "prepare" and saved.score == 0, "摇晃中存档回退回合开始前")
 end)

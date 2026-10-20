@@ -1,0 +1,346 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "recordedAt": "2026-10-20T05:58:11.757110+00:00",
+  "baselineRevision": "0e2266e80a593cad0a4c93bc5a1e025f105df7be",
+  "scope": "高频Lua临时数据复用；未改变玩法、物品数量、粒子数量或既有输入惯性参数。未提交或远端构建。",
+  "implementation": {
+    "records": "飞币、飘字、动作/消耗/入场/爆炸粒子、采样点、冲刺残影和目标进度粒子使用容量有界的空闲池；空闲容量不限制活动对象数量。",
+    "safety": "跨帧事务期间延迟清理/复用旧快照引用的记录；取消关闭Lua5.4 guard回收私有记录；稳定压缩保留顺序和金币回调顺序。",
+    "scratch": "固定物理步的物品列表、同步映射、接触/邻接图、软体绘制姿态和表现事务workspace复用；默认公开快照仍独立。",
+    "render": "缓存文字内容与测量结果、每个widget复用文字绘制包装器、复用500个浮尘记录与Color，仅更新变化的shader参数。",
+    "physicsBodies": "稳定UID物体保留既有刚体；新增/变形/消耗仍按原生命周期创建/销毁，未引入缺乏完整状态复位契约的刚体池。"
+  },
+  "urhoxExistingFacilities": [
+    {
+      "name": "ParticleEmitter / ParticleEmitter2D",
+      "purpose": "引擎粒子发射组件，可管理发射与粒子生命周期；并非当前自绘文字和Lua玩法记录的通用对象池。",
+      "sources": [
+        ".emmylua/ParticleEmitter.d.lua",
+        ".emmylua/ParticleEmitter2D.d.lua"
+      ]
+    },
+    {
+      "name": "UI.VirtualList",
+      "purpose": "虚拟列表的widget专用复用池。",
+      "sources": [
+        "urhox-libs/UI/Components/VirtualList.lua"
+      ]
+    },
+    {
+      "name": "示例 ParticlePool / TempPool",
+      "purpose": "项目自定义池的参考实现；在检查到的公开API中未发现通用Lua/GameObject池。",
+      "sources": [
+        "examples/07-minecraft-voxel-world/rendering/ParticleSystem.lua",
+        "examples/07-minecraft-voxel-world/utils/TempPool.lua"
+      ]
+    }
+  ],
+  "checks": {
+    "luaCompiledFiles": 174,
+    "regressionAssertions": 675,
+    "regressionSuites": {
+      "Bottle.Tests": {
+        "passed": true,
+        "count": 496
+      },
+      "Bottle.TutorialStateTests": {
+        "passed": true,
+        "count": 16
+      },
+      "Bottle.TutorialHandMotionTests": {
+        "passed": true,
+        "count": 15
+      },
+      "Bottle.RecordPoolTests": {
+        "passed": true,
+        "count": 8
+      },
+      "Bottle.FrameBudgetTests": {
+        "passed": true,
+        "count": 9
+      },
+      "Bottle.BoardEventStageTests": {
+        "passed": true,
+        "count": 6
+      },
+      "Bottle.ContactPerformanceTests": {
+        "passed": true,
+        "count": 9
+      },
+      "Bottle.PhysicsContactTests": {
+        "passed": true,
+        "count": 3
+      },
+      "Bottle.PhysicsStepTests": {
+        "passed": true,
+        "count": 4
+      },
+      "Bottle.StepContactFactsTests": {
+        "passed": true,
+        "count": 11
+      },
+      "Bottle.PresentationStateTests": {
+        "passed": true,
+        "count": 8
+      },
+      "Bottle.SimulationTests": {
+        "passed": true,
+        "count": 11
+      },
+      "Bottle.PhysicsAllocationTests": {
+        "passed": true,
+        "count": 8
+      },
+      "Bottle.ShakeTraceTests": {
+        "passed": true,
+        "count": 12
+      },
+      "Machine.ScreenFlowTests": {
+        "passed": true,
+        "count": 30
+      },
+      "Machine.UniformCacheTests": {
+        "passed": true,
+        "count": 6
+      },
+      "Bottle.PerformanceFeedbackTests": {
+        "passed": true,
+        "count": 15
+      },
+      "Machine.TargetProgressTests": {
+        "passed": true,
+        "count": 3
+      },
+      "Bottle.BoardAllocationTests": {
+        "passed": true,
+        "count": 5
+      }
+    },
+    "jsonRoundtripExecuted": true,
+    "jsonCodec": "Python标准库桥接，非引擎cjson二进制。",
+    "changedLuaFilesChecked": 35,
+    "lspErrorsAfterOfficialCompatibilityFilters": 0,
+    "lspOfficialFilterCounts": {
+      "integer-number-compat": 27,
+      "nullable-param-compat": 22
+    },
+    "physicsEquivalence": {
+      "cases": 24,
+      "steps_each": 180,
+      "finish": true,
+      "states_events_rng_exact": true
+    },
+    "feedbackBehaviorEqual": true,
+    "machineEquivalence": {
+      "trace_flow": {
+        "point_pool_created_at_most": 8,
+        "trail_pool_created_at_most": 6,
+        "exact_numeric_equality": true,
+        "render_state_frames": 2520
+      },
+      "dust": {
+        "frames": 1200,
+        "particle_states": 600000,
+        "records": 500,
+        "exact_mesh_totals": true,
+        "colors_created_after_warmup": 0
+      },
+      "progress": {
+        "frames": 1200,
+        "stable_order": true,
+        "particle_states": 350819,
+        "warm_created": 26,
+        "dense_peak": 780,
+        "warm_reused": 26000,
+        "free_capacity": 256
+      },
+      "tests": {
+        "Bottle.ShakeTraceTests": 12,
+        "Machine.ScreenFlowTests": 30,
+        "Machine.UniformCacheTests": 6,
+        "Machine.TargetProgressTests": 3
+      }
+    }
+  },
+  "allocationMicrobenchmarks": {
+    "method": "Lua5.4，预热后暂停GC计量临时分配；UI/NVG或物理输入使用边界替身。同种子同输入比较HEAD与当前实现。不含GPU/原生碰撞求解器/手机帧率。",
+    "feedback": {
+      "feedback": {
+        "before": {
+          "allocatedKiB": 4056.28125,
+          "iterations": 1000,
+          "cpuSeconds": 0.007000000000000006
+        },
+        "after": {
+          "allocatedKiB": 0.15625,
+          "iterations": 1000,
+          "cpuSeconds": 0.008000000000000007
+        },
+        "allocationReductionPercent": 99.99614794955355
+      },
+      "coin": {
+        "before": {
+          "allocatedKiB": 9515.625,
+          "iterations": 1000,
+          "cpuSeconds": 0.014000000000000012
+        },
+        "after": {
+          "allocatedKiB": 0.1875,
+          "iterations": 1000,
+          "cpuSeconds": 0.02100000000000002
+        },
+        "allocationReductionPercent": 99.99802955665025
+      },
+      "consume": {
+        "before": {
+          "allocatedKiB": 1523.5,
+          "iterations": 1000,
+          "cpuSeconds": 0.0020000000000000018
+        },
+        "after": {
+          "allocatedKiB": 0.21875,
+          "iterations": 1000,
+          "cpuSeconds": 0.0030000000000000027
+        },
+        "allocationReductionPercent": 99.98564161470298
+      },
+      "pop": {
+        "before": {
+          "allocatedKiB": 3148.5,
+          "iterations": 1000,
+          "cpuSeconds": 0.010000000000000009
+        },
+        "after": {
+          "allocatedKiB": 0.125,
+          "iterations": 1000,
+          "cpuSeconds": 0.01200000000000001
+        },
+        "allocationReductionPercent": 99.99602985548674
+      },
+      "text": {
+        "before": {
+          "allocatedKiB": 1640.8388671875,
+          "iterations": 2000,
+          "cpuSeconds": 0.003999999999999948
+        },
+        "after": {
+          "allocatedKiB": 0.1875,
+          "iterations": 2000,
+          "cpuSeconds": 0.0020000000000000018
+        },
+        "allocationReductionPercent": 99.98857291817316
+      }
+    },
+    "physics": {
+      "query": {
+        "before": {
+          "iterations": 5000,
+          "kb": 10273.4375,
+          "cpu_ms": 121.00000000000003
+        },
+        "after": {
+          "cpu_ms": 26.00000000000002,
+          "kb": 0.0,
+          "iterations": 5000
+        }
+      },
+      "contacts": {
+        "before": {
+          "iterations": 30,
+          "kb": 26857.91015625,
+          "cpu_ms": 299.0
+        },
+        "after": {
+          "cpu_ms": 261.0,
+          "kb": 3911.62890625,
+          "iterations": 30
+        }
+      },
+      "rotation": {
+        "before": {
+          "kb": 1640.8359375,
+          "iterations": 300,
+          "cpu_ms": 7.99999999999998
+        },
+        "after": {
+          "kb": 0.2109375,
+          "iterations": 300,
+          "cpu_ms": 5.000000000000004
+        }
+      },
+      "sync": {
+        "before": {
+          "iterations": 2000,
+          "kb": 2439.09375,
+          "cpu_ms": 10.999999999999982
+        },
+        "after": {
+          "kb": 579.71875,
+          "iterations": 2000,
+          "cpu_ms": 12.00000000000001
+        }
+      }
+    },
+    "interpretation": "重复特效的临时分配显著减少；部分池管理的CPU微测略增，不能将分配降幅当作FPS提升。",
+    "contactsAllocationReductionPercent": 85.43584037814745,
+    "syncAllocationReductionPercent": 76.23220714660927
+  },
+  "localPreview": {
+    "state": "stopped",
+    "processAlive": false,
+    "sessionId": "6a70223f-6fc2-48e4-9cb3-ec1f7803aee1",
+    "action": "已停止，按项目规则未重启；本轮最终源未进行native/GPU目视或帧率验收。",
+    "priorRuntimeErrors": [
+      "[2026-10-20 12_59_29_573][0] ERROR: Could not find resource Cube/Day/DaySpecularHDR.dds\r",
+      "[2026-10-20 12_59_29_599][0] ERROR: Can not load themis_x64.dll.\r",
+      "[2026-10-20 12_59_36_939][376] ERROR: Could not find resource Cube/Day/DaySpecularHDR.dds\r"
+    ]
+  },
+  "sourceSha256": {
+    "scripts/Bottle/Board.lua": "249c040463b9491251757935a34977413ffd08304995d2fae9b614305cda7891",
+    "scripts/Bottle/BoardAllocationTests.lua": "f31e8954f0e671744a9f239906ea761ea3601fb3955a3a29895ac0bf4550c257",
+    "scripts/Bottle/BoardEventStage.lua": "e22f3b01d69dbe3ab98a23f72a3683e31f3dbda4a7aa4f6edc3008fbfa4f3c09",
+    "scripts/Bottle/BoardEventStageTests.lua": "a6112a0497b05ee79bd74ece5d3e7ebe6dcdb7d1b6b59722b5f14b990298bb2e",
+    "scripts/Bottle/CoinPickup.lua": "173208ab5e5212729b7b0e838c6c342ac76a5f9c7e9721d8aa798d22eca10f46",
+    "scripts/Bottle/ConsumeFeedback.lua": "4f9e46fd31db7209dc317f05c9b1ba9fc14094b486d28ab7116e13d98026c2d2",
+    "scripts/Bottle/ConsumeFlashTests.lua": "69102cce1c0808a5c23282ca2faeb50210c86da4d0a9cca9416ff465b504e127",
+    "scripts/Bottle/DeckBoard.lua": "ab9b53fa329d959e8892319f29314c4830936f58a9243becec65d385121ccb2e",
+    "scripts/Bottle/ExpansionPhysics.lua": "1c3252856c9ab377ebbf1004262c6299086ecf7f97867bb4347daa298d7faa18",
+    "scripts/Bottle/FrameBudget.lua": "7178c1e4d72796eea4b4a3f97897373d7c2bfdff2a97045879a0adb1883d993e",
+    "scripts/Bottle/FrameBudgetTests.lua": "4aa5d4f0057e725b435811ca5ea16234cad860a7e334d23f52b9c914011f6dd5",
+    "scripts/Bottle/Game.lua": "07411f8789c3adaac5a4ce9a26fc59e21060b02c225bbcb762cdb0c92a641f7f",
+    "scripts/Bottle/ItemFeedback.lua": "71c46e347faa29e060c5d99c5e09318f2400dcedf9f955c1865cfacc3103e933",
+    "scripts/Bottle/PerformanceFeedbackTests.lua": "79c89b36654d790726ed9fb04765fc0865b0445c89d8cb938954951043010c34",
+    "scripts/Bottle/Physics.lua": "515a154c85bf840d653c61842e0cc681e21dc5f3a9ea5d072592f0a9c54c0212",
+    "scripts/Bottle/PhysicsAllocationTests.lua": "dfb690cefe811f2a5b023f691f599271b931974b9d2ff3de7e85adce7056dc6f",
+    "scripts/Bottle/PopIn.lua": "aa448c1a55d84e33209c14f871ddc109d10dadbbbffad31fea998b1485b12c9e",
+    "scripts/Bottle/RecordPool.lua": "93615c35902e6492e03ca8833565cb5be3a2c280ea16daa3813eef661b9fa766",
+    "scripts/Bottle/RecordPoolTests.lua": "a8b4f4aa7176f44134dd4ee2845e4397752a8e65e985c4e579aee883980ae1a6",
+    "scripts/Bottle/RelicExpansion.lua": "e250ba10fb4a1489379b8fe12eb2af65fff370b30a8488cfa9580e533ee6fc09",
+    "scripts/Bottle/ShakeTrace.lua": "723f1833fecd7bfe529aa9d30511dc8b0c0e9c39c571176d48821e60696002e2",
+    "scripts/Bottle/ShakeTraceTests.lua": "d11996380c3b960d9725b62ee559cb3b2c8e68f07399baf00aef4b3694fe36c6",
+    "scripts/Bottle/Simulation.lua": "70c48cbe1dd8ec67b783ca1398a52f6bd772aeec2390775258f0ba8b38dfdddf",
+    "scripts/Bottle/SoftBacon.lua": "ea179d2a4e4cede205a4669c377563e880e1a5d2b5a478a6367f5309dd3b79b5",
+    "scripts/Bottle/SoftView.lua": "d2674d028f5486d2a55f60b661c0da3c03e20e42d15e4e6cfca57b1a23406e8f",
+    "scripts/Bottle/StepContactFacts.lua": "3f1fe6fa487241451a0c88e3623da36c9b80d91cbd90f0830c560688af67f1d3",
+    "scripts/Bottle/TextMotion.lua": "ef8fb6ff938c674ea032707c4274f3fcf861fa7540d513fa88971ecd8afecbf3",
+    "scripts/Machine/DustField.lua": "930d484dcd28863e58eb041f2c78940184a0498433de918e913a02a2275c5416",
+    "scripts/Machine/LitSpriteScene.lua": "890be89563f6a15d5168181e3f5ab1a30fadcf00e269741bb224e42ce6f43f65",
+    "scripts/Machine/ScreenFlow.lua": "ec0eb3529cf103752811248258f505acbb858f170fdb6dc2381ad0bdcce752be",
+    "scripts/Machine/ScreenFlowTests.lua": "13b3a75f0bfb0acd9c3b15276b262887bbdb1f65ca98b52e0036a69f2697ccdf",
+    "scripts/Machine/TargetProgress.lua": "9804cf49cbd532dc69dc0551cfcc4a77e6430e2567ddd871edaa9ba1c230f436",
+    "scripts/Machine/TargetProgressTests.lua": "c9333e3969476454a12266e6d40965148a9a936d3d431dfb297e13c4e9c8707a",
+    "scripts/Machine/UniformCache.lua": "dfdca79fa4562049b79bf4216511d296e93d9a8ecfa73b111887499f59d44a9d",
+    "scripts/Machine/UniformCacheTests.lua": "6728c5284e51a515931c0e3fced05721f8e24dbe534e3c25d3d60db027caee8d"
+  },
+  "reproduction": {
+    "regression": ".tmp/pooling-complete-check.py",
+    "lsp": ".tmp/pooling-all-lsp-check.py",
+    "feedback": ".tmp/feedback-pool-20261020/compare-feedback.py",
+    "machine": ".tmp/machine-pooling-20261020/verify.py",
+    "runtime": "本机已安装Python3.12与.tmp/lua-check中的lupa.lua54；EmmyLua通过已安装Maker官方诊断规则过滤。",
+    "nativeBenchmark": "python benchmarks/native-pooling/run-all.py",
+    "nativeBenchmarkReport": "docs/record-pooling-native-20261020.json"
+  }
+}

@@ -1,0 +1,218 @@
+{
+  "date": "2026-10-20",
+  "feature": "Running discrete successful relic effects: spring scale, shake, single short sound",
+  "baselineCommit": "b01aeceed1941fe02d1a4732d8e7cb749df2904a",
+  "scope": {
+    "discreteRunningRelics": 27,
+    "passiveQueriesExcluded": 8,
+    "nonRunningRelicsExcluded": 2,
+    "physicsSchedulerUnchanged": true,
+    "newRngCalls": 0,
+    "soundSourcesAdded": 1,
+    "soundMinIntervalMs": 90,
+    "springDurationSeconds": 0.46,
+    "maxScaleEnvelope": 1.35
+  },
+  "rules": {
+    "passed": true,
+    "total": 1527,
+    "suites": {
+      "Tests": 517,
+      "ExpansionUITests": 859,
+      "FrameBudgetTests": 9,
+      "SimulationTests": 23,
+      "PresentationStateTests": 8,
+      "BoardEventStageTests": 6,
+      "ContactPerformanceTests": 9,
+      "PhysicsContactTests": 3,
+      "AdaptiveCCDTests": 20,
+      "PhysicsStepTests": 10,
+      "StepContactFactsTests": 11,
+      "TutorialStateTests": 16,
+      "TutorialHandMotionTests": 15,
+      "PerformanceFeedbackTests": 21
+    },
+    "jsonRoundtripExecuted": true,
+    "inputRegression": {
+      "pending": true,
+      "lostPixels": 0,
+      "cumulativePixels": 31,
+      "positionsOnlyAdvanceOnFixedStep": true,
+      "targetMeters": 0.31,
+      "inputSamples": 2
+    }
+  },
+  "differentialHooks": {
+    "passed": 33,
+    "checks": "Feedback enabled/disabled: live item states, balances, phase, revision, queue, RNG and original events equal"
+  },
+  "audio": {
+    "scope": "Actual Audio.lua public API with isolated Lua 5.4 engine audio doubles; not device listening",
+    "passed": 12,
+    "checks": [
+      "Before Init is silent and allocation-free",
+      "Independent non-looped effect source and reward clip",
+      "One batch of many relics emits one voice",
+      "Same-frame bursts and adjacent batches are debounced",
+      "Dropped sounds never queue or replay",
+      "Zero invalid and non-finite counts are silent",
+      "Repeated triggers never allocate extra sources",
+      "Existing music gains are unchanged",
+      "Existing effects retain their assets and gains",
+      "Shutdown explicitly releases the dedicated source",
+      "Re-init clears debounce and does not reuse disposed sources",
+      "Missing reward asset fails silently without fallback pop"
+    ],
+    "audioSha256": "44202cd12bf6ca8f31682bd09f08be4e8257bdb834b570935c14bd8633fbd736",
+    "audioUnchangedDuringCheck": true,
+    "resources": [
+      {
+        "file": "balatro_mult.wav",
+        "seconds": 0.16,
+        "sampleRate": 44100,
+        "channels": 1,
+        "sampleWidth": 2,
+        "rmsDbFS": -24.428445760759423,
+        "peak": 0.36846923828125
+      },
+      {
+        "file": "balatro_chip.wav",
+        "seconds": 0.16,
+        "sampleRate": 44100,
+        "channels": 1,
+        "sampleWidth": 2,
+        "rmsDbFS": -23.928739234445548,
+        "peak": 0.334136962890625
+      },
+      {
+        "file": "balatro_coin.wav",
+        "seconds": 0.16,
+        "sampleRate": 44100,
+        "channels": 1,
+        "sampleWidth": 2,
+        "rmsDbFS": -26.967309036577024,
+        "peak": 0.287689208984375
+      },
+      {
+        "file": "balatro_select_high.wav",
+        "seconds": 0.16,
+        "sampleRate": 44100,
+        "channels": 1,
+        "sampleWidth": 2,
+        "rmsDbFS": -22.157557415420737,
+        "peak": 0.382598876953125
+      },
+      {
+        "file": "balatro_win.wav",
+        "seconds": 0.65,
+        "sampleRate": 44100,
+        "channels": 1,
+        "sampleWidth": 2,
+        "rmsDbFS": -23.561351227472475,
+        "peak": 0.40130615234375
+      }
+    ]
+  },
+  "lsp": {
+    "checkedFiles": 16,
+    "rawErrorCount": 17,
+    "officialCompatibilityFilters": {
+      "nullable-param-compat": 13,
+      "integer-number-compat": 4
+    },
+    "remainingErrors": 0,
+    "sourceUnchanged": true
+  },
+  "native": [
+    {
+      "bodyCount": 20,
+      "checks": {
+        "completed": true,
+        "actualBodyCount": true,
+        "twoRelicsSameCommittedBatch": true,
+        "publishOnMainAfterLiveBind": true,
+        "audioPlayed": true,
+        "elasticZoom": true,
+        "shakeRotation": true,
+        "litIconActive": true,
+        "noAccumulatedZoom": true,
+        "cancelledStagedBatch": true,
+        "cancelDidNotPublish": true,
+        "cancelDidNotPlay": true,
+        "newRunReset": true,
+        "screenshotsSaved": true,
+        "screenshotTempFilesDeleted": true
+      },
+      "checksPassed": 15,
+      "played": 1,
+      "maxObservedScale": 1.2212448121823023,
+      "minObservedScale": 0.9628873131940586,
+      "maxObservedRotationDegrees": 3.104884344801323,
+      "frames": 56,
+      "frozenManifestSha256": "ed442ac061bcef84b9822de2fdb79455cd2554e026f407e71ed25e62d5d8aa8b",
+      "productionUnchangedDuringRun": true,
+      "savesUnchanged": true,
+      "report": "outputs/relic-trigger-feedback-20261020/final-r3-20/summary.json"
+    },
+    {
+      "bodyCount": 40,
+      "checks": {
+        "completed": true,
+        "actualBodyCount": true,
+        "twoRelicsSameCommittedBatch": true,
+        "publishOnMainAfterLiveBind": true,
+        "audioPlayed": true,
+        "elasticZoom": true,
+        "shakeRotation": true,
+        "litIconActive": true,
+        "noAccumulatedZoom": true,
+        "cancelledStagedBatch": true,
+        "cancelDidNotPublish": true,
+        "cancelDidNotPlay": true,
+        "newRunReset": true,
+        "screenshotsSaved": true,
+        "screenshotTempFilesDeleted": true
+      },
+      "checksPassed": 15,
+      "played": 1,
+      "maxObservedScale": 1.2223154024601124,
+      "minObservedScale": 0.9583211571989666,
+      "maxObservedRotationDegrees": 3.235408233709095,
+      "frames": 53,
+      "frozenManifestSha256": "ed442ac061bcef84b9822de2fdb79455cd2554e026f407e71ed25e62d5d8aa8b",
+      "productionUnchangedDuringRun": true,
+      "savesUnchanged": true,
+      "report": "outputs/relic-trigger-feedback-20261020/final-r3-40/summary.json"
+    }
+  ],
+  "nativeFinalSourceDifference": {
+    "paths": [
+      "scripts/Bottle/PerformanceFeedbackTests.lua"
+    ],
+    "reason": "Final explicit Widget type annotation in test fixture only; no runtime behavior change. Current fixture included in final 1527 regression and LSP."
+  },
+  "sourceSha256": {
+    "scripts/Bottle/Audio.lua": "44202cd12bf6ca8f31682bd09f08be4e8257bdb834b570935c14bd8633fbd736",
+    "scripts/Bottle/Effects.lua": "b5b7caaf8c75ddc6c69d1e02db760efd1f58d568775c738267cd4cf158c57718",
+    "scripts/Bottle/ExpansionEffects.lua": "b5a682ba09d21d49d1493de937f1bc6cba73aaab1fe69491885e0fad992c9412",
+    "scripts/Bottle/ExtraEffects.lua": "aee76faa4027b3ac3dc2cdbb878a087f2337b0251ae444df4743de284144a4a1",
+    "scripts/Bottle/Game.lua": "49ea9c6ccc93182f912da5cfe911942e5c6165d70591f8ceec1187f291813542",
+    "scripts/Bottle/GameLifecycle.lua": "bf1bb2e44a3e424e8500805b652e8b2f12abc46250f78ec1b77e1f9a5315ba31",
+    "scripts/Bottle/PerformanceFeedbackTests.lua": "07f4f1383eb97ea71522bf98321ae488ea2e206a92f79fddb8d50b6427c1bbad",
+    "scripts/Bottle/RelicEffects.lua": "cd4dd7479042fec5dadafd793fdcffa7868faa62903cc7ef0257060d26cc6ad3",
+    "scripts/Bottle/RelicExpansion.lua": "ba08576c1f7ebe6b238b10394240f7b2b68285f297741af0fea941fb11288834",
+    "scripts/Bottle/RelicView.lua": "b28d5d447b9aa1831a28d0971ed99b8d54151c6b1d4a4abf786067127779e504",
+    "scripts/Bottle/RotationEffects.lua": "595d759996efeb8f396c298e0a4bd319a610e384bd344a7a72c8f4b4dd242300",
+    "scripts/Bottle/Simulation.lua": "932f9a75439538822bd2a376485c39ce22495495c10ba2578d5adc1d0ec213af",
+    "scripts/Bottle/SimulationTests.lua": "c0f96d722512a15c91324115f0d58f19ceade421196c31910bb701da43192a09",
+    "scripts/Bottle/TriggerFeedback.lua": "341907904e6cf70f3bee8dfc4c39a512870345a45e105cdd827897fe53ff3107",
+    "scripts/Bottle/TriggerFeedbackTests.lua": "5479262bdd77b976aad6a5c5170961e396f401cbef1553a246438b56ece48cbf",
+    "scripts/main.lua": "abfc85e418b834aa5d71869c60fc1c58b5da60ef8940a24c1c78d2b022457576"
+  },
+  "limitations": [
+    "Windows native D3D11 actual main/UI/Box2D/audio API checks, not phone or browser measurement.",
+    "Screenshots verify layout and lit icon; numeric frame samples verify transient scale/rotation. No human listening claim.",
+    "Known pre-existing HDR DDS/themis startup errors remain in native raw logs.",
+    "Focused feedback checks do not establish stable 60 FPS or supersede prior native physics performance findings."
+  ]
+}

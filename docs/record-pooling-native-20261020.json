@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-20",
+  "recordedAt": "2026-10-20T06:29:56.757729+00:00",
+  "baselineRevision": "0e2266e80a593cad0a4c93bc5a1e025f105df7be",
+  "conclusion": "未观察到明显的整体帧率提升。20/40件恒定物体与密集飘字飞币场景的帧间隔p95约17–18ms；Lua堆峰值下降约4–6%。",
+  "method": {
+    "actualRuntime": "UrhoXRuntime 1032014, Direct3D11, NVIDIA GeForce RTX4070SUPER",
+    "groups": 6,
+    "warmupFramesPerGroup": 30,
+    "measuredFramesPerGroup": 300,
+    "measuredFrameTotal": 1800,
+    "fixture": "20/40球固定初始与运行数量、seed777、相同Board.OnPanMove正弦输入、默认4ms分帧预算/12速度迭代/8位置迭代；真实main/Box2D/NanoVG/500浮尘/CRT后处理。",
+    "fxStress": "独立人工表现负载：每12帧8个score和3个triggerReward；两组物品数量、事件数、飘字与飞币峰值匹配。非自然规则收益。",
+    "screenshotDuringMeasurement": false,
+    "computerUseForBenchmark": false,
+    "gc": "保持默认自然GC，不逐帧强制收集；heap不等于总分配或GC停顿时间。",
+    "clock": "引擎Time API绑定失败后，os.clock与Runtime日志三点校准误差≤1ms，本机验证它与elapsed时间一致；cpu_ms字段是区间耗时代理，不是独立CPU计数。"
+  },
+  "results": [
+    {
+      "scenario": "20-ball",
+      "frameP95MsBefore": 17.99999999999909,
+      "frameP95MsAfter": 17.00000000000091,
+      "frameP99MsBefore": 20.0,
+      "frameP99MsAfter": 21.99999999999909,
+      "updateMeanMsBefore": 1.5100000000000198,
+      "updateMeanMsAfter": 1.450000000000032,
+      "luaHeapPeakMiBBefore": 14.006792068481445,
+      "luaHeapPeakMiBAfter": 13.422521591186523,
+      "luaHeapPeakReductionPercent": 4.171336837430939,
+      "popupPeak": 12.0,
+      "coinPeak": 0.0,
+      "comparable": true
+    },
+    {
+      "scenario": "40-ball",
+      "frameP95MsBefore": 18.0,
+      "frameP95MsAfter": 18.0,
+      "frameP99MsBefore": 19.0,
+      "frameP99MsAfter": 21.0,
+      "updateMeanMsBefore": 2.8999999999999138,
+      "updateMeanMsAfter": 2.8133333333333392,
+      "luaHeapPeakMiBBefore": 14.708810806274414,
+      "luaHeapPeakMiBAfter": 14.033945083618164,
+      "luaHeapPeakReductionPercent": 4.588173248977878,
+      "popupPeak": 22.0,
+      "coinPeak": 0.0,
+      "comparable": true
+    },
+    {
+      "scenario": "20-ball-fx",
+      "frameP95MsBefore": 18.0,
+      "frameP95MsAfter": 17.99999999999909,
+      "frameP99MsBefore": 19.00000000000091,
+      "frameP99MsAfter": 19.99999999999909,
+      "updateMeanMsBefore": 1.5233333333333106,
+      "updateMeanMsAfter": 1.5199999999999303,
+      "luaHeapPeakMiBBefore": 14.63952922821045,
+      "luaHeapPeakMiBAfter": 13.81164264678955,
+      "luaHeapPeakReductionPercent": 5.655144837755821,
+      "popupPeak": 122.0,
+      "coinPeak": 96.0,
+      "comparable": true
+    }
+  ],
+  "functionalAssertions": {
+    "total": 12,
+    "passed": 12,
+    "failed": 0
+  },
+  "functionalResults": {
+    "actual_round_popups_coins_drain": {
+      "runningCoin": false,
+      "noPlayerStorageAccess": true,
+      "finalScore": 98,
+      "passed": true,
+      "performanceRunningCoin": false,
+      "finalPhase": "draft",
+      "finiteScans": 2154,
+      "performanceRunningPopup": false,
+      "ruleBalanceChecked": true,
+      "runningPopup": false,
+      "validatedPopupRecords": 10879,
+      "lastRoundScore": 98,
+      "virtualStepsAfterPerformance": 1064
+    },
+    "actual_stage_commit_order": {
+      "oldPopupAgeDuringPending": 0.05,
+      "poolCapabilityPresent": true,
+      "actualStage": true,
+      "pinAssertionsSkipped": false,
+      "passed": true,
+      "slices": 25,
+      "maxCheckpoints": 1,
+      "commitOrderChecked": true,
+      "pinsAfter": 0,
+      "pinsBefore": 0,
+      "pinnedCount": 0,
+      "cancelled": false
+    },
+    "actual_score_fixture_lifecycle": {
+      "passed": true,
+      "actualStage": true,
+      "credited": 19,
+      "allPopupsExpired": true,
+      "naturalRuleReward": false,
+      "actualEffects": true,
+      "memoryOnly": true,
+      "allCoinsArrived": true,
+      "initialCoinCount": 13,
+      "injectedFixture": true,
+      "afterMeasuredSamples": true,
+      "eventTotal": 19,
+      "actualBoardUpdate": true,
+      "eventCount": 3,
+      "virtualSteps": 121
+    },
+    "actual_stage_cancel_pin": {
+      "oldPopupAgeDuringPending": 0.05,
+      "poolCapabilityPresent": true,
+      "actualStage": true,
+      "pinAssertionsSkipped": false,
+      "passed": true,
+      "slices": 24,
+      "maxCheckpoints": 1,
+      "commitOrderChecked": false,
+      "pinsAfter": 0,
+      "pinsBefore": 0,
+      "pinnedCount": 0,
+      "cancelled": true
+    }
+  },
+  "integrity": {
+    "production_scripts_unchanged": true,
+    "player_saves_unchanged": true,
+    "frozen_scripts_unchanged": true,
+    "shared_assets_unchanged": true
+  },
+  "limitations": [
+    "每组只有一次300帧采样，系统调度和渲染波动会影响p99/max；不能宣称小幅差异为稳定性能收益。",
+    "在前三轮场景比较中，只预分配样本表本身；字段扩表的少量公共分配同样存在于前后版本，FX压力组进一步预填字段。",
+    "早期mixed场景保留为诊断：测量内截图造成102–103ms停顿，且自然物品增生不一致，不用于正式结论。",
+    "以上为本机Windows原生结果，不代表网页或手机帧率。"
+  ],
+  "rawRuntimeStatus": {
+    "result": "FAIL",
+    "errors": {
+      "lua_errors": 0,
+      "resource_errors": 1,
+      "engine_errors": 1,
+      "total_errors": 2
+    },
+    "missingResources": [
+      "Cube/Day/DaySpecularHDR.dds"
+    ],
+    "explanation": "原始总结果FAIL保留：现有Cube/Day/DaySpecularHDR.dds与themis_x64.dll环境缺失；业务断言全过、正式组Lua错误0。"
+  },
+  "reproduce": {
+    "command": [
+      "python",
+      "benchmarks/native-pooling/run-all.py"
+    ],
+    "repeatCommand": [
+      "python",
+      "benchmarks/native-pooling/run-all.py",
+      "--repeat",
+      "3"
+    ],
+    "prepareOnlyCommand": [
+      "python",
+      "benchmarks/native-pooling/run-all.py",
+      "--prepare-only"
+    ],
+    "runtimeOverride": "--runtime <已安装的UrhoXRuntime.exe路径>",
+    "runner": "benchmarks/native-pooling/native-run.py",
+    "comparison": "outputs/pooling-native-benchmark/<run-tag>-comparison.json",
+    "functional": "outputs/pooling-native-20261020/functional-candidate-20-mixed/summary.json",
+    "generatedOutputDirectory": "outputs/pooling-native-benchmark/",
+    "archivedMeasurementComparison": "outputs/pooling-native-20261020/comparison.json",
+    "storage": "可复跑源与562字节RenderPath fixture纳入仓库；冻结源、原始运行日志和逐帧样本保留在本地忽略目录。"
+  },
+  "benchmarkSourceSha256": {
+    "compare.py": "193d7c5a8ca5dfa10d06c8813b708466644821b4dec3a6b8824667e1f2c97056",
+    "native-checks.lua": "36d3251feb203c88ae521c1ff2087e4acecab437db86e877ea0f0edf282425d2",
+    "native-entry.lua": "9b6b950bee9e063e7388ff40fd14fe2943724bee5b6ea896b82a55348c10b065",
+    "native-functional.lua": "837736aed6d898a0f56fe86b8c48c3c1f527b1799cd65d434eb298e744b157b0",
+    "native-run.py": "bb7013ebdda736fc332e6337d9b5c6e2e495dbac2f88d56aa2f41f808ce42e9b",
+    "run-all.py": "336b830bc120ae3619be0485e89c10dedc7bc82e81738f8ea1f5756eb6c6fdbf",
+    "validate-functional.py": "d2f0650d4ce6999b813be1ae4702e315a38a3375f054c87f558d340e57e06a49"
+  },
+  "submissionPackaging": {
+    "directory": "benchmarks/native-pooling",
+    "generatedOutputDirectory": "outputs/pooling-native-benchmark",
+    "validation": "3个Python源编译、7组prepare-only、原始数据compare复核通过；没有重跑Runtime或改变采样逻辑。3个Lua与已测入口逐字节一致。",
+    "sourceSha256": {
+      "benchmarks/native-pooling/compare.py": "ba46827daf8a28d6b416ecb9656a61708804cdabef0f275e7cdd2bdd1d811957",
+      "benchmarks/native-pooling/fixture-resources/RenderPaths/Forward.xml": "45fea16ba9d2af230762b65ada3f3daa13aaff0e51aa99dba2dd79a4d576624c",
+      "benchmarks/native-pooling/native-checks.lua": "36d3251feb203c88ae521c1ff2087e4acecab437db86e877ea0f0edf282425d2",
+      "benchmarks/native-pooling/native-entry.lua": "9b6b950bee9e063e7388ff40fd14fe2943724bee5b6ea896b82a55348c10b065",
+      "benchmarks/native-pooling/native-functional.lua": "837736aed6d898a0f56fe86b8c48c3c1f527b1799cd65d434eb298e744b157b0",
+      "benchmarks/native-pooling/native-run.py": "840026fe0c1a68a0ae5b5c2ed7db7e5cfbb51e8099f0c4907b12f09590be50dd",
+      "benchmarks/native-pooling/run-all.py": "2087b4d044bebca596e18f0aa2e7f34309da8a42f859cb70096a069b3060af75"
+    }
+  }
+}

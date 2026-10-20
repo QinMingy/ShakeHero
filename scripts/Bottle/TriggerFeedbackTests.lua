@@ -54,6 +54,54 @@ local function Reward(events, uid, amount, rewardKind, trigger)
         "收益类别/触发类别错误：" .. tostring(event.rewardKind) .. "/" .. tostring(event.trigger))
 end
 
+---@param events GameEvent[]
+---@param id string
+---@param expected integer
+local function Relic(events,id,expected)
+    local count=0
+    for _,event in ipairs(Events(events,"relicTrigger")) do
+        assert(event.uid==0,"遗物反馈不能伪装成瓶内物品")
+        if event.id==id then count=count+1 end
+    end
+    assert(count==expected,id.." expected="..expected.." actual="..count)
+end
+
+-- 精确检查请求范围及次数，防止反馈增加随机数、重投或成功判定。
+---@param game BottleGame
+---@param requests integer[][] {maximum,result}
+---@return fun()
+local function Random(game,requests)
+    local index=0
+    rawset(game,"_RandomInt",function(_,maximum)
+        index=index+1
+        local request=assert(requests[index],"反馈不得追加随机判定")
+        assert(maximum==request[1] and request[2]>=1 and request[2]<=maximum,"随机范围改变")
+        return request[2]
+    end)
+    return function() assert(index==#requests,"预期随机判定未执行") end
+end
+
+---@generic T
+---@param value T
+---@return T
+local function Copy(value)
+    if type(value)~="table" then return value end
+    local result={}
+    for key,entry in pairs(value) do result[key]=Copy(entry) end
+    return result --[[@as T]]
+end
+
+---@param a any
+---@param b any
+---@return boolean
+local function Equal(a,b)
+    if type(a)~=type(b) then return false end
+    if type(a)~="table" then return a==b end
+    for key,value in pairs(a) do if not Equal(value,b[key]) then return false end end
+    for key in pairs(b) do if a[key]==nil then return false end end
+    return true
+end
+
 ---@type {name:string,run:fun()}[]
 local cases = {}
 ---@param name string
@@ -394,6 +442,396 @@ Test("分裂器折入基础价值的永久加成和倍率不虚报负收益", fu
     assert(ghosts==2 and #Events(events,"triggerReward")==0,
         "数值归一化不能显示永久-10或倍率损失")
     Close(game.roundScore,0)
+end)
+
+Test("偶数回合获得刷新发一次独立提示、重复结算不重发", function()
+    for _, round in ipairs({1,2,3,4}) do
+        local game = Fixture({"apple"})
+        game.round = round
+        local before = game.refreshes
+        local events = game:Finish()
+        local gains = Events(events, "refreshGain")
+        assert(#gains == (round % 2 == 0 and 1 or 0))
+        Close(game.refreshes, before + #gains)
+        if #gains > 0 then assert(gains[1].uid == 0 and gains[1].value == 1) end
+        assert(#Events(game:Finish(), "refreshGain") == 0)
+        assert(#Events(game:RevealStep(100), "refreshGain") == 0)
+        Close(game.roundScore, 2)
+    end
+end)
+
+Test("鸡蛋刷新成功才提示且保留自耗前位置、多来源不丢失", function()
+    local game = Fixture({"egg","egg","egg"})
+    game.round = 2
+    for _, egg in ipairs(game:BottleItems()) do egg.bottleRounds = 3 end
+    local calls = 0
+    rawset(game, "_RandomInt", function(_, maximum)
+        assert(maximum == 2)
+        calls = calls + 1
+        return calls == 2 and 2 or 1
+    end)
+    local before = game.refreshes
+    local events = game:Finish({positions={[1]={x=.4,y=1},[2]={x=-.2,y=2},[3]={x=.8,y=3}}})
+    local gains = Events(events, "refreshGain")
+    assert(#gains == 3 and calls == 3)
+    assert(gains[1].uid == 1 and gains[2].uid == 3 and gains[3].uid == 0)
+    Close(gains[1].x,.4); Close(gains[1].y,1)
+    Close(gains[2].x,.8); Close(gains[2].y,3)
+    Close(game.refreshes,before+3)
+    assert(#Events(events,"score") == 3 and game.roundScore == 9)
+    assert(#Events(game:Finish(),"refreshGain") == 0 and calls == 3)
+end)
+
+Test("未成熟或自耗被阻止的鸡蛋不提示、不抽概率", function()
+    local Expansion = require("Bottle.ExpansionEffects")
+    local game = Fixture({"egg"})
+    local events = {}
+    rawset(game, "_RandomInt", function() error("失败不得抽概率") end)
+    Expansion.AfterSettle(game,events)
+    assert(#Events(events,"refreshGain") == 0)
+    Item(game,1).bottleRounds = 3
+    rawset(game,"_Destroy",function() return false end)
+    Expansion.AfterSettle(game,events)
+    assert(#Events(events,"refreshGain") == 0 and game.refreshes == 1)
+end)
+
+Test("刷新提示不发金币不改RNG、无价值图标、恢复不重放", function()
+    local game = Fixture({"apple"})
+    local beforeRng,beforeScore,beforePop = game._rngState,game.score,game._roundPopCount
+    local events = {}
+    Feedback.Refresh(events)
+    Feedback.Refresh(events,Item(game,1),{x=.2,y=1})
+    assert(#events == 2 and #Events(events,"score") == 0)
+    assert(game._rngState == beforeRng and game.score == beforeScore and game._roundPopCount == beforePop)
+    local prefix,amount,icon = Feedback.Content(1,"refresh","refresh","刷新")
+    assert(prefix == "刷新" and amount == "+1" and not icon)
+    local restored = Game.Restore(Repair.Fixture({"apple"}):Snapshot())
+    assert(#restored.startEvents == 0 and restored.refreshes == 1)
+end)
+
+Test("遗物反馈只追加running已拥有的元数据，同数组去重且不改变规则或随机状态",function()
+    local game=Fixture({"apple"},{small_savings=true,credit_line=true})
+    local before=Copy(game)
+    local events={}
+    Feedback.Relic(game,events,"small_savings")
+    Feedback.Relic(game,events,"small_savings")
+    Feedback.Relic(game,events,"credit_line")
+    Feedback.Relic(game,events,"spin_reward")
+    Feedback.Relic(game,nil,"small_savings")
+    Relic(events,"small_savings",1);Relic(events,"credit_line",1);Relic(events,"spin_reward",0)
+    assert(#events==2 and Equal(game,before),"表现不能改金币、实例、revision、pop或RNG")
+    for _,phase in ipairs({"prepare","settle","reveal","draft","over"}) do
+        game.phase=phase --[[@as BottlePhase]]
+        local rejected={}
+        Feedback.Relic(game,rejected,"small_savings")
+        assert(#rejected==0,"非running不能播放摇晃反馈")
+    end
+    game.phase="running"
+    local nextBatch={}
+    Feedback.Relic(game,nextBatch,"small_savings")
+    Relic(nextBatch,"small_savings",1)
+end)
+
+Test("真实创建信用卡与积少成多同批各反馈一次，不重复入账且旧无events调用兼容",function()
+    local game=Fixture({"apple"},{small_savings=true,credit_line=true})
+    local score,total,roundScore,rng=game.score,game.totalScore,game.roundScore,game._rngState
+    local events={}
+    local first=game:_Create("credit_card",false,events)
+    local second=game:_Create("credit_card",false,events)
+    Close(first.permBonus,15);Close(second.permBonus,15)
+    Close(game:_Value(first),25);Close(game.score,score+2);Close(game.totalScore,total+2)
+    Close(game.roundScore,roundScore);assert(game._rngState==rng)
+    Relic(events,"credit_line",1);Relic(events,"small_savings",1)
+    assert(not pcall(function() game:_Create("not_a_real_item",false,events) end))
+    assert(#events==2 and game.score==score+2,"失败创建不能反馈或加钱")
+    local legacy=game:_Create("credit_card")
+    Close(legacy.permBonus,15);Close(game.score,score+3);assert(#events==2)
+    game.phase="settle"
+    local settled={}
+    game:_Create("credit_card",false,settled)
+    assert(#settled==0,"非running创建仍执行旧数值但不播摇晃反馈")
+end)
+
+Test("回合初始作弊骰子与六点大奖走真实Start事件且不增加随机调用",function()
+    local game=Repair.Fixture({"die_d6"},{cheat_dice=true,dice_jackpot=true})
+    local done=Random(game,{{5,5}})
+    assert(game:Start());done()
+    local die=Item(game,1)
+    Close(die.rollValue,6);Close(die.scale,1.5);Close(die.jackpotBonus,.5)
+    Relic(game.startEvents,"cheat_dice",1);Relic(game.startEvents,"dice_jackpot",1)
+    local scores=Events(game.startEvents,"score",1)
+    assert(#scores==1);Close(scores[1].value,game:_Value(die));Close(game.roundScore,scores[1].value or 0)
+end)
+
+Test("额外重投只在第二次实际投掷成功反馈，额度耗尽不再抽签或反馈",function()
+    local game=Fixture({"gambler","die_d6"},{one_more_round=true,cheat_dice=true})
+    local done=Random(game,{{5,2},{5,3}})
+    local contacts={pairs={{1,2}}}
+    local events=game:Step(0,contacts);done()
+    assert(Item(game,1).rerolled[2]==2);Close(Item(game,1).permBonus,2)
+    Relic(events,"one_more_round",1);Relic(events,"cheat_dice",1)
+    local score,rng=game.score,game._rngState
+    local exhausted=game:Step(0,contacts);done()
+    assert(#Events(exhausted,"relicTrigger")==0 and game.score==score and game._rngState==rng)
+end)
+
+Test("赌神令牌真正转化才反馈，概率失败和已尝试状态不反馈",function()
+    for _,roll in ipairs({1,2}) do
+        local game=Fixture({"gambler"},{gambling_token=true})
+        local gambler=Item(game,1)
+        gambler.valueBase=50
+        local done=Random(game,{{4,roll}})
+        local events=game:Step(0,{});done()
+        Relic(events,"gambling_token",roll==1 and 1 or 0)
+        if roll==1 then assert(gambler.id=="gambling_god");Close(gambler.permBonus,50)
+        else assert(gambler.id=="gambler" and gambler.tokenAttempted) end
+        local again=game:Step(0,{});done()
+        Relic(again,"gambling_token",0)
+    end
+end)
+
+Test("精进刀法第三份水果生成才反馈，50%失败保留两份与原随机次数",function()
+    for _,roll in ipairs({1,2}) do
+        local game=Fixture({"knife","apple"},{knife_skill=true})
+        local done=Random(game,{{2,roll}})
+        local events=game:Step(0,{pairs={{1,2}},positions={[2]={x=.2,y=2}}});done()
+        local count=0
+        for _,item in ipairs(game:BottleItems()) do if item.id=="apple_half" then count=count+1 end end
+        assert(count==(roll==1 and 3 or 2))
+        Relic(events,"knife_skill",roll==1 and 1 or 0)
+        Close(game.roundScore,0)
+    end
+end)
+
+Test("水果成功被耗后转基因成功才反馈，创建收益只增加原定一金币",function()
+    for _,success in ipairs({true,false}) do
+        local game=Fixture({"glutton","apple"},{gm_fruit=true,small_savings=true})
+        local before=game.score
+        local done=Random(game,success and {{10,1},{4,1},{101,51}} or {{10,2}})
+        local events=game:Step(0,{pairs={{1,2}},positions={[2]={x=.2,y=2}}});done()
+        assert(Item(game,2).location=="discard");Close(Item(game,1).permBonus,1)
+        Relic(events,"gm_fruit",success and 1 or 0)
+        Relic(events,"small_savings",success and 1 or 0)
+        assert(#Events(events,"spawn")== (success and 1 or 0))
+        Close(game.score,before+(success and 1 or 0));Close(game.roundScore,0)
+    end
+end)
+
+Test("羊毛合成两份独立回收但同批只反馈一次，概率失败不伪造羊毛",function()
+    for _,success in ipairs({true,false}) do
+        local game=Fixture({"wool","wool"},{wool_recycle=true})
+        local done=Random(game,success and {{2,1},{101,51},{2,1},{101,51}} or {{2,2},{2,2}})
+        local events=game:Step(0,{pairs={{1,2}}});done()
+        assert(#Events(events,"merge")==1 and Item(game,1).location=="discard" and Item(game,2).location=="discard")
+        local wool,merged=0,0
+        for _,item in ipairs(game:BottleItems()) do
+            if item.id=="wool" then
+                if item.generatedTemporary then wool=wool+1
+                else merged=merged+1;Close(game:_Value(item),2) end
+            end
+        end
+        assert(merged==1 and wool==(success and 2 or 0));Relic(events,"wool_recycle",success and 1 or 0)
+    end
+end)
+
+Test("老师同批两次成功合成只反馈一次，保镖阻挡合成不反馈遗物",function()
+    local game=Fixture({"teacher","teacher","teacher","teacher"},{teacher_team=true})
+    local events=game:Step(0,{pairs={{1,2},{3,4}}})
+    assert(#Events(events,"merge")==2 and #game:BottleItems()==2)
+    Relic(events,"teacher_team",1)
+    local guarded=Fixture({"teacher","teacher","bodyguard"},{teacher_team=true,small_savings=true})
+    local blocked=guarded:Step(0,{pairs={{1,2}}})
+    assert(#Events(blocked,"merge")==0 and Item(guarded,1).shielded and Item(guarded,3).counter==1)
+    assert(#Events(blocked,"score")==1,"原保镖保护收益须保留")
+    Relic(blocked,"teacher_team",0)
+    Relic(blocked,"small_savings",0)
+    Close(guarded.score,Events(blocked,"score")[1].value or 0)
+end)
+
+Test("解锁高阶硬币合成成功才反馈，普通低阶合成不冒充2048遗物触发",function()
+    for _,id in ipairs({"coin_1","coin_64"}) do
+        local game=Fixture({id,id},{merge_2048=true,small_savings=true})
+        local score,total=game.score,game.totalScore
+        local events=game:Step(0,{pairs={{1,2}}})
+        assert(#Events(events,"merge")==1)
+        Relic(events,"merge_2048",id=="coin_64" and 1 or 0)
+        Relic(events,"small_savings",1)
+        Close(game.score,score+1);Close(game.totalScore,total+1);Close(game.roundScore,0)
+    end
+    local game=Fixture({"coin_64","coin_64"})
+    local events=game:Step(0,{pairs={{1,2}}})
+    assert(#Events(events,"merge")==0 and #game:BottleItems()==2)
+    Relic(events,"merge_2048",0)
+end)
+
+Test("追杀成功击杀当前目标才奖励与反馈，被盾挡住不反馈",function()
+    for _,blocked in ipairs({false,true}) do
+        local game=Fixture(blocked and {"killer","gambler","bodyguard"} or {"killer","gambler"},
+            {jungle_hunt=true})
+        game.huntTargetUid=2
+        local events=game:Step(0,{pairs={{1,2}}})
+        Relic(events,"jungle_hunt",blocked and 0 or 1)
+        Close(Item(game,1).permMult,blocked and 1 or 1.5)
+        assert(Item(game,2).location==(blocked and "bottle" or "discard"))
+        if blocked then assert(Item(game,2).shielded and Item(game,3).counter==1) end
+    end
+end)
+
+Test("转圈圈只中奖才反馈，多个实际金币奖励同批合并且失败仍消耗三圈",function()
+    for _,roll in ipairs({1,100}) do
+        local game=Fixture({"apple","orange"},{spin_reward=true})
+        local done=Random(game,{{100,roll},{100,roll}})
+        local events=game:Step(0,{angularTravel={[1]=TURN*3,[2]=TURN*3}});done()
+        assert(#Events(events,"score")== (roll==1 and 2 or 0))
+        Close(game.roundScore,roll==1 and 2 or 0)
+        for uid=1,2 do Close(Item(game,uid).spinProgress,0) end
+        Relic(events,"spin_reward",roll==1 and 1 or 0)
+    end
+end)
+
+Test("幸运转盘仅77大奖反馈，幸运符仅反转负分支反馈且概率次数不变",function()
+    for _,case in ipairs({{rolls={{20,1}},value=77,permanent=false,wheel=1,charm=0},
+        {rolls={{20,2},{2,1}},value=3,permanent=true,wheel=0,charm=0},
+        {rolls={{20,2},{2,2}},value=1,permanent=true,wheel=0,charm=1}}) do
+        local game=Fixture({"roulette"},{lucky_roulette=true,lucky_charm=true})
+        local done=Random(game,case.rolls)
+        local events=game:Step(0,{angularTravel={[1]=TURN}});done()
+        Close(case.permanent and Item(game,1).permBonus or Item(game,1).bonus,case.value)
+        Close(case.permanent and Item(game,1).bonus or Item(game,1).permBonus,0)
+        Relic(events,"lucky_roulette",case.wheel);Relic(events,"lucky_charm",case.charm)
+    end
+end)
+
+Test("成群结队须真的惠及另一兔，幽灵满30米金币才反馈",function()
+    for _,multiple in ipairs({false,true}) do
+        local game=Fixture(multiple and {"rabbit","rabbit"} or {"rabbit"},{in_groups=true})
+        Item(game,1).distance=100
+        local events=game:Step(0,{})
+        Close(Item(game,1).permBonus,1)
+        if multiple then Close(Item(game,2).permBonus,1) end
+        Relic(events,"in_groups",multiple and 1 or 0)
+    end
+    local game=Fixture({"ghost"},{ghost_sport=true})
+    local events=game:Step(0,{positions={[1]={x=0,y=2}},pathLengths={[1]=60},pathGeneration={[1]=1}})
+    assert(#Events(events,"score",1)==2);Close(game.roundScore,2);Relic(events,"ghost_sport",1)
+end)
+
+Test("成功额外续命与金针菇永久加值才反馈，耗尽和护盾不伪报成功",function()
+    for _,before in ipairs({0,4,9}) do
+        local game=Fixture({"tomato_egg"},{scramble_recipe=true})
+        Item(game,1).counter=before
+        local events=game:Consume(1)
+        assert(Item(game,1).counter==before+1)
+        Relic(events,"scramble_recipe",before==4 and 1 or 0)
+        assert(#Events(events,"respawn")== (before<9 and 1 or 0))
+    end
+    local game=Fixture({"enoki"},{see_you_tomorrow=true})
+    local events=game:Consume(1)
+    Close(Item(game,1).permBonus,1);assert(#Events(events,"respawn")==1)
+    Relic(events,"see_you_tomorrow",1)
+    Item(game,1).shielded=true
+    local blocked=game:Consume(1)
+    Close(Item(game,1).permBonus,1);Relic(blocked,"see_you_tomorrow",0)
+end)
+
+Test("厨师帽成功吃刀本身反馈，无水果也成功，被阻止消费则不反馈",function()
+    for _,blocked in ipairs({false,true}) do
+        local game=Fixture({"chef","knife"},{chef_hat=true})
+        Item(game,2).shielded=blocked
+        local events=game:Step(0,{pairs={{1,2}}})
+        assert(Item(game,2).location==(blocked and "bottle" or "discard"))
+        Relic(events,"chef_hat",blocked and 0 or 1)
+        Close(Item(game,1).permBonus,0)
+        if not blocked then Close(Item(game,1).remaining,1) end
+    end
+end)
+
+Test("有教无类与金盘洗手只有实际转化和双向加值反馈，免疫过滤不反馈",function()
+    local game=Fixture({"teacher","gambler"},{teach_all=true})
+    local value=game:_Value(Item(game,2))
+    local events=game:Step(0,{pairs={{1,2}}})
+    assert(Item(game,2).id=="student");Close(Item(game,2).permBonus,value);Relic(events,"teach_all",1)
+    local immune=Fixture({"killer","teacher"},{teach_all=true})
+    Item(immune,2).remaining=100
+    local protected=immune:Step(0,{pairs={{1,2}}})
+    assert(Item(immune,2).id=="teacher" and Item(immune,2).location=="bottle");Relic(protected,"teach_all",0)
+    local thief=Fixture({"thief","credit_card"},{wash_hands=true})
+    local washed=thief:Step(0,{pairs={{1,2}}})
+    Close(Item(thief,1).permBonus,1);Close(Item(thief,2).permBonus,1);Relic(washed,"wash_hands",1)
+    local police=Fixture({"police","thief"},{wash_hands=true})
+    Item(police,2).remaining=100
+    local excluded=police:Step(0,{pairs={{1,2}}})
+    assert(Item(police,2).location=="bottle");Relic(excluded,"wash_hands",0)
+end)
+
+Test("优质小草成功动物产物和牛冲刺反馈，羊毛集市零库存不反馈",function()
+    local game=Fixture({"grass","calf"},{premium_grass=true,calf_rush=true})
+    local done=Random(game,{{60,1}})
+    local events=game:Step(0,{pairs={{1,2}},positions={[1]={x=0,y=2},[2]={x=.2,y=2}}});done()
+    assert(Item(game,1).location=="discard" and #Events(events,"dash",2)==1)
+    Close(Item(game,2).bonus,1);Close(Item(game,2).scale,1.2)
+    Relic(events,"premium_grass",1);Relic(events,"calf_rush",1)
+    local sheep=Fixture({"sheep"},{wool_market=true})
+    local empty=sheep:Step(0,{shakeStrength=5});Relic(empty,"wool_market",0)
+    Item(sheep,1).woolCount=3
+    local counts=Random(sheep,{{101,51},{101,51},{101,51}})
+    local produced=sheep:Step(0,{shakeStrength=5});counts()
+    Close(Item(sheep,1).woolCount,0);assert(#Events(produced,"spawn")==3)
+    for _,event in ipairs(Events(produced,"spawn")) do assert(event.id=="coin_1") end
+    Relic(produced,"wool_market",1)
+end)
+
+Test("硬币雨替换成功与升级机真实四元产物反馈，普通产物不假报升级成功",function()
+    local cloud=Fixture({"cloud"},{coin_rain=true})
+    local rainDone=Random(cloud,{{5,2}})
+    local rain=cloud:Step(0,{});rainDone()
+    assert(#Events(rain,"spawn")==1 and Events(rain,"spawn")[1].id=="coin_1")
+    Relic(rain,"coin_rain",1)
+    for _,roll in ipairs({1,3}) do
+        local game=Fixture({"coin_machine","student"},{upgrade_coin_machine=true})
+        local done=Random(game,{{3,roll},{101,51}})
+        local events=game:Step(0,{pairs={{1,2}}});done()
+        assert(#Events(events,"spawn")==1)
+        Relic(events,"upgrade_coin_machine",roll==3 and 1 or 0)
+        assert(Events(events,"spawn")[1].id==(roll==3 and "coin_4" or "coin_1"))
+    end
+end)
+
+Test("常驻遗物的价值冷却时长及邻接查询不会每帧触发反馈",function()
+    local game=Fixture({"apple","thief","chef","soul_stone","tombstone","tomato","poop","cherry"},
+        {soul_resonance=true,thief_handbook=true,tomato_tycoon=true,last_second=true,accelerator=true,
+            ghost_poop=true,food_comfort=true,bacon_network=true,juicer=true,cherry_plus=true})
+    local rng=game._rngState
+    for _=1,5 do
+        for _,item in ipairs(game:BottleItems()) do game:_Value(item);game:CooldownOf(item.id) end
+        game:Duration()
+        assert(#Events(game:Step(0,{}),"relicTrigger")==0)
+    end
+    assert(game._rngState==rng)
+    game.phase="settle"
+    local settled=game:SettleStep(2,{})
+    assert(#Events(settled,"relicTrigger")==0 and game.phase=="reveal")
+end)
+
+Test("真实规则启用与关闭纯反馈时事件之外的完整状态及PRNG完全一致",function()
+    local function Scene()
+        return Fixture({"cloud","knife","apple","coin_64","coin_64"},
+            {coin_rain=true,knife_skill=true,merge_2048=true,small_savings=true})
+    end
+    local actual,control=Scene(),Scene()
+    local contacts={pairs={{2,3},{4,5}},positions={[1]={x=0,y=3},[3]={x=.4,y=2}}}
+    local events=actual:Step(0,contacts)
+    local original=Feedback.Relic
+    Feedback.Relic=function() end
+    local expected={}
+    local ok,err=pcall(function() expected=control:Step(0,contacts) end)
+    Feedback.Relic=original
+    assert(ok,err)
+    assert(Equal(actual,control),"遗物表现不能改变金额、实例、队列、冷却、revision、pop或RNG")
+    local gameplay={}
+    for _,event in ipairs(events) do if event.kind~="relicTrigger" then gameplay[#gameplay+1]=event end end
+    assert(Equal(gameplay,expected),"原玩法事件内容及顺序不能被反馈改变")
+    assert(#Events(events,"relicTrigger")>=3)
 end)
 
 ---@return integer
